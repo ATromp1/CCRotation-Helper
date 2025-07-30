@@ -169,6 +169,16 @@ function addon.UI:CreateDisplayTab(container)
     decimalThresholdSlider:SetFullWidth(true)
     scroll:AddChild(decimalThresholdSlider)
     
+    -- Anchor lock checkbox
+    local anchorLockCheck = AceGUI:Create("CheckBox")
+    anchorLockCheck:SetLabel("Lock frame position (prevents Shift+drag movement)")
+    anchorLockCheck:SetValue(addon.Config:Get("anchorLocked"))
+    anchorLockCheck:SetCallback("OnValueChanged", function(widget, event, value)
+        addon.Config:Set("anchorLocked", value)
+    end)
+    anchorLockCheck:SetFullWidth(true)
+    scroll:AddChild(anchorLockCheck)
+    
 end
 
 -- Create Text tab content

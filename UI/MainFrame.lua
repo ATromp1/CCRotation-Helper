@@ -51,7 +51,7 @@ function UI:SetupMainFrame()
     frame:RegisterForDrag("LeftButton")
     
     frame:SetScript("OnDragStart", function(self)
-        if IsShiftKeyDown() then
+        if IsShiftKeyDown() and not config:Get("anchorLocked") then
             self:StartMoving()
         end
     end)
@@ -64,23 +64,13 @@ function UI:SetupMainFrame()
         addon.Config:Set("yOffset", y)
     end)
     
-    -- Tooltip for moving
-    frame:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:SetText("CC Rotation Helper")
-        GameTooltip:AddLine("Shift + drag to move", 1, 1, 1)
-        GameTooltip:Show()
-    end)
-    
-    frame:SetScript("OnLeave", function(self)
-        GameTooltip:Hide()
-    end)
     
     -- Create unavailable queue container
     frame.unavailableContainer = CreateFrame("Frame", nil, frame)
     frame.unavailableContainer:SetSize(1, 1)
     -- Position will be set dynamically in UpdateFrameSize based on content
 end
+
 
 -- Initialize icon pool system
 function UI:InitializeIconPool()
@@ -134,7 +124,7 @@ function UI:GetIcon()
         -- Hide countdown numbers from cooldown frame
         icon.cooldown:SetHideCountdownNumbers(true)
         
-        -- Setup click handlers (optional)
+        -- Setup click handlers and drag passthrough
         icon:SetScript("OnEnter", function(self)
             if addon.Config:Get("showTooltips") and self.spellInfo and self.unit then
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -149,6 +139,24 @@ function UI:GetIcon()
             if addon.Config:Get("showTooltips") then
                 GameTooltip:Hide()
             end
+        end)
+        
+        -- Pass through drag events to parent frame
+        icon:RegisterForDrag("LeftButton")
+        icon:SetScript("OnDragStart", function(self)
+            local config = addon.Config
+            if IsShiftKeyDown() and not config:Get("anchorLocked") then
+                self:GetParent():GetParent():StartMoving() -- icon -> container -> mainFrame
+            end
+        end)
+        
+        icon:SetScript("OnDragStop", function(self)
+            self:GetParent():GetParent():StopMovingOrSizing()
+            -- Save position
+            local mainFrame = self:GetParent():GetParent()
+            local point, _, relativePoint, x, y = mainFrame:GetPoint()
+            addon.Config:Set("xOffset", x)
+            addon.Config:Set("yOffset", y)
         end)
     end
     
@@ -222,7 +230,7 @@ function UI:GetUnavailableIcon()
         -- Hide countdown numbers from cooldown frame
         icon.cooldown:SetHideCountdownNumbers(true)
         
-        -- Setup click handlers (minimal for unavailable)
+        -- Setup click handlers and drag passthrough (minimal for unavailable)
         icon:SetScript("OnEnter", function(self)
             if addon.Config:Get("showTooltips") and self.spellInfo and self.unit then
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -242,6 +250,26 @@ function UI:GetUnavailableIcon()
             if addon.Config:Get("showTooltips") then
                 GameTooltip:Hide()
             end
+        end)
+        
+        -- Pass through drag events to parent frame
+        icon:RegisterForDrag("LeftButton")
+        icon:SetScript("OnDragStart", function(self)
+            local config = addon.Config
+            if IsShiftKeyDown() and not config:Get("anchorLocked") then
+                -- Navigate to main frame: icon -> unavailableContainer -> mainFrame
+                local mainFrame = self:GetParent():GetParent()
+                mainFrame:StartMoving()
+            end
+        end)
+        
+        icon:SetScript("OnDragStop", function(self)
+            local mainFrame = self:GetParent():GetParent()
+            mainFrame:StopMovingOrSizing()
+            -- Save position
+            local point, _, relativePoint, x, y = mainFrame:GetPoint()
+            addon.Config:Set("xOffset", x)
+            addon.Config:Set("yOffset", y)
         end)
     end
     

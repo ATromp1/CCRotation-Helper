@@ -102,6 +102,9 @@ local defaults = {
         -- Sound options
         enableSounds = false,
         nextSpellSound = "Interface\\AddOns\\CCRotation\\Sounds\\next.ogg",
+        
+        -- Anchor settings
+        anchorLocked = true,
     }
 }
 
