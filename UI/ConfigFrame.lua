@@ -27,6 +27,7 @@ function addon.UI:CreateConfigFrame()
         {text="Text", value="text"}, 
         {text="Icons", value="icons"},
         {text="Spells", value="spells"},
+        {text="Npcs", value="npcs"},
         {text="Players", value="players"}
     })
     tabGroup:SetCallback("OnGroupSelected", function(container, event, group)
@@ -39,6 +40,8 @@ function addon.UI:CreateConfigFrame()
             self:CreateIconsTab(container)
         elseif group == "spells" then
             self:CreateSpellsTab(container)
+        elseif group == "npcs" then
+            self:CreateNpcsTab(container)
         elseif group == "players" then
             self:CreatePlayersTab(container)
         end
@@ -452,15 +455,195 @@ function addon.UI:CreateSpellsTab(container)
     
     -- Help text
     local helpText = AceGUI:Create("Label")
-    helpText:SetText("Manage which spells are tracked in the rotation. Lower priority numbers mean higher priority (1 = highest).")
+    helpText:SetText("Manage which spells are tracked in the rotation.")
     helpText:SetFullWidth(true)
     scroll:AddChild(helpText)
     
-    -- CC Type reference
-    local ccTypeText = AceGUI:Create("Label")
-    ccTypeText:SetText("CC Types: 1=Stun, 2=Disorient, 3=Fear, 4=Knock, 5=Incapacitate")
-    ccTypeText:SetFullWidth(true)
-    scroll:AddChild(ccTypeText)
+    -- CC Type filter section
+    local filterGroup = AceGUI:Create("InlineGroup")
+    filterGroup:SetTitle("Queue Filters")
+    filterGroup:SetFullWidth(true)
+    filterGroup:SetLayout("Flow")
+    scroll:AddChild(filterGroup)
+    
+    -- CC type filter state - using string names that match ccTypeLookup
+    local ccTypeFilters = {
+        ["stun"] = true,
+        ["disorient"] = true,
+        ["fear"] = true,
+        ["knock"] = true,
+        ["incapacitate"] = true
+    }
+    
+    -- CC type filter buttons
+    local ccTypeButtons = {}
+    local ccTypeOrder = {"stun", "disorient", "fear", "knock", "incapacitate"}
+    local ccTypeDisplayNames = {
+        ["stun"] = "Stun",
+        ["disorient"] = "Disorient", 
+        ["fear"] = "Fear",
+        ["knock"] = "Knock",
+        ["incapacitate"] = "Incapacitate"
+    }
+    
+    -- Queue display section (create queueGroup first)
+    local queueGroup = AceGUI:Create("InlineGroup")
+    queueGroup:SetTitle("Current Rotation Queue")
+    queueGroup:SetFullWidth(true)
+    queueGroup:SetLayout("Flow")
+    scroll:AddChild(queueGroup)
+    
+    -- Queue display function (defined before buttons so it's in scope)
+    local createQueueDisplay
+    createQueueDisplay = function()
+        queueGroup:ReleaseChildren()
+        
+        if not addon.CCRotation then
+            local noRotationText = AceGUI:Create("Label")
+            noRotationText:SetText("Rotation system not initialized.")
+            noRotationText:SetFullWidth(true)
+            queueGroup:AddChild(noRotationText)
+            return
+        end
+        
+        -- Get the full unfiltered queue by rebuilding it manually
+        local fullQueue = {}
+        
+        if addon.CCRotation and addon.CCRotation.GUIDToUnit then
+            -- Use LibOpenRaid to get all cooldowns from all units
+            local lib = LibStub("LibOpenRaid-1.0", true)
+            if lib then
+                local allUnits = lib.GetAllUnitsCooldown()
+                if allUnits then
+                    for unit, cds in pairs(allUnits) do
+                        for spellID, info in pairs(cds) do
+                            if addon.CCRotation.trackedCooldowns and addon.CCRotation.trackedCooldowns[spellID] then
+                                local spellInfo = addon.CCRotation.trackedCooldowns[spellID]
+                                local ccType = spellInfo.type -- This contains string values like "stun", "disorient", etc.
+                                
+                                -- Debug: Print what we're checking
+                                print("Debug: spellID=" .. spellID .. ", ccType=" .. tostring(ccType) .. ", filtered=" .. tostring(ccTypeFilters[ccType]) .. ", shouldInclude=" .. tostring(not ccType or ccTypeFilters[ccType]))
+                                
+                                -- Apply CC type filter
+                                if not ccType or ccTypeFilters[ccType] then
+                                    local guid = UnitGUID(unit)
+                                    if guid then
+                                        local _, _, timeLeft, charges, _, _, _, duration = lib.GetCooldownStatusFromCooldownInfo(info)
+                                        local currentTime = GetTime()
+                                        
+                                        table.insert(fullQueue, {
+                                            GUID = guid,
+                                            unit = unit,
+                                            spellID = spellID,
+                                            priority = spellInfo.priority,
+                                            expirationTime = timeLeft + currentTime,
+                                            duration = duration,
+                                            charges = charges,
+                                            ccType = ccType
+                                        })
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        if #fullQueue == 0 then
+            local emptyText = AceGUI:Create("Label")
+            emptyText:SetText("No abilities found. Join a group to see available cooldowns.")
+            emptyText:SetFullWidth(true)
+            queueGroup:AddChild(emptyText)
+            return
+        end
+        
+        -- Sort the full queue using the same logic as the rotation system
+        table.sort(fullQueue, function(a, b)
+            local nameA, nameB = UnitName(a.unit), UnitName(b.unit)
+            local isPriorityA = addon.Config:IsPriorityPlayer(nameA)
+            local isPriorityB = addon.Config:IsPriorityPlayer(nameB)
+            
+            local now = GetTime()
+            local readyA = a.charges > 0 or a.expirationTime <= now
+            local readyB = b.charges > 0 or b.expirationTime <= now
+            
+            -- 1. Ready spells first
+            if readyA ~= readyB then return readyA end
+            
+            -- 2. Among ready spells, prioritize priority players
+            if readyA and readyB and (isPriorityA ~= isPriorityB) then
+                return isPriorityA
+            end
+            
+            -- 3. Finally, fallback on configured priority (or soonest available cooldown)
+            if readyA then
+                return a.priority < b.priority
+            else
+                return a.expirationTime < b.expirationTime
+            end
+        end)
+        
+        -- Create a horizontal container for the spell icons
+        local iconRow = AceGUI:Create("SimpleGroup")
+        iconRow:SetFullWidth(true)
+        iconRow:SetLayout("Flow")
+        queueGroup:AddChild(iconRow)
+        
+        -- Display spell icons in a row
+        for i, entry in ipairs(fullQueue) do
+            local spellIcon = AceGUI:Create("Icon")
+            spellIcon:SetWidth(32)
+            spellIcon:SetHeight(32)
+            spellIcon:SetImageSize(32, 32)
+            
+            -- Get spell icon from WoW API
+            local spellInfo = C_Spell.GetSpellInfo(entry.spellID)
+            if spellInfo and spellInfo.iconID then
+                spellIcon:SetImage(spellInfo.iconID)
+            else
+                -- Fallback icon if spell not found
+                spellIcon:SetImage("Interface\\Icons\\INV_Misc_QuestionMark")
+            end
+            
+            iconRow:AddChild(spellIcon)
+        end
+    end
+    
+    for _, ccType in ipairs(ccTypeOrder) do
+        local filterButton = AceGUI:Create("Button")
+        local displayName = ccTypeDisplayNames[ccType]
+        filterButton:SetText(displayName)
+        filterButton:SetWidth(100)
+        
+        -- Store the ccType and displayName on the button widget for the callback
+        filterButton.ccType = ccType
+        filterButton.displayName = displayName
+        
+        filterButton:SetCallback("OnClick", function(widget, event)
+            local buttonCcType = widget.ccType
+            local buttonDisplayName = widget.displayName
+            
+            ccTypeFilters[buttonCcType] = not ccTypeFilters[buttonCcType]
+            -- Update button appearance
+            if ccTypeFilters[buttonCcType] then
+                widget:SetText(buttonDisplayName)
+            else
+                widget:SetText("|cff888888" .. buttonDisplayName .. "|r")
+            end
+            -- Rebuild the actual rotation queue first
+            if addon.CCRotation and addon.CCRotation.RebuildQueue then
+                addon.CCRotation:RebuildQueue()
+            end
+            -- Then refresh queue display
+            createQueueDisplay()
+        end)
+        ccTypeButtons[ccType] = filterButton
+        filterGroup:AddChild(filterButton)
+    end
+    
+    -- Initial queue display
+    createQueueDisplay()
     
     -- Current tracked spells display
     local spellListGroup = AceGUI:Create("InlineGroup")
@@ -895,6 +1078,746 @@ function addon.UI:CreateSpellsTab(container)
     -- Help text for spell management
     local manageHelpText = AceGUI:Create("Label")
     manageHelpText:SetText("Use Up/Down buttons to reorder spells. Use Disable button to temporarily remove spells from rotation. Use Enable button to restore disabled spells.")
+    manageHelpText:SetFullWidth(true)
+    scroll:AddChild(manageHelpText)
+end
+
+-- Create Npcs tab content
+function addon.UI:CreateNpcsTab(container)
+    local scroll = AceGUI:Create("ScrollFrame")
+    scroll:SetFullWidth(true)
+    scroll:SetFullHeight(true)
+    scroll:SetLayout("Flow")
+    container:AddChild(scroll)
+    
+    -- Help text
+    local helpText = AceGUI:Create("Label")
+    helpText:SetText("Manage NPC crowd control effectiveness. Configure which types of CC work on each NPC.")
+    helpText:SetFullWidth(true)
+    scroll:AddChild(helpText)
+    
+    -- Current dungeon status and filter
+    local currentDungeonGroup = AceGUI:Create("InlineGroup")
+    currentDungeonGroup:SetTitle("Current Location")
+    currentDungeonGroup:SetFullWidth(true)
+    currentDungeonGroup:SetLayout("Flow")
+    scroll:AddChild(currentDungeonGroup)
+    
+    -- Get current dungeon info
+    local currentAbbrev, currentDungeonName, instanceType = addon.Database:GetCurrentDungeonInfo()
+    
+    -- Current dungeon status label
+    local dungeonStatusLabel = AceGUI:Create("Label")
+    dungeonStatusLabel:SetWidth(400)
+    if currentDungeonName then
+        if currentAbbrev then
+            dungeonStatusLabel:SetText("|cff00ff00Currently in: " .. currentDungeonName .. " (" .. instanceType .. ")|r")
+        else
+            dungeonStatusLabel:SetText("|cffff8800Currently in: " .. currentDungeonName .. " (" .. instanceType .. ") - Unknown dungeon|r")
+        end
+    else
+        if instanceType == "none" then
+            dungeonStatusLabel:SetText("|cffccccccNot currently in a dungeon.|r")
+        else
+            dungeonStatusLabel:SetText("|cffccccccCurrently in: " .. (instanceType or "unknown") .. " - Not a supported instance type.|r")
+        end
+    end
+    currentDungeonGroup:AddChild(dungeonStatusLabel)
+    
+    -- Current dungeon filter toggle (only show if in a known dungeon)
+    local filterCurrentButton = nil
+    if currentAbbrev and currentDungeonName then
+        filterCurrentButton = AceGUI:Create("Button")
+        filterCurrentButton:SetText("Show Only Current Dungeon")
+        filterCurrentButton:SetWidth(180)
+        currentDungeonGroup:AddChild(filterCurrentButton)
+        
+        -- Refresh button to update dungeon status
+        local refreshButton = AceGUI:Create("Button")
+        refreshButton:SetText("Refresh Location")
+        refreshButton:SetWidth(120)
+        refreshButton:SetCallback("OnClick", function()
+            -- Refresh the entire tab to update dungeon status
+            container:ReleaseChildren()
+            self:CreateNpcsTab(container)
+        end)
+        currentDungeonGroup:AddChild(refreshButton)
+    end
+    
+    -- State for collapsed dungeons and filters (using closure to persist between refreshes)
+    if not self.collapsedDungeons then
+        self.collapsedDungeons = {}
+    end
+    if not self.showOnlyCurrentDungeon then
+        self.showOnlyCurrentDungeon = false
+    end
+    
+    -- Add filter button callback if in known dungeon
+    if filterCurrentButton then
+        filterCurrentButton:SetText(self.showOnlyCurrentDungeon and "Show All Dungeons" or "Show Only Current Dungeon")
+        filterCurrentButton:SetCallback("OnClick", function()
+            self.showOnlyCurrentDungeon = not self.showOnlyCurrentDungeon
+            -- Refresh tab to apply filter
+            container:ReleaseChildren()
+            self:CreateNpcsTab(container)
+        end)
+    end
+    
+    -- Get all NPCs (from database + custom) and group by dungeon
+    local dungeonGroups = {}
+    
+    -- Apply current dungeon filter if enabled
+    local filterToDungeon = (self.showOnlyCurrentDungeon and currentDungeonName) and currentDungeonName or nil
+    
+    -- Process database NPCs
+    for npcID, data in pairs(addon.Database.defaultNPCs) do
+        local abbrev, dungeonName, mobName = addon.Database:ExtractDungeonInfo(data.name)
+        
+        -- Apply filter if active
+        if not filterToDungeon or dungeonName == filterToDungeon then
+            if not dungeonGroups[dungeonName] then
+                dungeonGroups[dungeonName] = {
+                    abbreviation = abbrev,
+                    npcs = {}
+                }
+            end
+            
+            dungeonGroups[dungeonName].npcs[npcID] = {
+                name = data.name,
+                mobName = mobName,
+                cc = data.cc,
+                source = "database"
+            }
+        end
+    end
+    
+    -- Override with custom NPCs
+    for npcID, data in pairs(addon.Config.db.customNPCs) do
+        local abbrev, dungeonName, mobName = addon.Database:ExtractDungeonInfo(data.name)
+        -- Also check explicit dungeon field for custom NPCs
+        local actualDungeon = data.dungeon or dungeonName
+        
+        -- Apply filter if active
+        if not filterToDungeon or actualDungeon == filterToDungeon or dungeonName == filterToDungeon then
+            local groupName = actualDungeon or dungeonName
+            if not dungeonGroups[groupName] then
+                dungeonGroups[groupName] = {
+                    abbreviation = abbrev,
+                    npcs = {}
+                }
+            end
+            
+            dungeonGroups[groupName].npcs[npcID] = {
+                name = data.name,
+                mobName = mobName,
+                cc = data.cc,
+                source = "custom",
+                dungeon = data.dungeon -- Custom NPCs might have explicit dungeon field
+            }
+        end
+    end
+    
+    -- Sort dungeons by name
+    local sortedDungeons = {}
+    for dungeonName, dungeonData in pairs(dungeonGroups) do
+        table.insert(sortedDungeons, {name = dungeonName, data = dungeonData})
+    end
+    table.sort(sortedDungeons, function(a, b) return a.name < b.name end)
+    
+    -- CC Types for headers
+    local ccTypes = {"Stun", "Disorient", "Fear", "Knock", "Incap"}
+    
+    -- Display dungeons with collapsible groups
+    for _, dungeon in ipairs(sortedDungeons) do
+        local dungeonName = dungeon.name
+        local dungeonData = dungeon.data
+        
+        -- Create dungeon group
+        local dungeonGroup = AceGUI:Create("InlineGroup")
+        -- Count NPCs in this dungeon
+        local npcCount = 0
+        for _ in pairs(dungeonData.npcs) do
+            npcCount = npcCount + 1
+        end
+        dungeonGroup:SetTitle(dungeonName .. " (" .. npcCount .. " NPCs)")
+        dungeonGroup:SetFullWidth(true)
+        dungeonGroup:SetLayout("Flow")
+        scroll:AddChild(dungeonGroup)
+        
+        -- Collapse/Expand button
+        local toggleButton = AceGUI:Create("Button")
+        local isCollapsed = self.collapsedDungeons[dungeonName]
+        toggleButton:SetText(isCollapsed and "Expand" or "Collapse")
+        toggleButton:SetWidth(100)
+        toggleButton:SetCallback("OnClick", function()
+            self.collapsedDungeons[dungeonName] = not self.collapsedDungeons[dungeonName]
+            -- Refresh tab to show/hide content
+            container:ReleaseChildren()
+            self:CreateNpcsTab(container)
+        end)
+        dungeonGroup:AddChild(toggleButton)
+        
+        -- Only show content if not collapsed
+        if not isCollapsed then
+            -- Create header for this dungeon
+            local headerGroup = AceGUI:Create("SimpleGroup")
+            headerGroup:SetFullWidth(true)
+            headerGroup:SetLayout("Flow")
+            dungeonGroup:AddChild(headerGroup)
+            
+            -- Headers
+            local nameHeader = AceGUI:Create("Label")
+            nameHeader:SetText("NPC Name")
+            nameHeader:SetWidth(180)
+            headerGroup:AddChild(nameHeader)
+            
+            local idHeader = AceGUI:Create("Label")
+            idHeader:SetText("ID")
+            idHeader:SetWidth(60)
+            headerGroup:AddChild(idHeader)
+            
+            local dungeonHeader = AceGUI:Create("Label")
+            dungeonHeader:SetText("Dungeon")
+            dungeonHeader:SetWidth(100)
+            headerGroup:AddChild(dungeonHeader)
+            
+            for i, ccType in ipairs(ccTypes) do
+                local ccHeader = AceGUI:Create("Label")
+                ccHeader:SetText(ccType)
+                ccHeader:SetWidth(60)
+                headerGroup:AddChild(ccHeader)
+            end
+            
+            local actionHeader = AceGUI:Create("Label")
+            actionHeader:SetText("Action")
+            actionHeader:SetWidth(80)
+            headerGroup:AddChild(actionHeader)
+            
+            -- Sort NPCs within dungeon by mob name
+            local sortedNPCs = {}
+            for npcID, npcData in pairs(dungeonData.npcs) do
+                table.insert(sortedNPCs, {npcID = npcID, data = npcData})
+            end
+            table.sort(sortedNPCs, function(a, b) return (a.data.mobName or a.data.name) < (b.data.mobName or b.data.name) end)
+            
+            -- Display NPCs
+            for _, npc in ipairs(sortedNPCs) do
+                local npcID = npc.npcID
+                local npcData = npc.data
+                
+                local rowGroup = AceGUI:Create("SimpleGroup")
+                rowGroup:SetFullWidth(true)
+                rowGroup:SetLayout("Flow")
+                dungeonGroup:AddChild(rowGroup)
+                
+                -- Editable mob name (without dungeon prefix)
+                local mobNameEdit = AceGUI:Create("EditBox")
+                mobNameEdit:SetText(npcData.mobName or npcData.name)
+                mobNameEdit:SetWidth(180)
+                mobNameEdit:SetCallback("OnEnterPressed", function(widget, event, text)
+                    local newMobName = text:trim()
+                    if newMobName ~= "" then
+                        local newFullName
+                        if dungeonData.abbreviation then
+                            newFullName = dungeonData.abbreviation .. " - " .. newMobName
+                        else
+                            newFullName = newMobName
+                        end
+                        
+                        -- Update the NPC name
+                        if npcData.source == "custom" then
+                            addon.Config.db.customNPCs[npcID].name = newFullName
+                        else
+                            -- Create custom entry to override database NPC
+                            addon.Config.db.customNPCs[npcID] = {
+                                name = newFullName,
+                                cc = npcData.cc,
+                                dungeon = dungeonName
+                            }
+                        end
+                    end
+                end)
+                rowGroup:AddChild(mobNameEdit)
+                
+                -- NPC ID (read-only display)
+                local npcIDLabel = AceGUI:Create("Label")
+                npcIDLabel:SetText(tostring(npcID))
+                npcIDLabel:SetWidth(60)
+                rowGroup:AddChild(npcIDLabel)
+                
+                -- Dungeon dropdown (editable for custom NPCs)
+                local dungeonDropdown = AceGUI:Create("Dropdown")
+                dungeonDropdown:SetWidth(100)
+                
+                -- Build dungeon list for dropdown
+                local dungeonList = {["Other"] = "Other"}
+                for abbrev, fullName in pairs(addon.Database.dungeonNames) do
+                    dungeonList[fullName] = fullName
+                end
+                dungeonDropdown:SetList(dungeonList)
+                dungeonDropdown:SetValue(dungeonName)
+                
+                if npcData.source == "custom" then
+                    dungeonDropdown:SetCallback("OnValueChanged", function(widget, event, value)
+                        -- Update dungeon for custom NPC
+                        local oldName = npcData.mobName or npcData.name
+                        local newAbbrev = nil
+                        for abbrev, fullName in pairs(addon.Database.dungeonNames) do
+                            if fullName == value then
+                                newAbbrev = abbrev
+                                break
+                            end
+                        end
+                        
+                        local newFullName
+                        if newAbbrev then
+                            newFullName = newAbbrev .. " - " .. oldName
+                        else
+                            newFullName = oldName
+                        end
+                        
+                        addon.Config.db.customNPCs[npcID].name = newFullName
+                        addon.Config.db.customNPCs[npcID].dungeon = value
+                        
+                        -- Refresh tab to regroup
+                        container:ReleaseChildren()
+                        self:CreateNpcsTab(container)
+                    end)
+                else
+                    dungeonDropdown:SetDisabled(true)
+                end
+                rowGroup:AddChild(dungeonDropdown)
+                
+                -- CC effectiveness checkboxes
+                for i = 1, 5 do
+                    local ccCheck = AceGUI:Create("CheckBox")
+                    ccCheck:SetWidth(60)
+                    ccCheck:SetValue(npcData.cc[i])
+                    ccCheck:SetCallback("OnValueChanged", function(widget, event, value)
+                        -- Update the CC effectiveness
+                        local newCC = {}
+                        for j = 1, 5 do
+                            if j == i then
+                                newCC[j] = value
+                            else
+                                newCC[j] = npcData.cc[j]
+                            end
+                        end
+                        
+                        if npcData.source == "custom" then
+                            addon.Config.db.customNPCs[npcID].cc = newCC
+                        else
+                            -- Create custom entry to override database NPC
+                            addon.Config.db.customNPCs[npcID] = {
+                                name = npcData.name,
+                                cc = newCC,
+                                dungeon = dungeonName
+                            }
+                        end
+                        
+                        -- Update local data for other checkboxes
+                        npcData.cc = newCC
+                    end)
+                    rowGroup:AddChild(ccCheck)
+                end
+                
+                -- Reset/Delete button
+                if npcData.source == "custom" and addon.Database.defaultNPCs[npcID] then
+                    local resetButton = AceGUI:Create("Button")
+                    resetButton:SetText("Reset")
+                    resetButton:SetWidth(80)
+                    resetButton:SetCallback("OnClick", function()
+                        -- Remove custom entry to revert to database
+                        addon.Config.db.customNPCs[npcID] = nil
+                        
+                        -- Refresh tab
+                        container:ReleaseChildren()
+                        self:CreateNpcsTab(container)
+                    end)
+                    rowGroup:AddChild(resetButton)
+                elseif npcData.source == "custom" then
+                    -- Delete button for custom-only NPCs
+                    local deleteButton = AceGUI:Create("Button")
+                    deleteButton:SetText("Delete")
+                    deleteButton:SetWidth(80)
+                    deleteButton:SetCallback("OnClick", function()
+                        -- Remove custom NPC entirely
+                        addon.Config.db.customNPCs[npcID] = nil
+                        
+                        -- Refresh tab
+                        container:ReleaseChildren()
+                        self:CreateNpcsTab(container)
+                    end)
+                    rowGroup:AddChild(deleteButton)
+                end
+            end
+        end
+    end
+    
+    -- Quick NPC Lookup section
+    local lookupGroup = AceGUI:Create("InlineGroup")
+    lookupGroup:SetTitle("Quick NPC Lookup")
+    lookupGroup:SetFullWidth(true)
+    lookupGroup:SetLayout("Flow")
+    scroll:AddChild(lookupGroup)
+    
+    -- Lookup from target for existing NPCs
+    local lookupTargetButton = AceGUI:Create("Button")
+    lookupTargetButton:SetText("Find Target in List")
+    lookupTargetButton:SetWidth(130)
+    lookupGroup:AddChild(lookupTargetButton)
+    
+    -- Search existing NPCs
+    local lookupSearchEdit = AceGUI:Create("EditBox")
+    lookupSearchEdit:SetLabel("Search NPCs")
+    lookupSearchEdit:SetWidth(200)
+    lookupGroup:AddChild(lookupSearchEdit)
+    
+    -- Search existing button
+    local lookupSearchButton = AceGUI:Create("Button")
+    lookupSearchButton:SetText("Find")
+    lookupSearchButton:SetWidth(60)
+    lookupGroup:AddChild(lookupSearchButton)
+    
+    -- Lookup status
+    local lookupStatusLabel = AceGUI:Create("Label")
+    lookupStatusLabel:SetText("")
+    lookupStatusLabel:SetWidth(400)
+    lookupGroup:AddChild(lookupStatusLabel)
+    
+    -- Lookup callbacks
+    lookupTargetButton:SetCallback("OnClick", function()
+        local targetInfo = addon.Database:GetTargetNPCInfo()
+        if not targetInfo then
+            lookupStatusLabel:SetText("|cffff0000No valid NPC target found.|r")
+            return
+        end
+        
+        -- Check if target exists in our configuration
+        local abbrev, dungeonName, mobName = addon.Database:ExtractDungeonInfo(targetInfo.name)
+        if targetInfo.exists then
+            lookupStatusLabel:SetText("|cff00ff00Found: " .. targetInfo.name .. " (ID: " .. targetInfo.id .. ") in " .. (dungeonName or "Other") .. " dungeon section above.|r")
+            
+            -- Auto-expand the dungeon if it's collapsed
+            if dungeonName and self.collapsedDungeons[dungeonName] then
+                self.collapsedDungeons[dungeonName] = false
+                -- Refresh to show the expanded section
+                container:ReleaseChildren()
+                self:CreateNpcsTab(container)
+            end
+        else
+            lookupStatusLabel:SetText("|cffff8800Target " .. targetInfo.name .. " (ID: " .. targetInfo.id .. ") not found in configuration. You can add it below.|r")
+        end
+    end)
+    
+    lookupSearchButton:SetCallback("OnClick", function()
+        local searchTerm = lookupSearchEdit:GetText():trim()
+        if searchTerm == "" then
+            lookupStatusLabel:SetText("|cffff0000Enter a name to search.|r")
+            return
+        end
+        
+        local results = addon.Database:SearchNPCsByName(searchTerm)
+        if #results == 0 then
+            lookupStatusLabel:SetText("|cffff8800No NPCs found matching '" .. searchTerm .. "'.|r")
+        else
+            local resultText = "Found " .. #results .. " NPCs: "
+            local dungeonsToExpand = {}
+            
+            for i = 1, math.min(3, #results) do
+                if i > 1 then resultText = resultText .. ", " end
+                local result = results[i]
+                local abbrev, dungeonName, mobName = addon.Database:ExtractDungeonInfo(result.name)
+                resultText = resultText .. (mobName or result.name) .. " (" .. result.id .. ")"
+                
+                if dungeonName then
+                    dungeonsToExpand[dungeonName] = true
+                end
+            end
+            
+            if #results > 3 then
+                resultText = resultText .. "..."
+            end
+            
+            lookupStatusLabel:SetText("|cff00ff00" .. resultText .. "|r")
+            
+            -- Auto-expand relevant dungeons
+            local needsRefresh = false
+            for dungeonName in pairs(dungeonsToExpand) do
+                if self.collapsedDungeons[dungeonName] then
+                    self.collapsedDungeons[dungeonName] = false
+                    needsRefresh = true
+                end
+            end
+            
+            if needsRefresh then
+                container:ReleaseChildren()
+                self:CreateNpcsTab(container)
+            end
+        end
+    end)
+    
+    -- Enter key support for search
+    lookupSearchEdit:SetCallback("OnEnterPressed", function(widget, event, text)
+        lookupSearchButton.frame:Click()
+    end)
+    
+    -- Add new NPC section
+    local addNPCGroup = AceGUI:Create("InlineGroup")
+    addNPCGroup:SetTitle("Add Custom NPC")
+    addNPCGroup:SetFullWidth(true)
+    addNPCGroup:SetLayout("Flow")
+    scroll:AddChild(addNPCGroup)
+    
+    -- Lookup from target button
+    local targetButton = AceGUI:Create("Button")
+    targetButton:SetText("Get from Target")
+    targetButton:SetWidth(120)
+    addNPCGroup:AddChild(targetButton)
+    
+    -- Status label for feedback
+    local statusLabel = AceGUI:Create("Label")
+    statusLabel:SetText("")
+    statusLabel:SetWidth(250)
+    addNPCGroup:AddChild(statusLabel)
+    
+    -- NPC ID input
+    local npcIDEdit = AceGUI:Create("EditBox")
+    npcIDEdit:SetLabel("NPC ID")
+    npcIDEdit:SetWidth(100)
+    addNPCGroup:AddChild(npcIDEdit)
+    
+    -- NPC name input
+    local npcNameEdit = AceGUI:Create("EditBox")
+    npcNameEdit:SetLabel("NPC Name")
+    npcNameEdit:SetWidth(200)
+    addNPCGroup:AddChild(npcNameEdit)
+    
+    -- Search button
+    local searchButton = AceGUI:Create("Button")
+    searchButton:SetText("Search")
+    searchButton:SetWidth(80)
+    addNPCGroup:AddChild(searchButton)
+    
+    -- Dungeon dropdown for new NPC
+    local newNPCDungeonDropdown = AceGUI:Create("Dropdown")
+    newNPCDungeonDropdown:SetLabel("Dungeon")
+    newNPCDungeonDropdown:SetWidth(150)
+    local dungeonList = {["Other"] = "Other"}
+    for abbrev, fullName in pairs(addon.Database.dungeonNames) do
+        dungeonList[fullName] = fullName
+    end
+    newNPCDungeonDropdown:SetList(dungeonList)
+    -- Auto-select current dungeon if we're in one
+    if currentAbbrev and currentDungeonName then
+        newNPCDungeonDropdown:SetValue(currentDungeonName)
+    else
+        newNPCDungeonDropdown:SetValue("Other")
+    end
+    addNPCGroup:AddChild(newNPCDungeonDropdown)
+    
+    -- Target lookup functionality
+    targetButton:SetCallback("OnClick", function()
+        local targetInfo = addon.Database:GetTargetNPCInfo()
+        if not targetInfo then
+            statusLabel:SetText("|cffff0000No valid NPC target found.|r")
+            return
+        end
+        
+        -- Fill in the form with target data
+        npcIDEdit:SetText(tostring(targetInfo.id))
+        npcNameEdit:SetText(targetInfo.name)
+        
+        -- Try to detect dungeon from name first
+        local abbrev, dungeonName, mobName = addon.Database:ExtractDungeonInfo(targetInfo.name)
+        
+        -- If no dungeon detected from name, use current location
+        if not dungeonName or dungeonName == "Other" then
+            local currentAbbrev, currentDungeonName, instanceType = addon.Database:GetCurrentDungeonInfo()
+            if currentDungeonName and currentAbbrev then
+                dungeonName = currentDungeonName
+                abbrev = currentAbbrev
+                mobName = targetInfo.name -- Use full name since no prefix detected
+                statusLabel:SetText("|cff00ffff Target loaded from current dungeon: " .. targetInfo.name .. " (ID: " .. targetInfo.id .. ")|r")
+            end
+        end
+        
+        -- Set dungeon and clean up name
+        if dungeonName and dungeonName ~= "Other" then
+            newNPCDungeonDropdown:SetValue(dungeonName)
+            if mobName then
+                npcNameEdit:SetText(mobName) -- Use just the mob name without prefix
+            end
+        end
+        
+        -- Check if NPC already exists
+        if targetInfo.exists then
+            statusLabel:SetText("|cffff8800NPC already exists in database.|r")
+        elseif not statusLabel:GetText():find("current dungeon") then
+            statusLabel:SetText("|cff00ff00Target loaded: " .. targetInfo.name .. " (ID: " .. targetInfo.id .. ")|r")
+        end
+    end)
+    
+    -- Search functionality
+    searchButton:SetCallback("OnClick", function()
+        local searchTerm = npcNameEdit:GetText():trim()
+        if searchTerm == "" then
+            statusLabel:SetText("|cffff0000Enter a name to search.|r")
+            return
+        end
+        
+        local results = addon.Database:SearchNPCsByName(searchTerm)
+        if #results == 0 then
+            statusLabel:SetText("|cffff8800No NPCs found matching '" .. searchTerm .. "'.|r")
+        elseif #results == 1 then
+            -- Single result - auto fill
+            local result = results[1]
+            npcIDEdit:SetText(tostring(result.id))
+            npcNameEdit:SetText(result.name)
+            
+            -- Try to detect dungeon
+            local abbrev, dungeonName, mobName = addon.Database:ExtractDungeonInfo(result.name)
+            if dungeonName and dungeonName ~= "Other" then
+                newNPCDungeonDropdown:SetValue(dungeonName)
+                npcNameEdit:SetText(mobName)
+            end
+            
+            statusLabel:SetText("|cff00ff00Found: " .. result.name .. " (ID: " .. result.id .. ", " .. result.source .. ")|r")
+        else
+            -- Multiple results - show first few
+            local resultText = "Found " .. #results .. " results: "
+            for i = 1, math.min(3, #results) do
+                if i > 1 then resultText = resultText .. ", " end
+                resultText = resultText .. results[i].name .. " (" .. results[i].id .. ")"
+            end
+            if #results > 3 then
+                resultText = resultText .. "..."
+            end
+            statusLabel:SetText("|cff00ffff" .. resultText .. "|r")
+            
+            -- Auto-fill with first result
+            local result = results[1]
+            npcIDEdit:SetText(tostring(result.id))
+            npcNameEdit:SetText(result.name)
+            
+            -- Try to detect dungeon
+            local abbrev, dungeonName, mobName = addon.Database:ExtractDungeonInfo(result.name)
+            if dungeonName and dungeonName ~= "Other" then
+                newNPCDungeonDropdown:SetValue(dungeonName)
+                npcNameEdit:SetText(mobName)
+            end
+        end
+    end)
+    
+    -- NPC ID validation
+    npcIDEdit:SetCallback("OnTextChanged", function(widget, event, text)
+        local npcID = tonumber(text)
+        if npcID then
+            local exists, source = addon.Database:NPCExists(npcID)
+            if exists then
+                statusLabel:SetText("|cffff8800NPC ID " .. npcID .. " already exists (" .. source .. ").|r")
+            else
+                statusLabel:SetText("")
+            end
+        end
+    end)
+    
+    -- Enter key support for search in add NPC section
+    npcNameEdit:SetCallback("OnEnterPressed", function(widget, event, text)
+        searchButton.frame:Click()
+    end)
+    
+    -- CC effectiveness checkboxes for new NPC
+    local newNPCCC = {true, true, true, true, true} -- Default all to true
+    local newNPCCCChecks = {}
+    
+    for i, ccType in ipairs(ccTypes) do
+        local ccCheck = AceGUI:Create("CheckBox")
+        ccCheck:SetLabel(ccType)
+        ccCheck:SetWidth(70)
+        ccCheck:SetValue(true)
+        ccCheck:SetCallback("OnValueChanged", function(widget, event, value)
+            newNPCCC[i] = value
+        end)
+        addNPCGroup:AddChild(ccCheck)
+        newNPCCCChecks[i] = ccCheck
+    end
+    
+    -- Add button
+    local addButton = AceGUI:Create("Button")
+    addButton:SetText("Add NPC")
+    addButton:SetWidth(100)
+    addButton:SetCallback("OnClick", function()
+        local npcID = tonumber(npcIDEdit:GetText())
+        local npcName = npcNameEdit:GetText():trim()
+        local selectedDungeon = newNPCDungeonDropdown:GetValue()
+        
+        if not npcID then
+            statusLabel:SetText("|cffff0000Please enter a valid NPC ID.|r")
+            return
+        end
+        
+        if npcName == "" then
+            statusLabel:SetText("|cffff0000Please enter an NPC name.|r")
+            return
+        end
+        
+        -- Check if NPC already exists
+        local exists, source = addon.Database:NPCExists(npcID)
+        if exists then
+            statusLabel:SetText("|cffff0000NPC ID " .. npcID .. " already exists in " .. source .. ". Use Reset button to modify database NPCs.|r")
+            return
+        end
+        
+        -- Construct full name based on dungeon
+        local fullName = npcName
+        if selectedDungeon ~= "Other" then
+            local abbrev = nil
+            for abbreviation, fullDungeonName in pairs(addon.Database.dungeonNames) do
+                if fullDungeonName == selectedDungeon then
+                    abbrev = abbreviation
+                    break
+                end
+            end
+            if abbrev then
+                fullName = abbrev .. " - " .. npcName
+            end
+        end
+        
+        -- Add to custom NPCs
+        addon.Config.db.customNPCs[npcID] = {
+            name = fullName,
+            cc = {newNPCCC[1], newNPCCC[2], newNPCCC[3], newNPCCC[4], newNPCCC[5]},
+            dungeon = selectedDungeon
+        }
+        
+        statusLabel:SetText("|cff00ff00Successfully added " .. fullName .. " (ID: " .. npcID .. ")|r")
+        
+        -- Clear inputs
+        npcIDEdit:SetText("")
+        npcNameEdit:SetText("")
+        -- Reset to current dungeon if we're in one, otherwise "Other"
+        if currentAbbrev and currentDungeonName then
+            newNPCDungeonDropdown:SetValue(currentDungeonName)
+        else
+            newNPCDungeonDropdown:SetValue("Other")
+        end
+        
+        -- Reset checkboxes to default (all true)
+        for i, check in ipairs(newNPCCCChecks) do
+            check:SetValue(true)
+            newNPCCC[i] = true
+        end
+        
+        -- Refresh the tab
+        container:ReleaseChildren()
+        self:CreateNpcsTab(container)
+    end)
+    addNPCGroup:AddChild(addButton)
+    
+    -- Help text for NPC management
+    local manageHelpText = AceGUI:Create("Label")
+    manageHelpText:SetText("NPCs are grouped by dungeon with Expand/Collapse buttons. Current Location shows where you are and offers filtering. 'Find Target in List' locates your target, 'Search NPCs' finds existing ones. 'Get from Target' auto-fills from your current target and detects dungeon. When in a dungeon, the addon auto-selects that dungeon for new NPCs. Use Reset to revert database NPCs, Delete to remove custom ones.")
     manageHelpText:SetFullWidth(true)
     scroll:AddChild(manageHelpText)
 end

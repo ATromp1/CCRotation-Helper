@@ -12,6 +12,27 @@ addon.Database.ccTypeLookup = {
     [5] = "incapacitate",
 }
 
+-- Dungeon name mappings
+addon.Database.dungeonNames = {
+    ["ROOK"] = "The Rookery",
+    ["WORK"] = "Operation: Mechagon - Workshop",
+    ["TOP"] = "Theater of Pain", 
+    ["ML"] = "Motherlode",
+    ["FL"] = "Fungal Folly",
+    ["DFC"] = "Darkflame Cleft",
+    ["CBM"] = "Cinderbrew Meadery",
+    ["PRIO"] = "Priory of the Sacred Flame"
+}
+
+-- Function to extract dungeon info from NPC name
+function addon.Database:ExtractDungeonInfo(npcName)
+    local abbreviation, mobName = npcName:match("^([A-Z]+)%s*-%s*(.+)$")
+    if abbreviation and self.dungeonNames[abbreviation] then
+        return abbreviation, self.dungeonNames[abbreviation], mobName
+    end
+    return nil, "Other", npcName
+end
+
 -- Default NPC configurations from your WeakAura
 addon.Database.defaultNPCs = {
     -- The Rookery
@@ -161,4 +182,198 @@ function addon.Database:BuildNPCEffectiveness()
     end
 
     return effectiveness
+end
+
+-- Get NPC info from current target
+function addon.Database:GetTargetNPCInfo()
+    if not UnitExists("target") or UnitIsPlayer("target") then
+        return nil
+    end
+    
+    local guid = UnitGUID("target")
+    if not guid then
+        return nil
+    end
+    
+    local npcID = tonumber(guid:match("-(%d+)-%x+$"))
+    local npcName = UnitName("target")
+    
+    if npcID and npcName then
+        return {
+            id = npcID,
+            name = npcName,
+            exists = self.defaultNPCs[npcID] ~= nil
+        }
+    end
+    
+    return nil
+end
+
+-- Search for NPCs by name (fuzzy matching)
+function addon.Database:SearchNPCsByName(searchTerm)
+    if not searchTerm or searchTerm == "" then
+        return {}
+    end
+    
+    local results = {}
+    local searchLower = searchTerm:lower()
+    
+    -- Search database NPCs
+    for npcID, data in pairs(self.defaultNPCs) do
+        local name = data.name:lower()
+        if name:find(searchLower, 1, true) then
+            table.insert(results, {
+                id = npcID,
+                name = data.name,
+                source = "database"
+            })
+        end
+    end
+    
+    -- Search custom NPCs if Config is available
+    if addon.Config and addon.Config.db then
+        for npcID, data in pairs(addon.Config.db.customNPCs) do
+            local name = data.name:lower()
+            if name:find(searchLower, 1, true) then
+                table.insert(results, {
+                    id = npcID,
+                    name = data.name,
+                    source = "custom"
+                })
+            end
+        end
+    end
+    
+    -- Sort by relevance (exact matches first, then by name)
+    table.sort(results, function(a, b)
+        local aExact = a.name:lower() == searchLower
+        local bExact = b.name:lower() == searchLower
+        if aExact ~= bExact then
+            return aExact
+        end
+        return a.name < b.name
+    end)
+    
+    return results
+end
+
+-- Check if NPC exists in database or custom NPCs
+function addon.Database:NPCExists(npcID)
+    if self.defaultNPCs[npcID] then
+        return true, "database"
+    end
+    
+    if addon.Config and addon.Config.db and addon.Config.db.customNPCs[npcID] then
+        return true, "custom"
+    end
+    
+    return false, nil
+end
+
+-- Get NPC info by ID from database or custom
+function addon.Database:GetNPCInfo(npcID)
+    if self.defaultNPCs[npcID] then
+        return {
+            id = npcID,
+            name = self.defaultNPCs[npcID].name,
+            cc = self.defaultNPCs[npcID].cc,
+            source = "database"
+        }
+    end
+    
+    if addon.Config and addon.Config.db and addon.Config.db.customNPCs[npcID] then
+        local customNPC = addon.Config.db.customNPCs[npcID]
+        return {
+            id = npcID,
+            name = customNPC.name,
+            cc = customNPC.cc,
+            source = "custom",
+            dungeon = customNPC.dungeon
+        }
+    end
+    
+    return nil
+end
+
+-- Get current dungeon/instance information
+function addon.Database:GetCurrentDungeonInfo()
+    local name, instanceType, difficultyID, difficultyName, maxPlayers = GetInstanceInfo()
+    
+    -- Only consider party dungeons and raids
+    if instanceType ~= "party" and instanceType ~= "raid" then
+        return nil, nil, instanceType
+    end
+    
+    if not name or name == "" then
+        return nil, nil, instanceType
+    end
+    
+    -- Try to match against our known dungeons
+    for abbrev, fullName in pairs(self.dungeonNames) do
+        if name == fullName then
+            return abbrev, fullName, instanceType
+        end
+    end
+    
+    -- Check for partial matches (in case of different naming)
+    local nameLower = name:lower()
+    for abbrev, fullName in pairs(self.dungeonNames) do
+        local fullNameLower = fullName:lower()
+        if nameLower:find(fullNameLower, 1, true) or fullNameLower:find(nameLower, 1, true) then
+            return abbrev, fullName, instanceType
+        end
+    end
+    
+    -- Return the raw name if not in our database (unknown dungeon)
+    return nil, name, instanceType
+end
+
+-- Get NPCs that belong to the current dungeon
+function addon.Database:GetCurrentDungeonNPCs()
+    local abbrev, dungeonName, instanceType = self:GetCurrentDungeonInfo()
+    if not dungeonName then
+        return {}
+    end
+    
+    local dungeonNPCs = {}
+    
+    -- Get database NPCs for this dungeon
+    for npcID, data in pairs(self.defaultNPCs) do
+        local npcAbbrev, npcDungeon, mobName = self:ExtractDungeonInfo(data.name)
+        if npcDungeon == dungeonName then
+            dungeonNPCs[npcID] = {
+                id = npcID,
+                name = data.name,
+                mobName = mobName,
+                cc = data.cc,
+                source = "database"
+            }
+        end
+    end
+    
+    -- Get custom NPCs for this dungeon
+    if addon.Config and addon.Config.db then
+        for npcID, data in pairs(addon.Config.db.customNPCs) do
+            local npcAbbrev, npcDungeon, mobName = self:ExtractDungeonInfo(data.name)
+            -- Check both name-based detection and explicit dungeon field
+            if npcDungeon == dungeonName or data.dungeon == dungeonName then
+                dungeonNPCs[npcID] = {
+                    id = npcID,
+                    name = data.name,
+                    mobName = mobName,
+                    cc = data.cc,
+                    source = "custom",
+                    dungeon = data.dungeon
+                }
+            end
+        end
+    end
+    
+    return dungeonNPCs
+end
+
+-- Check if we're currently in a dungeon that has NPCs in our database
+function addon.Database:IsInKnownDungeon()
+    local abbrev, dungeonName, instanceType = self:GetCurrentDungeonInfo()
+    return dungeonName ~= nil and abbrev ~= nil
 end

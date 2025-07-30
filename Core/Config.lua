@@ -144,7 +144,15 @@ end
 function addon.Config:GetNPCEffectiveness(npcID)
     -- Check custom NPCs first
     if self.db.customNPCs[npcID] then
-        return self.db.customNPCs[npcID]
+        local customNPC = self.db.customNPCs[npcID]
+        -- Convert array format to map format for consistency
+        return {
+            stun = customNPC.cc[1],
+            disorient = customNPC.cc[2],
+            fear = customNPC.cc[3],
+            knock = customNPC.cc[4],
+            incapacitate = customNPC.cc[5],
+        }
     end
     
     -- Fall back to database
