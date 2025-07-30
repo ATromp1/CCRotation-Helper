@@ -1,0 +1,33 @@
+## Interface: 110107
+## Title: CC Rotation Helper
+## Notes: Crowd Control rotation tracker for Mythic+ dungeons
+## Author: Furo
+## Version: 1.0.0
+## SavedVariables: CCRotationDB
+
+# Libraries
+Libs\LibStub\LibStub.lua
+Libs\Ace3\LibStub\LibStub.lua
+Libs\Ace3\CallbackHandler-1.0\CallbackHandler-1.0.xml
+Libs\Ace3\AceAddon-3.0\AceAddon-3.0.xml
+Libs\Ace3\AceEvent-3.0\AceEvent-3.0.xml
+Libs\Ace3\AceGUI-3.0\AceGUI-3.0.xml
+Libs\Ace3\AceConfig-3.0\AceConfig-3.0.xml
+Libs\Ace3\LibSharedMedia-3.0\LibSharedMedia-3.0.xml
+Libs\LibOpenRaid\LibOpenRaid.lua
+
+# Core files
+Core\Database.lua
+Core\Config.lua  
+Core\RotationCore.lua
+
+# UI files
+UI\Templates.xml
+UI\MainFrame.lua
+UI\ConfigFrame.lua
+
+# Main addon file
+CCRotationHelper.lua
+
+# Debug utilities
+Debug.lua

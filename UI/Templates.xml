@@ -1,0 +1,156 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/
+..\FrameXML\UI.xsd">
+	<!-- Main frame template for CC Rotation Helper -->
+	<Frame name="CCRotationTemplate" virtual="true" parent="UIParent" frameStrata="MEDIUM" framelevel="8" movable="true" clampedToScreen="true" dontSavePosition="true" hidden="true">
+		<Size>
+			<AbsDimension x="1" y="1"/>
+		</Size>
+		<Anchors>
+			<Anchor point="CENTER"/>
+		</Anchors>
+		<Frames>
+			<!-- Anchor frame for positioning -->
+			<Frame name="$parentAnchor" parentKey="anchor" enableMouse="true" clampedToScreen="true">
+				<Size>
+					<AbsDimension x="15" y="15"/>
+				</Size>
+				<Anchors>
+					<Anchor point="CENTER"/>
+				</Anchors>
+				<Layers>
+					<Layer level="BACKGROUND">
+						<Texture name="$parentBG" setAllPoints="true" parentKey="background">
+							<Color r="0.756" g="0" b="0.012" a="0.7"/>
+						</Texture>
+					</Layer>
+					<Layer level="ARTWORK">
+						<FontString name="$parentText" parentKey="text" inherits="GameFontNormal">
+							<Color r="1" g="1" b="1" a="1"/>
+							<Anchors>
+								<Anchor point="CENTER"/>
+							</Anchors>
+						</FontString>
+					</Layer>
+				</Layers>
+			</Frame>
+			<!-- Container for all icons -->
+			<Frame name="$parentIcons" parentKey="container" clampedToScreen="true">
+				<Size>
+					<AbsDimension x="1" y="1"/>
+				</Size>
+				<Anchors>
+					<Anchor point="TOPLEFT"/>
+					<Anchor point="BOTTOMRIGHT"/>
+				</Anchors>
+			</Frame>
+		</Frames>
+	</Frame>
+
+	<!-- Icon button template -->
+	<Button name="CCRotationIconTemplate" hidden="true" virtual="true">
+		<Size>
+			<AbsDimension x="64" y="64"/>
+		</Size>
+		<Anchors>
+			<Anchor point="CENTER"/>
+		</Anchors>
+		<Layers>
+			<!-- Main icon texture (using OVERLAY layer like our working solution) -->
+			<Layer level="OVERLAY">
+				<Texture name="$parentIcon" parentKey="icon" setAllPoints="true"/>
+			</Layer>
+			
+			<!-- Text elements -->
+			<Layer level="OVERLAY" textureSubLevel="2">
+				<!-- Spell name (above icon) -->
+				<FontString name="$parentSpellName" parentKey="spellName" inherits="GameFontHighlightSmallOutline" justifyH="CENTER">
+					<Size x="80" y="12"/>
+					<Anchors>
+						<Anchor point="BOTTOM" relativePoint="TOP" x="0" y="5"/>
+					</Anchors>
+					<Color r="1.0" g="1.0" b="1.0" a="1.0"/>
+				</FontString>
+				
+				<!-- Player name (below icon) -->
+				<FontString name="$parentPlayerName" parentKey="playerName" inherits="GameFontHighlightSmallOutline" justifyH="CENTER">
+					<Size x="80" y="12"/>
+					<Anchors>
+						<Anchor point="TOP" relativePoint="BOTTOM" x="0" y="-5"/>
+					</Anchors>
+					<Color r="1.0" g="1.0" b="1.0" a="1.0"/>
+				</FontString>
+			</Layer>
+			
+			<!-- Overlay elements -->
+			<Layer level="OVERLAY" textureSubLevel="3">
+				<!-- Cooldown text (center) -->
+				<FontString name="$parentCooldownText" parentKey="cooldownText" inherits="GameFontNormalLarge" justifyH="CENTER">
+					<Anchors>
+						<Anchor point="CENTER"/>
+					</Anchors>
+					<Color r="0.91" g="1.0" b="0.37" a="1.0"/>
+				</FontString>
+				
+				<!-- Glow effect for "next" spell -->
+				<Texture parentKey="glow" file="Interface\SpellActivationOverlay\IconAlert" hidden="true" alphaMode="ADD">
+					<Anchors>
+						<Anchor point="CENTER"/>
+					</Anchors>
+					<TexCoords left="0.00781250" right="0.50781250" top="0.53515625" bottom="0.78515625"/>
+				</Texture>
+			</Layer>
+
+			<!-- Border elements -->
+			<Layer level="BACKGROUND" textureSubLevel="1">
+				<Texture parentKey="borderTop">
+					<Color r="0" g="0" b="0"/>
+				</Texture>
+				<Texture parentKey="borderBottom">
+					<Color r="0" g="0" b="0"/>
+				</Texture>
+				<Texture parentKey="borderLeft">
+					<Color r="0" g="0" b="0"/>
+				</Texture>
+				<Texture parentKey="borderRight">
+					<Color r="0" g="0" b="0"/>
+				</Texture>
+			</Layer>
+		</Layers>
+		
+		<Frames>
+			<!-- Cooldown frame -->
+			<Cooldown name="$parentCooldown" inherits="CooldownFrameTemplate" parentKey="cooldown" reverse="true" drawBling="false" drawEdge="false" setAllPoints="true" hidden="true">
+				<SwipeTexture>
+					<Color r="0" g="0" b="0" a="0.8"/>
+				</SwipeTexture>
+			</Cooldown>
+			
+			<!-- Animation frame for glow effects -->
+			<Frame parentKey="animFrame" setAllPoints="true" hidden="true">
+				<Layers>
+					<Layer level="OVERLAY">
+						<Texture parentKey="glowAnim" file="Interface\SpellActivationOverlay\IconAlert" alpha="0">
+							<Anchors>
+								<Anchor point="CENTER"/>
+							</Anchors>
+							<TexCoords left="0.00781250" right="0.50781250" top="0.53515625" bottom="0.78515625"/>
+						</Texture>
+					</Layer>
+				</Layers>
+				<Animations>
+					<AnimationGroup parentKey="pulseAnim" looping="BOUNCE">
+						<Alpha childKey="glowAnim" duration="0.8" fromAlpha="0.3" toAlpha="0.7"/>
+						<Scripts>
+							<OnPlay>
+								self:GetParent():Show();
+							</OnPlay>
+							<OnStop>
+								self:GetParent():Hide();
+							</OnStop>
+						</Scripts>
+					</AnimationGroup>
+				</Animations>
+			</Frame>
+		</Frames>
+	</Button>
+</Ui>

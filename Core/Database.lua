@@ -1,0 +1,164 @@
+local addonName, addon = ...
+
+-- Database of NPC effectiveness and spell configurations
+addon.Database = {}
+
+-- CC Type lookup
+addon.Database.ccTypeLookup = {
+    [1] = "stun",
+    [2] = "disorient",
+    [3] = "fear",
+    [4] = "knock",
+    [5] = "incapacitate",
+}
+
+-- Default NPC configurations from your WeakAura
+addon.Database.defaultNPCs = {
+    -- The Rookery
+    [207198] = { name = "ROOK - Cursed Thunderer", cc = {true, true, true, true, true} },
+    [214439] = { name = "ROOK - Corrupted Oracle", cc = {true, true, true, true, true} },
+
+    -- Operation: Mechagon - Workshop
+    [151657] = { name = "WORK - Bomb tonk", cc = {true, false, false, true, false} },
+    [236033] = { name = "WORK - Metal gunk", cc = {true, true, true, true, true} },
+    [151773] = { name = "WORK - Junkyard Dog", cc = {true, true, false, true, true} },
+    [144294] = { name = "WORK - Mechagon tinkerer", cc = {true, true, true, true, true} },
+    [144295] = { name = "WORK - Mechagon Mechanic", cc = {true, true, true, true, true} },
+
+    -- Theater of Pain
+    [174197] = { name = "TOP - Battlefield Ritualist", cc = {true, true, true, true, true} },
+    [174210] = { name = "TOP - Sludge Spewer", cc = {true, true, false, true, true} },
+    [169875] = { name = "TOP - Shackled Soul", cc = {true, true, false, true, true} },
+    [160495] = { name = "TOP - Maniacal Soulbinder", cc = {true, true, true, true, true} },
+    [170882] = { name = "TOP - Bone Magus", cc = {true, true, false, true, true} },
+    [164510] = { name = "TOP - Shambling Arbalest", cc = {true, true, false, true, true} },
+    [166524] = { name = "TOP - Deathwalker", cc = {true, true, true, true, true} },
+
+    -- Motherlode
+    [136470] = { name = "ML - Refreshment Vendor", cc = {true, true, true, true, true} },
+    [134232] = { name = "ML - Hired Assassin", cc = {true, true, true, true, true} },
+    [130488] = { name = "ML - Mech Jockey", cc = {true, true, true, true, true} },
+    [130661] = { name = "ML - Venture Earthshaper", cc = {true, true, true, true, true} },
+    [130635] = { name = "ML - Stonefury", cc = {true, true, true, true, true} },
+    [129802] = { name = "ML - Earthrager", cc = {true, true, true, true, true} },
+    [133432] = { name = "ML - Venture co Alchemist", cc = {true, true, true, true, true} },
+    [133482] = { name = "ML - Crawler mine", cc = {true, false, false, true, false} },
+
+    -- Fungal Folly
+    [231385] = { name = "FL - Darkfuse Inspector", cc = {true, true, true, true, true} },
+    [229069] = { name = "FL - Mechadrone Sniper", cc = {true, false, false, false, true} },
+    [229212] = { name = "FL - Darkfuse Demolitionist", cc = {true, true, true, true, true} },
+    [229686] = { name = "FL - Venture co Surveyor", cc = {true, true, true, true, true} },
+    [231014] = { name = "FL - Loaderbot", cc = {true, false, false, false, false} },
+    [231496] = { name = "FL - Venture co diver", cc = {true, true, true, true, true} },
+    [231223] = { name = "FL - Disturbed kelp", cc = {true, true, true, true, true} },
+    [231312] = { name = "FL - Venture co electrician", cc = {true, true, true, true, true} },
+
+    -- Darkflame Cleft
+    [211121] = { name = "DFC - Rank Overseer", cc = {false, false, false, true, false} },
+    [210812] = { name = "DFC - Royal Wicklighter", cc = {true, true, true, true, true} },
+    [210818] = { name = "DFC - Lowly Moleherd", cc = {true, true, true, true, true} },
+    [212383] = { name = "DFC - Kobold taskworker", cc = {true, true, true, true, true} },
+    [220815] = { name = "DFC - Blazing Fiend 2", cc = {true, true, true, true, true} },
+    [223772] = { name = "DFC - Blazing Fiend", cc = {true, true, true, true, true} },
+    [223773] = { name = "DFC - Blazing Fiend 3", cc = {true, true, true, true, true} },
+    [211228] = { name = "DFC - Blazing Fiend 4", cc = {true, true, true, true, true} },
+    [223774] = { name = "DFC - Blazing Fiend 5", cc = {false, false, false, false, false} },
+    [223777] = { name = "DFC - Blazing Fiend 6", cc = {true, true, true, true, true} },
+    [223770] = { name = "DFC - Blazing Fiend 7", cc = {false, false, false, false, false} },
+    [223775] = { name = "DFC - Blazing Fiend 8", cc = {true, true, true, true, true} },
+    [223776] = { name = "DFC - Blazing Fiend 9", cc = {true, true, true, true, true} },
+    [213913] = { name = "DFC - Kobold flametender", cc = {true, true, true, true, true} },
+    [208456] = { name = "DFC - Shuffling Horror", cc = {true, true, true, true, true} },
+    [208457] = { name = "DFC - Skittering Darkness", cc = {true, true, true, true, true} },
+    [210148] = { name = "DFC - Menial laborer", cc = {true, true, true, true, true} },
+    [213008] = { name = "DFC - Wriggling darkspawn", cc = {true, true, true, true, true} },
+
+    -- Cinderbrew Meadery
+    [218671] = { name = "CBM - Venture Pyromaniac", cc = {true, true, true, true, true} },
+    [214668] = { name = "CBM - Venture Patron", cc = {true, true, true, true, true} },
+    [214673] = { name = "CBM - Flavor Scientist", cc = {true, true, true, true, true} },
+    [220060] = { name = "CBM - Taste Tester", cc = {true, true, true, true, true} },
+    [210264] = { name = "CBM - Bee wrangler", cc = {true, true, true, true, true} },
+    [210265] = { name = "CBM - Worker bee", cc = {true, true, true, true, true} },
+    [220141] = { name = "CBM - Royal jelly purveyor", cc = {true, true, true, true, true} },
+    [218016] = { name = "CBM - Ravenour Cinderbee", cc = {true, true, true, true, true} },
+
+    -- Priory of the Sacred Flame
+    [206705] = { name = "PRIO - Arathi Footman", cc = {true, true, true, true, true} },
+    [206697] = { name = "PRIO - Devout Priest", cc = {true, true, true, true, true} },
+    [206698] = { name = "PRIO - Fanatical Conjuror", cc = {true, true, true, true, true} },
+    [206699] = { name = "PRIO - War Lynx", cc = {true, true, true, true, false} },
+    [207943] = { name = "PRIO - Arathi neophyte", cc = {true, true, true, true, true} },
+    [221760] = { name = "PRIO - Risen Mage", cc = {true, true, false, true, true} },
+}
+
+-- Default spell configurations
+addon.Database.defaultSpells = {
+    -- Demon Hunter
+    [179057] = { name = "DH - Chaos nova", ccType = 1, priority = 1 },
+    [207684] = { name = "DH - Sigil of misery", ccType = 3, priority = 16 },
+    [202138] = { name = "DH - Sigil of chains", ccType = 4, priority = 17 },
+
+    -- Death Knight
+    [207167] = { name = "DK - blinding sleet", ccType = 2, priority = 8 },
+
+    -- Druid
+    [99] = { name = "Druid - Incapacitating roar", ccType = 5, priority = 14 },
+    [132469] = { name = "Druid - typhoon", ccType = 4, priority = 15 },
+
+    -- Evoker
+    [368970] = { name = "Evoker - Tail swipe", ccType = 4, priority = 5 },
+    [357214] = { name = "Evoker - Wing buffet", ccType = 4, priority = 24 },
+
+    -- Hunter
+    [462031] = { name = "Hunter - explosive trap", ccType = 4, priority = 22 },
+    [186387] = { name = "Hunter - bursting shot", ccType = 4, priority = 23 },
+
+    -- Mage
+    [157980] = { name = "Mage - Supernova", ccType = 4, priority = 9 },
+    [458513] = { name = "Mage - Gravity lapse", ccType = 4, priority = 10 },
+    [31661] = { name = "Mage - dragon's breath", ccType = 2, priority = 11 },
+    [157981] = { name = "Mage - blast wave", ccType = 4, priority = 12 },
+
+    -- Monk
+    [119381] = { name = "Monk - Leg sweep", ccType = 1, priority = 4 },
+    [116844] = { name = "Monk - Ring of peace", ccType = 4, priority = 18 },
+
+    -- Paladin
+    [115750] = { name = "Paladin - blinding light", ccType = 2, priority = 13 },
+
+    -- Priest
+    [8122] = { name = "Priest - Psychic scream", ccType = 3, priority = 7 },
+
+    -- Rogue
+    [2094] = { name = "Rogue - Blind", ccType = 2, priority = 21 },
+
+    -- Shaman
+    [51490] = { name = "Shaman - Thunderstorm", ccType = 4, priority = 2 },
+    [192058] = { name = "Shaman - Incap totem", ccType = 1, priority = 3 },
+
+    -- Warlock
+    [30283] = { name = "Warlock - Shadowfury", ccType = 1, priority = 20 },
+
+    -- Warrior
+    [46968] = { name = "Warrior - Shockwave", ccType = 1, priority = 6 },
+    [5246] = { name = "Warrior - Intimidating shout", ccType = 3, priority = 19 },
+}
+
+-- Convert CC array to effectiveness map
+function addon.Database:BuildNPCEffectiveness()
+    local effectiveness = {}
+
+    for npcID, data in pairs(self.defaultNPCs) do
+        effectiveness[npcID] = {
+            stun = data.cc[1],
+            disorient = data.cc[2],
+            fear = data.cc[3],
+            knock = data.cc[4],
+            incapacitate = data.cc[5],
+        }
+    end
+
+    return effectiveness
+end
