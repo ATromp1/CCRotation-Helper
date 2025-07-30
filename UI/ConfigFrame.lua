@@ -439,9 +439,16 @@ function addon.UI:MoveSpellPriority(spellID, spellData, direction, sortedSpells,
         }
     end
     
-    -- Rebuild rotation queue
-    if addon.CCRotation and addon.CCRotation.RebuildQueue then
-        addon.CCRotation:RebuildQueue()
+    -- Immediately update tracked cooldowns cache and rebuild queue
+    if addon.CCRotation then
+        -- Update the tracked cooldowns cache with new priorities
+        addon.CCRotation.trackedCooldowns = addon.Config:GetTrackedSpells()
+        -- Force immediate synchronous rebuild instead of debounced rebuild
+        if addon.CCRotation.DoRebuildQueue then
+            addon.CCRotation:DoRebuildQueue()
+        elseif addon.CCRotation.RebuildQueue then
+            addon.CCRotation:RebuildQueue()
+        end
     end
 end
 
@@ -520,10 +527,7 @@ function addon.UI:CreateSpellsTab(container)
                             if addon.CCRotation.trackedCooldowns and addon.CCRotation.trackedCooldowns[spellID] then
                                 local spellInfo = addon.CCRotation.trackedCooldowns[spellID]
                                 local ccType = spellInfo.type -- This contains string values like "stun", "disorient", etc.
-                                
-                                -- Debug: Print what we're checking
-                                print("Debug: spellID=" .. spellID .. ", ccType=" .. tostring(ccType) .. ", filtered=" .. tostring(ccTypeFilters[ccType]) .. ", shouldInclude=" .. tostring(not ccType or ccTypeFilters[ccType]))
-                                
+                                                                
                                 -- Apply CC type filter
                                 if not ccType or ccTypeFilters[ccType] then
                                     local guid = UnitGUID(unit)
@@ -652,6 +656,15 @@ function addon.UI:CreateSpellsTab(container)
     spellListGroup:SetLayout("Flow")
     scroll:AddChild(spellListGroup)
     
+    -- Build the spell list
+    self:RebuildSpellList(spellListGroup, createQueueDisplay)
+    
+    -- Add the management sections (add/inactive spells)
+    self:CreateSpellManagementSections(scroll)
+end
+
+-- Rebuild spell list content (extracted for partial updates)
+function addon.UI:RebuildSpellList(spellListGroup, queueDisplayRefreshFn)
     -- Get all active spells (from database + custom, excluding inactive)
     local allSpells = {}
     
@@ -743,9 +756,17 @@ function addon.UI:CreateSpellsTab(container)
             upButton:SetDisabled(true)
         else
             upButton:SetCallback("OnClick", function()
+                -- Update priorities and rotation queue
                 self:MoveSpellPriority(spell.spellID, spell.data, "up", sortedSpells, i)
-                container:ReleaseChildren()
-                self:CreateSpellsTab(container)
+                
+                -- Rebuild just the spell list group, not the entire tab
+                spellListGroup:ReleaseChildren()
+                self:RebuildSpellList(spellListGroup, queueDisplayRefreshFn)
+                
+                -- Also refresh the queue display preview
+                if queueDisplayRefreshFn then
+                    queueDisplayRefreshFn()
+                end
             end)
         end
         rowGroup:AddChild(upButton)
@@ -758,9 +779,17 @@ function addon.UI:CreateSpellsTab(container)
             downButton:SetDisabled(true)
         else
             downButton:SetCallback("OnClick", function()
+                -- Update priorities and rotation queue
                 self:MoveSpellPriority(spell.spellID, spell.data, "down", sortedSpells, i)
-                container:ReleaseChildren()
-                self:CreateSpellsTab(container)
+                
+                -- Rebuild just the spell list group, not the entire tab
+                spellListGroup:ReleaseChildren()
+                self:RebuildSpellList(spellListGroup, queueDisplayRefreshFn)
+                
+                -- Also refresh the queue display preview
+                if queueDisplayRefreshFn then
+                    queueDisplayRefreshFn()
+                end
             end)
         end
         rowGroup:AddChild(downButton)
@@ -901,12 +930,21 @@ function addon.UI:CreateSpellsTab(container)
                 addon.CCRotation:DoRebuildQueue()
             end
             
-            container:ReleaseChildren()
-            self:CreateSpellsTab(container)
+            -- Rebuild just the spell list, not the entire tab
+            spellListGroup:ReleaseChildren()
+            self:RebuildSpellList(spellListGroup, queueDisplayRefreshFn)
+            
+            -- Also refresh the queue display preview
+            if queueDisplayRefreshFn then
+                queueDisplayRefreshFn()
+            end
         end)
         rowGroup:AddChild(disableButton)
     end
-    
+end
+
+-- Continue with CreateSpellsTab - add management sections
+function addon.UI:CreateSpellManagementSections(scroll)
     -- Add new spell section
     local addSpellGroup = AceGUI:Create("InlineGroup")
     addSpellGroup:SetTitle("Add Custom Spell")
@@ -1653,8 +1691,12 @@ function addon.UI:CreateNpcsTab(container)
         -- Check if NPC already exists
         if targetInfo.exists then
             statusLabel:SetText("|cffff8800NPC already exists in database.|r")
-        elseif not statusLabel:GetText():find("current dungeon") then
-            statusLabel:SetText("|cff00ff00Target loaded: " .. targetInfo.name .. " (ID: " .. targetInfo.id .. ")|r")
+        else
+            -- Only override status if we haven't already set a "current dungeon" message
+            local currentStatusSet = (dungeonName and currentDungeonName and dungeonName == currentDungeonName)
+            if not currentStatusSet then
+                statusLabel:SetText("|cff00ff00Target loaded: " .. targetInfo.name .. " (ID: " .. targetInfo.id .. ")|r")
+            end
         end
     end)
     
