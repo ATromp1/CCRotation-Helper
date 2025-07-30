@@ -6,6 +6,7 @@ local LibDataBroker = LibStub("LibDataBroker-1.1", true)
 
 addon.MinimapIcon = {}
 
+
 function addon.MinimapIcon:Initialize()
     -- Only initialize if LibDBIcon is available
     if not LibDBIcon or not LibDataBroker then
@@ -16,7 +17,7 @@ function addon.MinimapIcon:Initialize()
     local minimapLDB = LibDataBroker:NewDataObject("CCRotationHelper", {
         type = "launcher",
         text = "CCR",
-        icon = "Interface\\Icons\\Spell_Arcane_PortalStormwind",
+        icon = "Interface\\AddOns\\CCRotationHelper\\media\\CCRotationHelper",
         OnClick = function(frame, button)
             if button == "LeftButton" then
                 -- Left click - open config panel
@@ -85,11 +86,5 @@ function addon.MinimapIcon:Initialize()
 
     -- Register the minimap icon
     LibDBIcon:Register("CCRotationHelper", minimapLDB, addon.Config.db.minimap)
-    
-    -- Update icon texture after registration
-    local button = LibDBIcon:GetMinimapButton("CCRotationHelper")
-    if button and button.icon then
-        button.icon:SetTexture(minimapLDB.icon)
-    end
 end
 

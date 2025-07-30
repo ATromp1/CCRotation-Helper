@@ -4,6 +4,7 @@
 ## Author: Furo
 ## Version: 1.0.0
 ## SavedVariables: CCRotationDB
+## IconTexture: Interface\AddOns\CCRotationHelper\media\CCRotationHelper.tga
 
 # Libraries
 Libs\LibStub\LibStub.lua
