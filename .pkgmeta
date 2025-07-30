@@ -1,0 +1,8 @@
+package-as: CCRotationHelper
+
+ignore:
+  - .git
+  - .github
+  - README.md
+  - LICENSE
+  - .pkgmeta
