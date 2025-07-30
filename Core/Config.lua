@@ -187,7 +187,7 @@ function addon.Config:GetTrackedSpells()
         if not self.db.inactiveSpells[spellID] then
             spells[spellID] = {
                 priority = data.priority,
-                type = addon.Database.ccTypeLookup[data.ccType]
+                type = self:NormalizeCCType(data.ccType)
             }
         end
     end
@@ -197,7 +197,7 @@ function addon.Config:GetTrackedSpells()
         if not self.db.inactiveSpells[spellID] then
             spells[spellID] = {
                 priority = data.priority,
-                type = addon.Database.ccTypeLookup[data.ccType]
+                type = self:NormalizeCCType(data.ccType)
             }
         end
     end
@@ -215,4 +215,16 @@ end
 
 function addon.Config:RemovePriorityPlayer(playerName)
     self.db.priorityPlayers[playerName] = nil
+end
+
+-- Normalize CC type to string format (handle both old numeric and new string values)
+function addon.Config:NormalizeCCType(ccType)
+    if type(ccType) == "number" then
+        -- Convert old numeric format to string using lookup
+        return addon.Database.ccTypeLookup[ccType]
+    elseif type(ccType) == "string" then
+        -- Already string format, validate it exists
+        return addon.Database.ccTypeLookup[ccType] and ccType or ccType
+    end
+    return nil
 end

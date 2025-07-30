@@ -890,14 +890,14 @@ function addon.UI:RebuildSpellList(spellListGroup, queueDisplayRefreshFn)
         -- Editable CC type dropdown
         local ccTypeDropdown = AceGUI:Create("Dropdown")
         ccTypeDropdown:SetWidth(120)
-        ccTypeDropdown:SetList({
-            [1] = "1 - Stun",
-            [2] = "2 - Disorient", 
-            [3] = "3 - Fear",
-            [4] = "4 - Knock",
-            [5] = "5 - Incapacitate"
-        })
-        ccTypeDropdown:SetValue(spell.data.ccType)
+        local ccTypeList = {}
+        local ccTypeDisplayList = {}
+        for _, ccType in ipairs(addon.Database.ccTypeOrder) do
+            ccTypeList[ccType] = addon.Database.ccTypeDisplayNames[ccType]
+            ccTypeDisplayList[ccType] = addon.Database.ccTypeDisplayNames[ccType]
+        end
+        ccTypeDropdown:SetList(ccTypeList)
+        ccTypeDropdown:SetValue(addon.Config:NormalizeCCType(spell.data.ccType))
         ccTypeDropdown:SetCallback("OnValueChanged", function(widget, event, value)
             -- Update the CC type
             if spell.data.source == "custom" then
@@ -979,14 +979,12 @@ function addon.UI:CreateSpellManagementSections(scroll)
     local ccTypeDropdown = AceGUI:Create("Dropdown")
     ccTypeDropdown:SetLabel("CC Type")
     ccTypeDropdown:SetWidth(150)
-    ccTypeDropdown:SetList({
-        [1] = "1 - Stun",
-        [2] = "2 - Disorient", 
-        [3] = "3 - Fear",
-        [4] = "4 - Knock",
-        [5] = "5 - Incapacitate"
-    })
-    ccTypeDropdown:SetValue(1)
+    local ccTypeList = {}
+    for _, ccType in ipairs(addon.Database.ccTypeOrder) do
+        ccTypeList[ccType] = addon.Database.ccTypeDisplayNames[ccType]
+    end
+    ccTypeDropdown:SetList(ccTypeList)
+    ccTypeDropdown:SetValue("stun")
     addSpellGroup:AddChild(ccTypeDropdown)
     
     -- Priority input
@@ -1092,9 +1090,10 @@ function addon.UI:CreateSpellManagementSections(scroll)
             
             -- Spell info (grayed out)
             local inactiveSpellLine = AceGUI:Create("Label")
-            local ccTypeName = addon.Database.ccTypeLookup[spellData.ccType] or "unknown"
+            local ccTypeName = addon.Config:NormalizeCCType(spellData.ccType) or "unknown"
+            local ccTypeDisplay = addon.Database.ccTypeDisplayNames[ccTypeName] or ccTypeName
             inactiveSpellLine:SetText(string.format("|cff888888%s (ID: %d, Type: %s)|r", 
-                spellData.name, spellID, ccTypeName))
+                spellData.name, spellID, ccTypeDisplay))
             inactiveSpellLine:SetWidth(350)
             inactiveRowGroup:AddChild(inactiveSpellLine)
             
