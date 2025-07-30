@@ -36,6 +36,11 @@ function CCRotationHelper:OnPlayerLogin()
         addon.UI:Initialize()
     end
     
+    -- Initialize minimap icon
+    if addon.MinimapIcon then
+        addon.MinimapIcon:Initialize()
+    end
+    
     print("|cff00ff00CC Rotation Helper|r: Ready for M+ dungeons!")
 end
 

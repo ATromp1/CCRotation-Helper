@@ -105,6 +105,12 @@ local defaults = {
         
         -- Anchor settings
         anchorLocked = true,
+        
+        -- Minimap icon settings
+        minimap = {
+            minimapPos = 220,
+            radius = 80,
+        },
     }
 }
 

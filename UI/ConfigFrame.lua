@@ -179,6 +179,7 @@ function addon.UI:CreateDisplayTab(container)
     anchorLockCheck:SetFullWidth(true)
     scroll:AddChild(anchorLockCheck)
     
+    
 end
 
 -- Create Text tab content
