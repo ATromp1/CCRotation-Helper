@@ -237,7 +237,13 @@ function CCRotation:SortAndSeparateQueues()
         local unit = self.GUIDToUnit[cooldownData.GUID]
         if unit then
             cooldownData.isDead = UnitIsDeadOrGhost(unit)
-            cooldownData.inRange = UnitInRange(unit)
+            
+            -- Special case: when not in a group, treat yourself as always in range
+            if unit == "player" and not IsInGroup() then
+                cooldownData.inRange = true
+            else
+                cooldownData.inRange = UnitInRange(unit)
+            end
             
             if cooldownData.isDead or not cooldownData.inRange then
                 table.insert(unavailableQueue, cooldownData)
