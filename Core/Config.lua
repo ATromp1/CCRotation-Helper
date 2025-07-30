@@ -111,6 +111,9 @@ local defaults = {
             minimapPos = 220,
             radius = 80,
         },
+        
+        -- Icon zoom multiplier (texture zoom within container, like WeakAuras)
+        iconZoom = 1.0,
     }
 }
 

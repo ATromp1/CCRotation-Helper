@@ -89,6 +89,9 @@ function UI:GetIcon()
         numIconsCreated = numIconsCreated + 1
         icon = CreateFrame("Button", "CCRotationIcon" .. numIconsCreated, UIParent, "CCRotationIconTemplate")
         
+        -- Enable clipping to properly mask zoomed textures (like WeakAuras)
+        icon:SetClipsChildren(true)
+        
         -- Create working texture (XML template texture has issues)
         icon.displayTexture = icon:CreateTexture("DisplayTexture_" .. numIconsCreated, "OVERLAY")
         icon.displayTexture:SetAllPoints()
@@ -172,6 +175,8 @@ function UI:GetIcon()
     icon.displayTexture:SetTexture(nil)
     icon.displayTexture:SetDesaturated(false)
     icon.displayTexture:Hide()
+    icon.displayTexture:ClearAllPoints()
+    icon.displayTexture:SetAllPoints(icon)
     icon.glow:Hide()
     icon.cooldown:Clear()
     icon.cooldown:Hide()
@@ -192,6 +197,9 @@ function UI:GetUnavailableIcon()
     if not icon then
         numUnavailableIconsCreated = numUnavailableIconsCreated + 1
         icon = CreateFrame("Button", "CCRotationUnavailableIcon" .. numUnavailableIconsCreated, UIParent, "CCRotationIconTemplate")
+        
+        -- Enable clipping to properly mask zoomed textures (like WeakAuras)
+        icon:SetClipsChildren(true)
         
         -- Create working texture (smaller for unavailable queue)
         icon.displayTexture = icon:CreateTexture("DisplayTextureUnavailable_" .. numUnavailableIconsCreated, "OVERLAY")
@@ -285,6 +293,8 @@ function UI:GetUnavailableIcon()
     icon.displayTexture:SetTexture(nil)
     icon.displayTexture:SetDesaturated(true)  -- Always desaturated for unavailable
     icon.displayTexture:Hide()
+    icon.displayTexture:ClearAllPoints()
+    icon.displayTexture:SetAllPoints(icon)
     icon.glow:Hide()
     icon.cooldown:Clear()
     icon.cooldown:Hide()
@@ -533,9 +543,20 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                 -- Add status indicators for dead/out-of-range
                 self:UpdateStatusIndicators(icon, cooldownData)
                 
-                -- Position and size icon using individual size
+                -- Position and size icon using individual size (frame size unchanged)
                 local iconSize = config:Get("iconSize" .. i)
                 icon:SetSize(iconSize, iconSize)
+                
+                -- Apply texture zoom within the frame (like WeakAuras)
+                local iconZoom = config:Get("iconZoom") or 1.0
+                icon.displayTexture:ClearAllPoints()
+                if iconZoom ~= 1.0 then
+                    local textureSize = iconSize * iconZoom
+                    icon.displayTexture:SetSize(textureSize, textureSize)
+                    icon.displayTexture:SetPoint("CENTER", icon, "CENTER", 0, 0)
+                else
+                    icon.displayTexture:SetAllPoints(icon)
+                end
                 
                 -- Set cooldown font size based on icon size and percentage
                 local cooldownFontPercent = config:Get("cooldownFontSizePercent") or 25
@@ -582,6 +603,17 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                     -- Set icon texture
                     icon.displayTexture:SetTexture(icon.spellInfo.iconID)
                     icon.displayTexture:Show()
+                    
+                    -- Apply texture zoom within the frame (like WeakAuras)
+                    local iconZoom = config:Get("iconZoom") or 1.0
+                    icon.displayTexture:ClearAllPoints()
+                    if iconZoom ~= 1.0 then
+                        local textureSize = unavailableIconSize * iconZoom
+                        icon.displayTexture:SetSize(textureSize, textureSize)
+                        icon.displayTexture:SetPoint("CENTER", icon, "CENTER", 0, 0)
+                    else
+                        icon.displayTexture:SetAllPoints(icon)
+                    end
                     
                     -- Hide text for small unavailable icons
                     icon.spellName:Hide()

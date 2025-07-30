@@ -269,6 +269,20 @@ function addon.UI:CreateIconsTab(container)
     scroll:SetLayout("Flow")
     container:AddChild(scroll)
     
+    -- Icon zoom slider
+    local iconZoomSlider = AceGUI:Create("Slider")
+    iconZoomSlider:SetLabel("Icon Zoom (Texture scale within frame)")
+    iconZoomSlider:SetSliderValues(0.3, 3.0, 0.1)
+    iconZoomSlider:SetValue(addon.Config:Get("iconZoom"))
+    iconZoomSlider:SetCallback("OnValueChanged", function(widget, event, value)
+        addon.Config:Set("iconZoom", value)
+        if addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
+    end)
+    iconZoomSlider:SetFullWidth(true)
+    scroll:AddChild(iconZoomSlider)
+    
     -- Max icons slider
     local maxIconsSlider = AceGUI:Create("Slider")
     maxIconsSlider:SetLabel("Max Icons")
