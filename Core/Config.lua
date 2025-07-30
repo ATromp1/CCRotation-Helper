@@ -39,6 +39,13 @@ local defaults = {
         spacing = 3,
         growDirection = "RIGHT",
         
+        -- Unavailable queue settings
+        showUnavailableQueue = true,
+        maxUnavailableIcons = 3,
+        unavailableIconSize = 24,
+        unavailableSpacing = 2,
+        unavailableQueueOffset = 5,
+        
         -- Position
         point = "CENTER",
         relativeTo = "UIParent",
@@ -50,6 +57,7 @@ local defaults = {
         showSpellName = true,
         showPlayerName = true,
         showCooldownText = true,
+        showTooltips = true,
         highlightNext = false,
         cooldownDecimalThreshold = 3,
         

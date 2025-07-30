@@ -128,6 +128,17 @@ function addon.UI:CreateDisplayTab(container)
     cooldownTextCheck:SetFullWidth(true)
     scroll:AddChild(cooldownTextCheck)
     
+    -- Show tooltips
+    local tooltipCheck = AceGUI:Create("CheckBox")
+    tooltipCheck:SetLabel("Show tooltips on hover")
+    tooltipCheck:SetValue(addon.Config:Get("showTooltips"))
+    tooltipCheck:SetCallback("OnValueChanged", function(widget, event, value)
+        addon.Config:Set("showTooltips", value)
+        -- No need to refresh display for tooltip setting
+    end)
+    tooltipCheck:SetFullWidth(true)
+    scroll:AddChild(tooltipCheck)
+    
     -- Highlight next spell
     local highlightCheck = AceGUI:Create("CheckBox")
     highlightCheck:SetLabel("Highlight next spell")
@@ -700,11 +711,15 @@ function addon.UI:CreateSpellsTab(container)
             -- Renumber remaining active spells to eliminate gaps
             self:RenumberSpellPriorities()
             
+            -- Update tracked cooldowns immediately
+            if addon.CCRotation then
+                addon.CCRotation.trackedCooldowns = addon.Config:GetTrackedSpells()
+                -- Force immediate queue rebuild
+                addon.CCRotation:DoRebuildQueue()
+            end
+            
             container:ReleaseChildren()
             self:CreateSpellsTab(container)
-            if addon.CCRotation and addon.CCRotation.RebuildQueue then
-                addon.CCRotation:RebuildQueue()
-            end
         end)
         rowGroup:AddChild(disableButton)
     end
@@ -817,11 +832,15 @@ function addon.UI:CreateSpellsTab(container)
                 -- Renumber all active spells (including the newly enabled one)
                 self:RenumberSpellPriorities()
                 
+                -- Update tracked cooldowns immediately
+                if addon.CCRotation then
+                    addon.CCRotation.trackedCooldowns = addon.Config:GetTrackedSpells()
+                    -- Force immediate queue rebuild
+                    addon.CCRotation:DoRebuildQueue()
+                end
+                
                 container:ReleaseChildren()
                 self:CreateSpellsTab(container)
-                if addon.CCRotation and addon.CCRotation.RebuildQueue then
-                    addon.CCRotation:RebuildQueue()
-                end
             end)
             inactiveRowGroup:AddChild(enableButton)
             

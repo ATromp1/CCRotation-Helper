@@ -11,6 +11,11 @@ local iconPool = {}
 local activeIcons = {}
 local numIconsCreated = 0
 
+-- Unavailable queue icon pooling
+local unavailableIconPool = {}
+local activeUnavailableIcons = {}
+local numUnavailableIconsCreated = 0
+
 -- Initialize UI system
 function UI:Initialize()
     if self.mainFrame then return end
@@ -70,6 +75,11 @@ function UI:SetupMainFrame()
     frame:SetScript("OnLeave", function(self)
         GameTooltip:Hide()
     end)
+    
+    -- Create unavailable queue container
+    frame.unavailableContainer = CreateFrame("Frame", nil, frame)
+    frame.unavailableContainer:SetSize(1, 1)
+    -- Position will be set dynamically in UpdateFrameSize based on content
 end
 
 -- Initialize icon pool system
@@ -77,6 +87,9 @@ function UI:InitializeIconPool()
     iconPool = {}
     activeIcons = {}
     numIconsCreated = 0
+    unavailableIconPool = {}
+    activeUnavailableIcons = {}
+    numUnavailableIconsCreated = 0
 end
 
 -- Get icon from pool or create new one (OmniCD approach)
@@ -91,6 +104,17 @@ function UI:GetIcon()
         icon.displayTexture:SetAllPoints()
         icon.displayTexture:SetTexelSnappingBias(0.0)
         icon.displayTexture:SetSnapToPixelGrid(false)
+        
+        -- Create status indicator textures
+        icon.deadIndicator = icon:CreateTexture("DeadIndicator_" .. numIconsCreated, "OVERLAY", nil, 1)
+        icon.deadIndicator:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Skull")
+        icon.deadIndicator:SetPoint("TOPRIGHT", icon, "TOPRIGHT", -2, -2)
+        icon.deadIndicator:Hide()
+        
+        icon.rangeIndicator = icon:CreateTexture("RangeIndicator_" .. numIconsCreated, "OVERLAY", nil, 1)
+        icon.rangeIndicator:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
+        icon.rangeIndicator:SetPoint("TOPLEFT", icon, "TOPLEFT", 2, -2)
+        icon.rangeIndicator:Hide()
         
         -- Hide the XML template icon texture
         if icon.icon then
@@ -112,7 +136,7 @@ function UI:GetIcon()
         
         -- Setup click handlers (optional)
         icon:SetScript("OnEnter", function(self)
-            if self.spellInfo and self.unit then
+            if addon.Config:Get("showTooltips") and self.spellInfo and self.unit then
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                 GameTooltip:SetSpellByID(self.spellInfo.spellID)
                 GameTooltip:AddLine(" ")
@@ -122,7 +146,9 @@ function UI:GetIcon()
         end)
         
         icon:SetScript("OnLeave", function(self)
-            GameTooltip:Hide()
+            if addon.Config:Get("showTooltips") then
+                GameTooltip:Hide()
+            end
         end)
     end
     
@@ -136,10 +162,106 @@ function UI:GetIcon()
     icon.playerName:SetText("")
     icon.cooldownText:SetText("")
     icon.displayTexture:SetTexture(nil)
+    icon.displayTexture:SetDesaturated(false)
     icon.displayTexture:Hide()
     icon.glow:Hide()
     icon.cooldown:Clear()
     icon.cooldown:Hide()
+    icon.deadIndicator:Hide()
+    icon.rangeIndicator:Hide()
+    
+    -- Stop any animations
+    if icon.animFrame.pulseAnim:IsPlaying() then
+        icon.animFrame.pulseAnim:Stop()
+    end
+    
+    return icon
+end
+
+-- Get unavailable icon from pool or create new one
+function UI:GetUnavailableIcon()
+    local icon = table.remove(unavailableIconPool)
+    if not icon then
+        numUnavailableIconsCreated = numUnavailableIconsCreated + 1
+        icon = CreateFrame("Button", "CCRotationUnavailableIcon" .. numUnavailableIconsCreated, UIParent, "CCRotationIconTemplate")
+        
+        -- Create working texture (smaller for unavailable queue)
+        icon.displayTexture = icon:CreateTexture("DisplayTextureUnavailable_" .. numUnavailableIconsCreated, "OVERLAY")
+        icon.displayTexture:SetAllPoints()
+        icon.displayTexture:SetTexelSnappingBias(0.0)
+        icon.displayTexture:SetSnapToPixelGrid(false)
+        
+        -- Create status indicator textures (same as main icons)
+        icon.deadIndicator = icon:CreateTexture("DeadIndicatorUnavailable_" .. numUnavailableIconsCreated, "OVERLAY", nil, 1)
+        icon.deadIndicator:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Skull")
+        icon.deadIndicator:SetPoint("TOPRIGHT", icon, "TOPRIGHT", -1, -1)
+        icon.deadIndicator:Hide()
+        
+        icon.rangeIndicator = icon:CreateTexture("RangeIndicatorUnavailable_" .. numUnavailableIconsCreated, "OVERLAY", nil, 1)
+        icon.rangeIndicator:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
+        icon.rangeIndicator:SetPoint("TOPLEFT", icon, "TOPLEFT", 1, -1)
+        icon.rangeIndicator:Hide()
+        
+        -- Hide the XML template icon texture
+        if icon.icon then
+            icon.icon:Hide()
+        end
+        
+        -- Setup smaller fonts for unavailable icons
+        local config = addon.Config
+        local fontSize = math.max(8, config:Get("unavailableIconSize") * 0.2)
+        config:SetFontProperties(icon.spellName, config:Get("spellNameFont"), fontSize)
+        config:SetFontProperties(icon.playerName, config:Get("playerNameFont"), fontSize)
+        config:SetFontProperties(icon.cooldownText, config:Get("cooldownFont"), fontSize)
+        
+        -- Set text colors
+        icon.spellName:SetTextColor(unpack(config:Get("spellNameColor")))
+        icon.playerName:SetTextColor(unpack(config:Get("spellNameColor")))
+        icon.cooldownText:SetTextColor(unpack(config:Get("cooldownTextColor")))
+        
+        -- Hide countdown numbers from cooldown frame
+        icon.cooldown:SetHideCountdownNumbers(true)
+        
+        -- Setup click handlers (minimal for unavailable)
+        icon:SetScript("OnEnter", function(self)
+            if addon.Config:Get("showTooltips") and self.spellInfo and self.unit then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetSpellByID(self.spellInfo.spellID)
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine("Player: " .. (UnitName(self.unit) or "Unknown"), 1, 1, 1)
+                if self.queueData and self.queueData.isDead then
+                    GameTooltip:AddLine("Status: Dead", 1, 0, 0)
+                elseif self.queueData and not self.queueData.inRange then
+                    GameTooltip:AddLine("Status: Out of Range", 1, 1, 0)
+                end
+                GameTooltip:Show()
+            end
+        end)
+        
+        icon:SetScript("OnLeave", function(self)
+            if addon.Config:Get("showTooltips") then
+                GameTooltip:Hide()
+            end
+        end)
+    end
+    
+    -- Set parent and reset state
+    icon:SetParent(self.mainFrame.unavailableContainer)
+    icon:ClearAllPoints()
+    icon:Hide()
+    
+    -- Reset all visual state
+    icon.spellName:SetText("")
+    icon.playerName:SetText("")
+    icon.cooldownText:SetText("")
+    icon.displayTexture:SetTexture(nil)
+    icon.displayTexture:SetDesaturated(true)  -- Always desaturated for unavailable
+    icon.displayTexture:Hide()
+    icon.glow:Hide()
+    icon.cooldown:Clear()
+    icon.cooldown:Hide()
+    icon.deadIndicator:Hide()
+    icon.rangeIndicator:Hide()
     
     -- Stop any animations
     if icon.animFrame.pulseAnim:IsPlaying() then
@@ -167,6 +289,30 @@ function UI:ReleaseIcon(icon)
         for i, activeIcon in ipairs(activeIcons) do
             if activeIcon == icon then
                 table.remove(activeIcons, i)
+                break
+            end
+        end
+    end
+end
+
+-- Return unavailable icon to pool
+function UI:ReleaseUnavailableIcon(icon)
+    if icon then
+        icon:Hide()
+        icon:SetParent(UIParent)
+        icon:ClearAllPoints()
+        
+        -- Clear references
+        icon.spellInfo = nil
+        icon.unit = nil
+        icon.queueData = nil
+        
+        table.insert(unavailableIconPool, icon)
+        
+        -- Remove from active unavailable icons
+        for i, activeIcon in ipairs(activeUnavailableIcons) do
+            if activeIcon == icon then
+                table.remove(activeUnavailableIcons, i)
                 break
             end
         end
@@ -237,12 +383,12 @@ function UI:RefreshDisplay()
     end
     
     if addon.CCRotation and addon.CCRotation.cooldownQueue then
-        self:UpdateDisplay(addon.CCRotation.cooldownQueue)
+        self:UpdateDisplay(addon.CCRotation.cooldownQueue, addon.CCRotation.unavailableQueue)
     end
 end
 
 -- Update display with current queue (main function)
-function UI:UpdateDisplay(queue)
+function UI:UpdateDisplay(queue, unavailableQueue)
     if not self.mainFrame or not self.mainFrame.container then return end
     
     -- Add null check for queue
@@ -260,6 +406,12 @@ function UI:UpdateDisplay(queue)
         self:ReleaseIcon(activeIcons[i])
     end
     wipe(activeIcons)
+    
+    -- Release all current unavailable icons back to pool
+    for i = #activeUnavailableIcons, 1, -1 do
+        self:ReleaseUnavailableIcon(activeUnavailableIcons[i])
+    end
+    wipe(activeUnavailableIcons)
     
     -- Update frame visibility
     if not addon.CCRotation:ShouldBeActive() then
@@ -280,23 +432,26 @@ function UI:UpdateDisplay(queue)
             icon.queueData = cooldownData
             icon.unit = addon.CCRotation.GUIDToUnit[cooldownData.GUID]
             icon.spellInfo = C_Spell.GetSpellInfo(cooldownData.spellID)
+            icon.spellConfig = addon.Config:GetSpellInfo(cooldownData.spellID)
             
             if icon.spellInfo and icon.unit then
                 -- Set icon texture using working approach
                 icon.displayTexture:SetTexture(icon.spellInfo.iconID)
                 icon.displayTexture:Show()
                 
-                -- Set spell name (using individual icon setting)
-                if config:Get("showSpellName" .. i) then
-                    local spellName = self:TruncateText(icon.spellInfo.name, config:Get("spellNameMaxLength"))
-                    icon.spellName:SetText(spellName)
+                -- Set spell name (using both global and individual icon settings)
+                if config:Get("showSpellName") and config:Get("showSpellName" .. i) then
+                    -- Use custom spell name if available, otherwise fall back to game spell name
+                    local spellName = (icon.spellConfig and icon.spellConfig.name) or icon.spellInfo.name
+                    local truncatedName = self:TruncateText(spellName, config:Get("spellNameMaxLength"))
+                    icon.spellName:SetText(truncatedName)
                     icon.spellName:Show()
                 else
                     icon.spellName:Hide()
                 end
                 
-                -- Set player name with class color (using individual icon setting)
-                if config:Get("showPlayerName" .. i) then
+                -- Set player name with class color (using both global and individual icon settings)
+                if config:Get("showPlayerName") and config:Get("showPlayerName" .. i) then
                     local name = UnitName(icon.unit)
                     if name then
                         local truncatedName = self:TruncateText(name, config:Get("playerNameMaxLength"))
@@ -347,6 +502,9 @@ function UI:UpdateDisplay(queue)
                     end
                 end
                 
+                -- Add status indicators for dead/out-of-range
+                self:UpdateStatusIndicators(icon, cooldownData)
+                
                 -- Position and size icon using individual size
                 local iconSize = config:Get("iconSize" .. i)
                 icon:SetSize(iconSize, iconSize)
@@ -370,6 +528,65 @@ function UI:UpdateDisplay(queue)
                 end
                 
                 icon:Show()
+            end
+        end
+    end
+    
+    -- Create and position unavailable queue icons
+    if config:Get("showUnavailableQueue") and unavailableQueue and #unavailableQueue > 0 then
+        local maxUnavailableIcons = config:Get("maxUnavailableIcons")
+        local unavailableSpacing = config:Get("unavailableSpacing")
+        local unavailableIconSize = config:Get("unavailableIconSize")
+        
+        for i = 1, math.min(#unavailableQueue, maxUnavailableIcons) do
+            local cooldownData = unavailableQueue[i]
+            if cooldownData then
+                local icon = self:GetUnavailableIcon()
+                table.insert(activeUnavailableIcons, icon)
+                
+                -- Set icon data
+                icon.queueData = cooldownData
+                icon.unit = addon.CCRotation.GUIDToUnit[cooldownData.GUID]
+                icon.spellInfo = C_Spell.GetSpellInfo(cooldownData.spellID)
+                icon.spellConfig = addon.Config:GetSpellInfo(cooldownData.spellID)
+                
+                if icon.spellInfo and icon.unit then
+                    -- Set icon texture
+                    icon.displayTexture:SetTexture(icon.spellInfo.iconID)
+                    icon.displayTexture:Show()
+                    
+                    -- Hide text for small unavailable icons
+                    icon.spellName:Hide()
+                    icon.playerName:Hide()
+                    
+                    -- Set cooldown (minimal display)
+                    local charges = cooldownData.charges or 0
+                    local isReady = charges > 0 or cooldownData.expirationTime <= now
+                    
+                    if isReady then
+                        icon.cooldown:Clear()
+                        icon.cooldown:Hide()
+                        icon.cooldownText:SetText("")
+                    else
+                        icon.cooldown:SetCooldown(now, cooldownData.expirationTime - now)
+                        icon.cooldown:Show()
+                        icon.cooldownText:SetText("")  -- No text for small icons
+                    end
+                    
+                    -- Add status indicators
+                    self:UpdateStatusIndicators(icon, cooldownData)
+                    
+                    -- Position and size icon
+                    icon:SetSize(unavailableIconSize, unavailableIconSize)
+                    
+                    if i == 1 then
+                        icon:SetPoint("TOPLEFT", self.mainFrame.unavailableContainer, "TOPLEFT", 0, 0)
+                    else
+                        icon:SetPoint("TOPLEFT", activeUnavailableIcons[i-1], "TOPRIGHT", unavailableSpacing, 0)
+                    end
+                    
+                    icon:Show()
+                end
             end
         end
     end
@@ -411,9 +628,13 @@ function UI:UpdateFrameSize()
     local config = addon.Config
     local spacing = config:Get("spacing")
     local visibleIcons = #activeIcons
+    local visibleUnavailableIcons = #activeUnavailableIcons
     
+    local totalWidth = 0
+    local totalHeight = 0
+    
+    -- Calculate main queue dimensions (keep frame size same as before)
     if visibleIcons > 0 then
-        local totalWidth = 0
         local maxHeight = 0
         
         -- Calculate total width and max height using individual icon sizes
@@ -428,10 +649,24 @@ function UI:UpdateFrameSize()
             end
         end
         
-        self.mainFrame:SetSize(totalWidth, maxHeight)
-    else
-        self.mainFrame:SetSize(1, 1)
+        totalHeight = maxHeight
     end
+    
+    -- Position unavailable container below main container but don't affect main frame size
+    if visibleUnavailableIcons > 0 and config:Get("showUnavailableQueue") then
+        local unavailableIconSize = config:Get("unavailableIconSize")
+        local offset = config:Get("unavailableQueueOffset")
+        
+        -- Position unavailable container below the main container
+        self.mainFrame.unavailableContainer:ClearAllPoints()
+        self.mainFrame.unavailableContainer:SetPoint("TOP", self.mainFrame.container, "BOTTOM", 0, -offset)
+    end
+    
+    -- Set minimum size (keep main frame size unchanged)
+    if totalWidth == 0 then totalWidth = 1 end
+    if totalHeight == 0 then totalHeight = 1 end
+    
+    self.mainFrame:SetSize(totalWidth, totalHeight)
 end
 
 -- Update position from config
@@ -510,4 +745,40 @@ function UI:ShowNotification(title, message, callback)
     notification:AddChild(button)
     
     return notification
+end
+
+-- Update status indicators for dead/out-of-range players
+function UI:UpdateStatusIndicators(icon, cooldownData)
+    if not icon or not cooldownData then return end
+    
+    -- Calculate indicator size (20% of icon size)
+    local iconSize = icon:GetWidth()
+    local indicatorSize = math.max(16, iconSize * 0.2)
+    
+    local hasStatusIndicator = false
+    
+    -- Update dead indicator
+    if cooldownData.isDead then
+        icon.deadIndicator:SetSize(indicatorSize, indicatorSize)
+        icon.deadIndicator:Show()
+        hasStatusIndicator = true
+    else
+        icon.deadIndicator:Hide()
+    end
+    
+    -- Update range indicator (only show if alive but out of range)
+    if not cooldownData.isDead and not cooldownData.inRange then
+        icon.rangeIndicator:SetSize(indicatorSize, indicatorSize)
+        icon.rangeIndicator:Show()
+        hasStatusIndicator = true
+    else
+        icon.rangeIndicator:Hide()
+    end
+    
+    -- Desaturate icon if any status indicator is shown
+    if hasStatusIndicator then
+        icon.displayTexture:SetDesaturated(true)
+    else
+        icon.displayTexture:SetDesaturated(false)
+    end
 end

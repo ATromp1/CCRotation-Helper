@@ -217,20 +217,38 @@ function CCRotation:DoRebuildQueue()
         self.cooldownQueue = filtered
     end
     
-    -- Sort the queue
-    self:SortQueue()
+    -- Sort and separate queues
+    self:SortAndSeparateQueues()
     
     -- Notify UI to update
     if addon.UI then
-        addon.UI:UpdateDisplay(self.cooldownQueue)
+        addon.UI:UpdateDisplay(self.cooldownQueue, self.unavailableQueue)
     end
 end
 
--- Sort the cooldown queue
-function CCRotation:SortQueue()
+-- Sort the cooldown queue and separate available from unavailable
+function CCRotation:SortAndSeparateQueues()
     local now = GetTime()
+    local availableQueue = {}
+    local unavailableQueue = {}
     
-    table.sort(self.cooldownQueue, function(a, b)
+    -- Add status information and separate into available/unavailable
+    for _, cooldownData in ipairs(self.cooldownQueue) do
+        local unit = self.GUIDToUnit[cooldownData.GUID]
+        if unit then
+            cooldownData.isDead = UnitIsDeadOrGhost(unit)
+            cooldownData.inRange = UnitInRange(unit)
+            
+            if cooldownData.isDead or not cooldownData.inRange then
+                table.insert(unavailableQueue, cooldownData)
+            else
+                table.insert(availableQueue, cooldownData)
+            end
+        end
+    end
+    
+    -- Sort available queue
+    table.sort(availableQueue, function(a, b)
         local unitA, unitB = self.GUIDToUnit[a.GUID], self.GUIDToUnit[b.GUID]
         if not (unitA and unitB) then return false end
         
@@ -240,12 +258,8 @@ function CCRotation:SortQueue()
         
         local readyA = a.charges > 0 or a.expirationTime <= now
         local readyB = b.charges > 0 or b.expirationTime <= now
-        local deadA = UnitIsDeadOrGhost(unitA)
-        local deadB = UnitIsDeadOrGhost(unitB)
-        local inRangeA = UnitInRange(unitA)
-        local inRangeB = UnitInRange(unitB)
         
-        -- 1. Ready spells always first
+        -- 1. Ready spells first
         if readyA ~= readyB then return readyA end
         
         -- 2. Among ready spells, prioritize priority players
@@ -253,19 +267,41 @@ function CCRotation:SortQueue()
             return isPriorityA
         end
         
-        -- 3. Then alive units
-        if deadA ~= deadB then return not deadA end
-        
-        -- 4. Then in-range units
-        if inRangeA ~= inRangeB then return inRangeA end
-        
-        -- 5. Finally, fallback on configured priority (or soonest available cooldown)
+        -- 3. Finally, fallback on configured priority (or soonest available cooldown)
         if readyA then
             return a.priority < b.priority
         else
             return a.expirationTime < b.expirationTime
         end
     end)
+    
+    -- Sort unavailable queue by what their priority WOULD be if available
+    table.sort(unavailableQueue, function(a, b)
+        local unitA, unitB = self.GUIDToUnit[a.GUID], self.GUIDToUnit[b.GUID]
+        if not (unitA and unitB) then return false end
+        
+        local nameA, nameB = UnitName(unitA), UnitName(unitB)
+        local isPriorityA = addon.Config:IsPriorityPlayer(nameA)
+        local isPriorityB = addon.Config:IsPriorityPlayer(nameB)
+        
+        local readyA = a.charges > 0 or a.expirationTime <= now
+        local readyB = b.charges > 0 or b.expirationTime <= now
+        
+        -- Same sorting as available queue to show proper priority
+        if readyA ~= readyB then return readyA end
+        if readyA and readyB and (isPriorityA ~= isPriorityB) then
+            return isPriorityA
+        end
+        if readyA then
+            return a.priority < b.priority
+        else
+            return a.expirationTime < b.expirationTime
+        end
+    end)
+    
+    -- Update the main queue and store unavailable queue
+    self.cooldownQueue = availableQueue
+    self.unavailableQueue = unavailableQueue
 end
 
 -- Combat start handler
