@@ -492,7 +492,49 @@ function addon.UI:CreateSpellsTab(container)
     end
     table.sort(sortedSpells, function(a, b) return a.data.priority < b.data.priority end)
     
-    -- Display spells as interactive rows
+    -- Create header row
+    local headerGroup = AceGUI:Create("SimpleGroup")
+    headerGroup:SetFullWidth(true)
+    headerGroup:SetLayout("Flow")
+    spellListGroup:AddChild(headerGroup)
+    
+    -- Header spacer for buttons
+    local headerSpacer = AceGUI:Create("Label")
+    headerSpacer:SetText("Actions")
+    headerSpacer:SetWidth(140)
+    headerGroup:AddChild(headerSpacer)
+    
+    -- Icon header
+    local iconHeader = AceGUI:Create("Label")
+    iconHeader:SetText("Icon")
+    iconHeader:SetWidth(40)
+    headerGroup:AddChild(iconHeader)
+    
+    -- Spell name header
+    local nameHeader = AceGUI:Create("Label")
+    nameHeader:SetText("Spell Name")
+    nameHeader:SetWidth(150)
+    headerGroup:AddChild(nameHeader)
+    
+    -- Spell ID header
+    local idHeader = AceGUI:Create("Label")
+    idHeader:SetText("Spell ID")
+    idHeader:SetWidth(80)
+    headerGroup:AddChild(idHeader)
+    
+    -- CC Type header
+    local typeHeader = AceGUI:Create("Label")
+    typeHeader:SetText("CC Type")
+    typeHeader:SetWidth(120)
+    headerGroup:AddChild(typeHeader)
+    
+    -- Action header
+    local actionHeader = AceGUI:Create("Label")
+    actionHeader:SetText("Action")
+    actionHeader:SetWidth(80)
+    headerGroup:AddChild(actionHeader)
+    
+    -- Display spells as tabular rows
     for i, spell in ipairs(sortedSpells) do
         local rowGroup = AceGUI:Create("SimpleGroup")
         rowGroup:SetFullWidth(true)
@@ -545,13 +587,102 @@ function addon.UI:CreateSpellsTab(container)
         end
         rowGroup:AddChild(spellIcon)
         
-        -- Spell info label
-        local spellLine = AceGUI:Create("Label")
-        local ccTypeName = addon.Database.ccTypeLookup[spell.data.ccType] or "unknown"
-        spellLine:SetText(string.format("%s (ID: %d, Priority: %d, Type: %s)", 
-            spell.data.name, spell.spellID, spell.data.priority, ccTypeName))
-        spellLine:SetWidth(350)
-        rowGroup:AddChild(spellLine)
+        -- Editable spell name
+        local spellNameEdit = AceGUI:Create("EditBox")
+        spellNameEdit:SetText(spell.data.name)
+        spellNameEdit:SetWidth(150)
+        spellNameEdit:SetCallback("OnEnterPressed", function(widget, event, text)
+            local newName = text:trim()
+            if newName ~= "" then
+                -- Update the spell name
+                if spell.data.source == "custom" then
+                    addon.Config.db.customSpells[spell.spellID].name = newName
+                else
+                    -- Create custom entry to override database spell
+                    addon.Config.db.customSpells[spell.spellID] = {
+                        name = newName,
+                        ccType = spell.data.ccType,
+                        priority = spell.data.priority
+                    }
+                end
+                
+                -- Rebuild rotation queue
+                if addon.CCRotation and addon.CCRotation.RebuildQueue then
+                    addon.CCRotation:RebuildQueue()
+                end
+            end
+        end)
+        rowGroup:AddChild(spellNameEdit)
+        
+        -- Editable spell ID
+        local spellIDEdit = AceGUI:Create("EditBox")
+        spellIDEdit:SetText(tostring(spell.spellID))
+        spellIDEdit:SetWidth(80)
+        spellIDEdit:SetCallback("OnEnterPressed", function(widget, event, text)
+            local newSpellID = tonumber(text)
+            if newSpellID and newSpellID ~= spell.spellID then
+                -- Remove old spell entry
+                if spell.data.source == "custom" then
+                    addon.Config.db.customSpells[spell.spellID] = nil
+                else
+                    -- Mark old database spell as inactive
+                    addon.Config.db.inactiveSpells[spell.spellID] = {
+                        name = spell.data.name,
+                        ccType = spell.data.ccType,
+                        priority = spell.data.priority,
+                        source = spell.data.source
+                    }
+                end
+                
+                -- Add new spell entry
+                addon.Config.db.customSpells[newSpellID] = {
+                    name = spell.data.name,
+                    ccType = spell.data.ccType,
+                    priority = spell.data.priority
+                }
+                
+                -- Refresh tab
+                container:ReleaseChildren()
+                self:CreateSpellsTab(container)
+                
+                -- Rebuild rotation queue
+                if addon.CCRotation and addon.CCRotation.RebuildQueue then
+                    addon.CCRotation:RebuildQueue()
+                end
+            end
+        end)
+        rowGroup:AddChild(spellIDEdit)
+        
+        -- Editable CC type dropdown
+        local ccTypeDropdown = AceGUI:Create("Dropdown")
+        ccTypeDropdown:SetWidth(120)
+        ccTypeDropdown:SetList({
+            [1] = "1 - Stun",
+            [2] = "2 - Disorient", 
+            [3] = "3 - Fear",
+            [4] = "4 - Knock",
+            [5] = "5 - Incapacitate"
+        })
+        ccTypeDropdown:SetValue(spell.data.ccType)
+        ccTypeDropdown:SetCallback("OnValueChanged", function(widget, event, value)
+            -- Update the CC type
+            if spell.data.source == "custom" then
+                addon.Config.db.customSpells[spell.spellID].ccType = value
+            else
+                -- Create custom entry to override database spell
+                addon.Config.db.customSpells[spell.spellID] = {
+                    name = spell.data.name,
+                    ccType = value,
+                    priority = spell.data.priority
+                }
+            end
+            
+            -- Rebuild rotation queue
+            if addon.CCRotation and addon.CCRotation.RebuildQueue then
+                addon.CCRotation:RebuildQueue()
+            end
+        end)
+        rowGroup:AddChild(ccTypeDropdown)
         
         -- Disable button (for all spells)
         local disableButton = AceGUI:Create("Button")
@@ -711,8 +842,8 @@ function addon.UI:CreateSpellsTab(container)
             -- Spell info (grayed out)
             local inactiveSpellLine = AceGUI:Create("Label")
             local ccTypeName = addon.Database.ccTypeLookup[spellData.ccType] or "unknown"
-            inactiveSpellLine:SetText(string.format("|cff888888%s (ID: %d, Priority: %d, Type: %s)|r", 
-                spellData.name, spellID, spellData.priority, ccTypeName))
+            inactiveSpellLine:SetText(string.format("|cff888888%s (ID: %d, Type: %s)|r", 
+                spellData.name, spellID, ccTypeName))
             inactiveSpellLine:SetWidth(350)
             inactiveRowGroup:AddChild(inactiveSpellLine)
             
