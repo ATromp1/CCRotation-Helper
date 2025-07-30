@@ -6,3 +6,4 @@ ignore:
   - README.md
   - LICENSE
   - .pkgmeta
+  - .vscode
