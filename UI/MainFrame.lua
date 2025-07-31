@@ -107,9 +107,11 @@ function UI:Initialize()
     -- Start cooldown text update timer
     self:StartCooldownTextUpdates()
     
-    -- Update position and visibility with force update
-    self:UpdatePosition(true)
-    self:UpdateVisibility()
+    -- Delay position update to ensure saved variables are loaded
+    C_Timer.After(0.1, function()
+        self:UpdatePosition(true)
+        self:UpdateVisibility()
+    end)
     
     addon.Config:DebugPrint("UI initialization complete")
 end
@@ -624,12 +626,28 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                 local isReady = charges > 0 or cooldownData.expirationTime <= now
                 
                 if isReady then
-                    icon.cooldown:Clear()
-                    icon.cooldown:Hide()
-                    icon.cooldownText:SetText("")
+                    -- Don't clear if cooldown animation is still running - let it finish naturally
+                    if icon.cooldown:IsShown() and (cooldownData.expirationTime - now) > -0.5 then
+                        -- Let both swipe and text finish naturally
+                        if config:Get("showCooldownText") then
+                            local timeLeft = math.max(0, cooldownData.expirationTime - now)
+                            icon.cooldownText:SetText(timeLeft > 0 and self:FormatTime(timeLeft) or "")
+                        else
+                            icon.cooldownText:SetText("")
+                        end
+                    else
+                        icon.cooldown:Clear()
+                        icon.cooldown:Hide()
+                        icon.cooldownEndTime = nil
+                        icon.cooldownText:SetText("")
+                    end
                 else
-                    icon.cooldown:SetCooldown(now, cooldownData.expirationTime - now)
-                    icon.cooldown:Show()
+                    -- Only set cooldown if it's not already running with the same end time
+                    if not icon.cooldown:IsShown() or math.abs((icon.cooldownEndTime or 0) - cooldownData.expirationTime) > 0.1 then
+                        icon.cooldown:SetCooldown(now, cooldownData.expirationTime - now)
+                        icon.cooldownEndTime = cooldownData.expirationTime
+                        icon.cooldown:Show()
+                    end
                     if config:Get("showCooldownText") then
                         local timeLeft = cooldownData.expirationTime - now
                         icon.cooldownText:SetText(self:FormatTime(timeLeft))
@@ -744,12 +762,23 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                         local isReady = charges > 0 or cooldownData.expirationTime <= now
                         
                         if isReady then
-                            icon.cooldown:Clear()
-                            icon.cooldown:Hide()
-                            icon.cooldownText:SetText("")
+                            -- Don't clear if cooldown animation is still running - let it finish naturally
+                            if icon.cooldown:IsShown() and (cooldownData.expirationTime - now) > -0.5 then
+                                -- Let swipe finish naturally, no text for unavailable icons anyway
+                                icon.cooldownText:SetText("")
+                            else
+                                icon.cooldown:Clear()
+                                icon.cooldown:Hide()
+                                icon.cooldownEndTime = nil
+                                icon.cooldownText:SetText("")
+                            end
                         else
-                            icon.cooldown:SetCooldown(now, cooldownData.expirationTime - now)
-                            icon.cooldown:Show()
+                            -- Only set cooldown if it's not already running with the same end time
+                            if not icon.cooldown:IsShown() or math.abs((icon.cooldownEndTime or 0) - cooldownData.expirationTime) > 0.1 then
+                                icon.cooldown:SetCooldown(now, cooldownData.expirationTime - now)
+                                icon.cooldownEndTime = cooldownData.expirationTime
+                                icon.cooldown:Show()
+                            end
                             icon.cooldownText:SetText("")  -- No text for small icons
                         end
                     
@@ -853,7 +882,7 @@ end
 -- Validate and clamp position coordinates to screen bounds
 function UI:ValidatePosition(x, y)
     if not x or not y or type(x) ~= "number" or type(y) ~= "number" then
-        addon.Config:DebugPrint("Invalid position coordinates, using defaults:", x, y)
+        addon.Config:DebugPrint("Invalid position coordinates, using defaults:", x, y, "types:", type(x), type(y))
         return 354, 134  -- Default position
     end
     
@@ -885,14 +914,23 @@ function UI:UpdatePosition(forceUpdate)
     local xOffset = config:Get("xOffset")
     local yOffset = config:Get("yOffset")
     
+    addon.Config:DebugPrint("UpdatePosition called with:", xOffset, yOffset, "forceUpdate:", forceUpdate)
+    
     -- Validate position coordinates
     local validX, validY = self:ValidatePosition(xOffset, yOffset)
     
-    -- Update config if position was corrected
+    -- Update config if position was corrected (but only if we're sure the values are actually wrong)
     if validX ~= xOffset or validY ~= yOffset then
-        config:Set("xOffset", validX)
-        config:Set("yOffset", validY)
-        addon.Config:DebugPrint("Corrected invalid position in config")
+        addon.Config:DebugPrint("Position validation changed from", xOffset, yOffset, "to", validX, validY)
+        -- Only update config if the original values were actually invalid, not just clamped
+        if not xOffset or not yOffset or type(xOffset) ~= "number" or type(yOffset) ~= "number" then
+            config:Set("xOffset", validX)
+            config:Set("yOffset", validY)
+            addon.Config:DebugPrint("Corrected invalid position in config")
+        else
+            -- Use the clamped values for positioning but don't save them back to config
+            addon.Config:DebugPrint("Position was clamped but not saved to config")
+        end
     end
     
     -- Check if we need to update (avoid unnecessary positioning)
