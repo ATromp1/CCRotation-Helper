@@ -214,6 +214,8 @@ function addon.UI:CreateProfilesTab(container)
         end
     end)
     syncGroup:AddChild(syncCurrentBtn)
+
+    syncGroup:AddChild(addon.UI.Component:HorizontalSpacer(40))
     
     -- Profile selection dropdown for sharing specific profiles
     local shareProfileDropdown = AceGUI:Create("Dropdown")
@@ -221,28 +223,39 @@ function addon.UI:CreateProfilesTab(container)
     shareProfileDropdown:SetWidth(200)
     local shareProfiles = addon.Config:GetProfileNames()
     local shareProfileList = {}
+    local profileToShare = nil
     for i, name in ipairs(shareProfiles) do
         shareProfileList[i] = name
     end
     shareProfileDropdown:SetList(shareProfileList)
-    shareProfileDropdown:SetCallback("OnValueChanged", function(widget, event, value)
+    shareProfileDropdown:SetCallback("OnValueChanged", function(_, _, value)
         if not addon.ProfileSync then
             print("|cffff0000CC Rotation Helper|r: Profile sync not available")
             return
         end
         -- value is the index, get the profile name
-        local profileName = shareProfiles[value]
-        if profileName then
-            local success, msg = addon.Config:SyncProfileToParty(profileName)
-            if success then
-                print("|cff00ff00CC Rotation Helper|r: " .. msg)
-            else
-                print("|cffff0000CC Rotation Helper|r: " .. msg)
-            end
-        end
+        profileToShare = shareProfiles[value] or nil
     end)
     syncGroup:AddChild(shareProfileDropdown)
-    
+
+    local shareProfileButton = AceGUI:Create("Button")
+    shareProfileButton:SetText("Share selected profile")
+    shareProfileButton:SetWidth(150)
+    shareProfileButton:SetCallback("OnClick", function()
+        if profileToShare == nil then
+            print("|cffff0000CC Rotation Helper|r: No profile selected")
+            return
+        end
+
+        local success, msg = addon.Config:SyncProfileToParty(profileToShare)
+        if success then
+            print("|cff00ff00CC Rotation Helper|r: " .. msg)
+        else
+            print("|cffff0000CC Rotation Helper|r: " .. msg)
+        end
+    end)
+    syncGroup:AddChild(shareProfileButton)
+
     -- Request profile section
     local requestGroup = AceGUI:Create("InlineGroup")
     requestGroup:SetFullWidth(true)
