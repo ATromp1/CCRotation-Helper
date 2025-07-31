@@ -288,6 +288,15 @@ function addon.Config:GetProfileNames()
     return profiles
 end
 
+function addon.Config:ProfileExists(profileName)
+    for _, value in pairs(self.database:GetProfiles()) do
+        if value == profileName then
+            return true
+        end
+    end
+    return false
+end
+
 function addon.Config:CreateProfile(profileName)
     if not profileName or profileName == "" then
         return false, "Profile name cannot be empty"
@@ -331,9 +340,12 @@ function addon.Config:DeleteProfile(profileName)
         return false, "Cannot delete Default profile"
     end
     
-    local profiles = self.database:GetProfiles()
-    if not profiles[profileName] then
+    if not self:ProfileExists(profileName) then
         return false, "Profile does not exist"
+    end
+
+    if self:GetCurrentProfileName() == profileName then
+        return false, "Cannot delete the currently selected profile"
     end
     
     -- Use AceDB's delete functionality
