@@ -22,33 +22,33 @@ AceComm:Embed(addon)
 -- Addon loaded handler
 function CCRotationHelper:OnAddonLoaded(loadedAddonName)
     if loadedAddonName ~= addonName then return end
-    
+
     -- Initialize configuration
     addon.Config:Initialize()
-    
+
     -- Initialize profile sync
     if addon.ProfileSync then
         addon.ProfileSync:Initialize()
     end
-    
+
     print("|cff00ff00CC Rotation Helper|r: Addon loaded successfully!")
 end
 
--- Player login handler  
+-- Player login handler
 function CCRotationHelper:OnPlayerLogin()
     -- Initialize core rotation system
     addon.CCRotation:Initialize()
-    
+
     -- Initialize UI
     if addon.UI then
         addon.UI:Initialize()
     end
-    
+
     -- Initialize minimap icon
     if addon.MinimapIcon then
         addon.MinimapIcon:Initialize()
     end
-    
+
     print("|cff00ff00CC Rotation Helper|r: Ready for M+ dungeons!")
 end
 
@@ -67,7 +67,7 @@ SLASH_CCROTATION2 = "/ccrotation"
 
 SlashCmdList["CCROTATION"] = function(msg)
     local command = string.lower(msg or "")
-    
+
     if command == "config" or command == "options" then
         if addon.UI and addon.UI.ShowConfigFrame then
             addon.UI:ShowConfigFrame()
@@ -78,7 +78,7 @@ SlashCmdList["CCROTATION"] = function(msg)
         local enabled = addon.Config:Get("enabled")
         addon.Config:Set("enabled", not enabled)
         print("|cff00ff00CC Rotation Helper|r: " .. (enabled and "Disabled" or "Enabled"))
-        
+
         if addon.UI then
             if enabled then
                 addon.UI:Hide()
@@ -91,7 +91,7 @@ SlashCmdList["CCROTATION"] = function(msg)
         addon.Config:Set("xOffset", 354)
         addon.Config:Set("yOffset", 134)
         if addon.UI then
-            addon.UI:UpdatePosition(true)  -- Force update
+            addon.UI:UpdatePosition(true) -- Force update
         end
         print("|cff00ff00CC Rotation Helper|r: Position reset to default")
     elseif command == "position" or command == "pos" then
@@ -116,7 +116,7 @@ SlashCmdList["CCROTATION"] = function(msg)
         print("Available profiles: " .. table.concat(profiles, ", "))
     elseif string.match(command, "^sync") then
         -- Profile sync commands
-        local args = {string.match(command, "^sync%s+(.+)")}
+        local args = { string.match(command, "^sync%s+(.+)") }
         if #args == 0 then
             -- Sync current profile to party
             local success, msg = addon.Config:SyncProfileToParty()
@@ -158,7 +158,7 @@ SlashCmdList["CCROTATION"] = function(msg)
         print("  IsInRaid():", IsInRaid())
         print("  GetNumSubgroupMembers():", GetNumSubgroupMembers())
         print("  GetNumGroupMembers():", GetNumGroupMembers())
-        
+
         if addon.ProfileSync then
             local members = addon.ProfileSync:GetPartyMembers()
             print("  Party members found:", #members)

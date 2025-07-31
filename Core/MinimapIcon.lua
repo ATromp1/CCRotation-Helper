@@ -31,7 +31,7 @@ function addon.MinimapIcon:Initialize()
                 local enabled = addon.Config:Get("enabled")
                 addon.Config:Set("enabled", not enabled)
                 print("|cff00ff00CC Rotation Helper|r: " .. (enabled and "Disabled" or "Enabled"))
-                
+
                 if addon.UI then
                     if enabled then
                         addon.UI:Hide()
@@ -47,7 +47,7 @@ function addon.MinimapIcon:Initialize()
             tooltip:AddLine("|cffeda55fLeft Click:|r Open Configuration")
             tooltip:AddLine("|cffeda55fRight Click:|r Toggle Enable/Disable")
             tooltip:AddLine("|cffeda55fShift+Left Click:|r Toggle Frame Lock")
-            
+
             -- Show current status
             local enabled = addon.Config:Get("enabled")
             local locked = addon.Config:Get("anchorLocked")
@@ -91,4 +91,3 @@ function addon.MinimapIcon:Initialize()
     -- Register the minimap icon
     LibDBIcon:Register("CCRotationHelper", minimapLDB, addon.Config.db.minimap)
 end
-
