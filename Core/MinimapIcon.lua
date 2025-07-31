@@ -70,6 +70,10 @@ function addon.MinimapIcon:Initialize()
             -- Toggle anchor lock
             local currentLock = addon.Config:Get("anchorLocked")
             addon.Config:Set("anchorLocked", not currentLock)
+            -- Update mouse settings when anchor lock changes
+            if addon.UI and addon.UI.UpdateMouseSettings then
+                addon.UI:UpdateMouseSettings()
+            end
             print("|cff00ff00CC Rotation Helper|r: Frame " .. (currentLock and "unlocked" or "locked"))
         else
             originalOnClick(frame, button)

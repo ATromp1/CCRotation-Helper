@@ -63,16 +63,292 @@ end
 
 -- Create Profiles tab content using AceDBOptions
 function addon.UI:CreateProfilesTab(container)
-    -- Create a BlizOptionsGroup container for AceDBOptions
-    local profileGroup = AceGUI:Create("BlizOptionsGroup")
-    profileGroup:SetFullWidth(true)
-    profileGroup:SetFullHeight(true)
-    profileGroup:SetTitle("Profile Management")
-    container:AddChild(profileGroup)
+    local scroll = AceGUI:Create("ScrollFrame")
+    scroll:SetFullWidth(true)
+    scroll:SetFullHeight(true)
+    scroll:SetLayout("Flow")
+    container:AddChild(scroll)
     
-    -- Use AceConfigDialog to draw the profile options inside our container
-    local AceConfigDialog = LibStub("AceConfigDialog-3.0")
-    AceConfigDialog:Open("CCRotationHelper_Profiles", profileGroup)
+    -- Standard AceDB profile management - create manual UI instead of using AceConfigDialog
+    local profileGroup = AceGUI:Create("InlineGroup")
+    profileGroup:SetFullWidth(true)
+    profileGroup:SetTitle("Profile Management")
+    profileGroup:SetLayout("Flow")
+    scroll:AddChild(profileGroup)
+    
+    -- Current profile display
+    local currentLabel = AceGUI:Create("Label")
+    currentLabel:SetText("Current Profile: " .. addon.Config:GetCurrentProfileName())
+    currentLabel:SetFullWidth(true)
+    profileGroup:AddChild(currentLabel)
+    
+    -- Profile dropdown for switching
+    local profileDropdown = AceGUI:Create("Dropdown")
+    profileDropdown:SetLabel("Switch to Profile")
+    profileDropdown:SetWidth(200)
+    local profiles = addon.Config:GetProfileNames()
+    
+    -- Create proper dropdown list format for AceGUI
+    local profileList = {}
+    for i, name in ipairs(profiles) do
+        profileList[i] = name  -- Use numeric indices for AceGUI dropdown
+    end
+    profileDropdown:SetList(profileList)
+    
+    -- Find the current profile index
+    local currentProfile = addon.Config:GetCurrentProfileName()
+    local currentIndex = nil
+    for i, name in ipairs(profiles) do
+        if name == currentProfile then
+            currentIndex = i
+            break
+        end
+    end
+    if currentIndex then
+        profileDropdown:SetValue(currentIndex)
+    end
+    profileDropdown:SetCallback("OnValueChanged", function(widget, event, value)
+        -- Get fresh profile list since it might have changed
+        local currentProfiles = addon.Config:GetProfileNames()
+        local profileName = currentProfiles[value]
+        if profileName then
+            local success, msg = addon.Config:SwitchProfile(profileName)
+            if success then
+                currentLabel:SetText("Current Profile: " .. profileName)
+                print("|cff00ff00CC Rotation Helper|r: " .. msg)
+            else
+                print("|cffff0000CC Rotation Helper|r: " .. msg)
+            end
+        end
+    end)
+    profileGroup:AddChild(profileDropdown)
+    
+    -- Create new profile
+    local newProfileInput = AceGUI:Create("EditBox")
+    newProfileInput:SetLabel("New Profile Name")
+    newProfileInput:SetWidth(150)
+    profileGroup:AddChild(newProfileInput)
+    
+    local createBtn = AceGUI:Create("Button")
+    createBtn:SetText("Create")
+    createBtn:SetWidth(80)
+    createBtn:SetCallback("OnClick", function()
+        local name = newProfileInput:GetText()
+        if name and name ~= "" then
+            local success, msg = addon.Config:CreateProfile(name)
+            if success then
+                -- Refresh dropdown with new profile list
+                local newProfiles = addon.Config:GetProfileNames()
+                local newProfileList = {}
+                for i, pname in ipairs(newProfiles) do
+                    newProfileList[i] = pname
+                end
+                profileDropdown:SetList(newProfileList)
+                
+                -- Update the profiles variable for callbacks
+                profiles = newProfiles
+                
+                -- Find and select the newly created profile
+                local newProfileIndex = nil
+                for i, pname in ipairs(newProfiles) do
+                    if pname == name then
+                        newProfileIndex = i
+                        break
+                    end
+                end
+                if newProfileIndex then
+                    profileDropdown:SetValue(newProfileIndex)
+                    currentLabel:SetText("Current Profile: " .. name)
+                end
+                
+                newProfileInput:SetText("")
+                print("|cff00ff00CC Rotation Helper|r: " .. msg)
+            else
+                print("|cffff0000CC Rotation Helper|r: " .. msg)
+            end
+        end
+    end)
+    profileGroup:AddChild(createBtn)
+    
+    -- Reset profile button
+    local resetBtn = AceGUI:Create("Button")
+    resetBtn:SetText("Reset Current Profile")
+    resetBtn:SetWidth(150)
+    resetBtn:SetCallback("OnClick", function()
+        local success, msg = addon.Config:ResetProfile()
+        if success then
+            print("|cff00ff00CC Rotation Helper|r: " .. msg)
+        else
+            print("|cffff0000CC Rotation Helper|r: " .. msg)
+        end
+    end)
+    profileGroup:AddChild(resetBtn)
+    
+    -- Profile Sync section
+    local syncGroup = AceGUI:Create("InlineGroup")
+    syncGroup:SetFullWidth(true)
+    syncGroup:SetTitle("Profile Sync (Party/Raid)")
+    syncGroup:SetLayout("Flow")
+    scroll:AddChild(syncGroup)
+    
+    -- Info text
+    local infoLabel = AceGUI:Create("Label")
+    infoLabel:SetText("Share profiles with party/raid members who also have CC Rotation Helper installed.")
+    infoLabel:SetFullWidth(true)
+    syncGroup:AddChild(infoLabel)
+    
+    -- Current profile sync button
+    local syncCurrentBtn = AceGUI:Create("Button")
+    syncCurrentBtn:SetText("Share Current Profile")
+    syncCurrentBtn:SetWidth(200)
+    syncCurrentBtn:SetCallback("OnClick", function()
+        if not addon.ProfileSync then
+            print("|cffff0000CC Rotation Helper|r: Profile sync not available")
+            return
+        end
+        local success, msg = addon.Config:SyncProfileToParty()
+        if success then
+            print("|cff00ff00CC Rotation Helper|r: " .. msg)
+        else
+            print("|cffff0000CC Rotation Helper|r: " .. msg)
+        end
+    end)
+    syncGroup:AddChild(syncCurrentBtn)
+    
+    -- Profile selection dropdown for sharing specific profiles
+    local shareProfileDropdown = AceGUI:Create("Dropdown")
+    shareProfileDropdown:SetLabel("Share Specific Profile")
+    shareProfileDropdown:SetWidth(200)
+    local shareProfiles = addon.Config:GetProfileNames()
+    local shareProfileList = {}
+    for i, name in ipairs(shareProfiles) do
+        shareProfileList[i] = name
+    end
+    shareProfileDropdown:SetList(shareProfileList)
+    shareProfileDropdown:SetCallback("OnValueChanged", function(widget, event, value)
+        if not addon.ProfileSync then
+            print("|cffff0000CC Rotation Helper|r: Profile sync not available")
+            return
+        end
+        -- value is the index, get the profile name
+        local profileName = shareProfiles[value]
+        if profileName then
+            local success, msg = addon.Config:SyncProfileToParty(profileName)
+            if success then
+                print("|cff00ff00CC Rotation Helper|r: " .. msg)
+            else
+                print("|cffff0000CC Rotation Helper|r: " .. msg)
+            end
+        end
+    end)
+    syncGroup:AddChild(shareProfileDropdown)
+    
+    -- Request profile section
+    local requestGroup = AceGUI:Create("InlineGroup")
+    requestGroup:SetFullWidth(true)
+    requestGroup:SetTitle("Request Profile from Party Member")
+    requestGroup:SetLayout("Flow")
+    scroll:AddChild(requestGroup)
+    
+    -- Party member dropdown
+    local partyDropdown = AceGUI:Create("Dropdown")
+    partyDropdown:SetLabel("Party Member (with addon)")
+    partyDropdown:SetWidth(150)
+    local members = {}
+    if addon.ProfileSync and addon.ProfileSync.GetAddonUsers then
+        members = addon.ProfileSync:GetAddonUsers()
+    end
+    
+    -- Add placeholder if no addon users found
+    if #members == 0 then
+        members = {"(No addon users found)"}
+    end
+    
+    local memberList = {}
+    for i, name in ipairs(members) do
+        memberList[i] = name
+    end
+    partyDropdown:SetList(memberList)
+    requestGroup:AddChild(partyDropdown)
+    
+    -- Profile name input
+    local profileInput = AceGUI:Create("EditBox")
+    profileInput:SetLabel("Profile Name")
+    profileInput:SetWidth(150)
+    requestGroup:AddChild(profileInput)
+    
+    -- Request button
+    local requestBtn = AceGUI:Create("Button")
+    requestBtn:SetText("Request Profile")
+    requestBtn:SetWidth(120)
+    requestBtn:SetCallback("OnClick", function()
+        if not addon.ProfileSync then
+            print("|cffff0000CC Rotation Helper|r: Profile sync not available")
+            return
+        end
+        
+        local selectedIndex = partyDropdown:GetValue()
+        local selectedMember = members[selectedIndex]
+        local profileName = profileInput:GetText()
+        
+        if not selectedMember or selectedMember == "" or selectedMember == "(No addon users found)" then
+            print("|cffff0000CC Rotation Helper|r: Please select a valid party member with the addon")
+            return
+        end
+        
+        if not profileName or profileName == "" then
+            print("|cffff0000CC Rotation Helper|r: Please enter a profile name")
+            return
+        end
+        
+        local success, msg = addon.Config:RequestProfileFromPlayer(selectedMember, profileName)
+        if success then
+            print("|cff00ff00CC Rotation Helper|r: " .. msg)
+        else
+            print("|cffff0000CC Rotation Helper|r: " .. msg)
+        end
+    end)
+    requestGroup:AddChild(requestBtn)
+    
+    -- Refresh addon users button
+    local refreshBtn = AceGUI:Create("Button")
+    refreshBtn:SetText("Scan for Addon Users")
+    refreshBtn:SetWidth(150)
+    refreshBtn:SetCallback("OnClick", function()
+        -- Trigger addon detection ping
+        if addon.ProfileSync and addon.ProfileSync.RefreshAddonUsers then
+            addon.ProfileSync:RefreshAddonUsers()
+            
+            -- Refresh dropdown after a short delay to allow responses
+            C_Timer.After(2, function()
+                local newMembers = {}
+                if addon.ProfileSync and addon.ProfileSync.GetAddonUsers then
+                    newMembers = addon.ProfileSync:GetAddonUsers()
+                end
+                
+                -- Add placeholder if no addon users found
+                if #newMembers == 0 then
+                    newMembers = {"(No addon users found)"}
+                end
+                
+                local newMemberList = {}
+                for i, name in ipairs(newMembers) do
+                    newMemberList[i] = name
+                end
+                partyDropdown:SetList(newMemberList)
+                partyDropdown:SetValue(nil)
+                
+                -- Update the members variable for the callback
+                members = newMembers
+                
+                local count = #newMembers == 1 and newMembers[1] == "(No addon users found)" and "0" or tostring(#newMembers)
+                print("|cff00ff00CC Rotation Helper|r: Found " .. count .. " party members with the addon")
+            end)
+        else
+            print("|cffff0000CC Rotation Helper|r: Profile sync not available")
+        end
+    end)
+    requestGroup:AddChild(refreshBtn)
 end
 
 -- Create Display tab content
@@ -166,7 +442,10 @@ function addon.UI:CreateDisplayTab(container)
     tooltipCheck:SetValue(addon.Config:Get("showTooltips"))
     tooltipCheck:SetCallback("OnValueChanged", function(widget, event, value)
         addon.Config:Set("showTooltips", value)
-        -- No need to refresh display for tooltip setting
+        -- Update mouse settings to enable/disable click-through
+        if addon.UI.UpdateMouseSettings then
+            addon.UI:UpdateMouseSettings()
+        end
     end)
     tooltipCheck:SetFullWidth(true)
     scroll:AddChild(tooltipCheck)
@@ -204,9 +483,25 @@ function addon.UI:CreateDisplayTab(container)
     anchorLockCheck:SetValue(addon.Config:Get("anchorLocked"))
     anchorLockCheck:SetCallback("OnValueChanged", function(widget, event, value)
         addon.Config:Set("anchorLocked", value)
+        -- Update mouse settings to enable/disable click-through
+        if addon.UI.UpdateMouseSettings then
+            addon.UI:UpdateMouseSettings()
+        end
     end)
     anchorLockCheck:SetFullWidth(true)
     scroll:AddChild(anchorLockCheck)
+    
+    -- Debug mode checkbox
+    local debugCheck = AceGUI:Create("CheckBox")
+    debugCheck:SetLabel("Debug mode (shows detailed debug messages)")
+    debugCheck:SetValue(addon.Config:Get("debugMode"))
+    debugCheck:SetCallback("OnValueChanged", function(widget, event, value)
+        addon.Config:Set("debugMode", value)
+        local state = value and "enabled" or "disabled"
+        print("|cff00ff00CC Rotation Helper|r: Debug mode " .. state)
+    end)
+    debugCheck:SetFullWidth(true)
+    scroll:AddChild(debugCheck)
     
     
 end

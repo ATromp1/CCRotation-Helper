@@ -47,7 +47,8 @@ function UI:SetupMainFrame()
     
     -- Make frame movable
     frame:SetMovable(true)
-    frame:EnableMouse(true)
+    -- Enable mouse if frame is unlocked OR tooltips are enabled
+    frame:EnableMouse(not config:Get("anchorLocked") or config:Get("showTooltips"))
     frame:RegisterForDrag("LeftButton")
     
     frame:SetScript("OnDragStart", function(self)
@@ -60,8 +61,10 @@ function UI:SetupMainFrame()
         self:StopMovingOrSizing()
         -- Save position
         local point, _, relativePoint, x, y = self:GetPoint()
+        addon.Config:DebugPrint("Saving position to profile:", addon.Config:GetCurrentProfileName(), "X:", x, "Y:", y)
         addon.Config:Set("xOffset", x)
         addon.Config:Set("yOffset", y)
+        addon.Config:DebugPrint("Position saved. Current values - X:", addon.Config:Get("xOffset"), "Y:", addon.Config:Get("yOffset"))
     end)
     
     
@@ -128,6 +131,9 @@ function UI:GetIcon()
         icon.cooldown:SetHideCountdownNumbers(true)
         
         -- Setup click handlers and drag passthrough
+        -- Only enable mouse if tooltips are enabled
+        icon:EnableMouse(addon.Config:Get("showTooltips"))
+        
         icon:SetScript("OnEnter", function(self)
             if addon.Config:Get("showTooltips") and self.spellInfo and self.unit then
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -239,6 +245,9 @@ function UI:GetUnavailableIcon()
         icon.cooldown:SetHideCountdownNumbers(true)
         
         -- Setup click handlers and drag passthrough (minimal for unavailable)
+        -- Only enable mouse if tooltips are enabled
+        icon:EnableMouse(addon.Config:Get("showTooltips"))
+        
         icon:SetScript("OnEnter", function(self)
             if addon.Config:Get("showTooltips") and self.spellInfo and self.unit then
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -843,6 +852,28 @@ function UI:UpdateStatusIndicators(icon, cooldownData)
     end
 end
 
+-- Update mouse settings based on tooltip config
+function UI:UpdateMouseSettings()
+    if not self.mainFrame then return end
+    
+    local config = addon.Config
+    local showTooltips = config:Get("showTooltips")
+    local anchorLocked = config:Get("anchorLocked")
+    
+    -- Update main frame mouse settings: enable if unlocked OR tooltips are enabled
+    self.mainFrame:EnableMouse(not anchorLocked or showTooltips)
+    
+    -- Update active icon mouse settings: only enable if tooltips are enabled
+    for _, icon in ipairs(activeIcons) do
+        icon:EnableMouse(showTooltips)
+    end
+    
+    -- Update active unavailable icon mouse settings: only enable if tooltips are enabled
+    for _, icon in ipairs(activeUnavailableIcons) do
+        icon:EnableMouse(showTooltips)
+    end
+end
+
 -- Update UI when configuration changes (called after profile switch)
 function UI:UpdateFromConfig()
     if not self.mainFrame then return end
@@ -864,6 +895,9 @@ function UI:UpdateFromConfig()
     -- Update visibility based on new profile settings
     self:UpdateVisibility()
     
+    -- Update mouse settings
+    self:UpdateMouseSettings()
+    
     -- Force refresh of all icon pools to apply new settings
     self:InitializeIconPool()
     
@@ -872,7 +906,7 @@ function UI:UpdateFromConfig()
     
     -- Debug output to help troubleshoot
     local config = addon.Config
-    print("|cff00ff00CC Rotation Helper:|r Profile switch complete - Position: " .. 
+    config:DebugPrint("Profile switch complete - Position: " .. 
           config:Get("xOffset") .. ", " .. config:Get("yOffset") .. 
           " | Enabled: " .. tostring(config:Get("enabled")) .. 
           " | MaxIcons: " .. config:Get("maxIcons"))

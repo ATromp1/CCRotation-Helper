@@ -115,6 +115,9 @@ local defaults = {
         
         -- Icon zoom multiplier (texture zoom within container, like WeakAuras)
         iconZoom = 1.0,
+        
+        -- Debug mode
+        debugMode = false,
     }
 }
 
@@ -137,20 +140,25 @@ function addon.Config:Initialize()
     AceConfig:RegisterOptionsTable("CCRotationHelper_Profiles", self.profileOptions)
 end
 
+
 -- Called when profile changes (switch, copy, reset)
 function addon.Config:OnProfileChanged()
-    print("|cff00ff00CC Rotation Helper:|r Profile changed to:", self.database:GetCurrentProfile())
+    local newProfile = self.database:GetCurrentProfile()
+    print("|cff00ff00CC Rotation Helper:|r Profile changed to:", newProfile)
     
     -- Update reference to current profile
     self.db = self.database.profile
     
+    -- Debug: Show profile-specific position data
+    self:DebugPrint("Profile position data - X:", self.db.xOffset, "Y:", self.db.yOffset)
+    
     -- Notify rotation system to update tracked spells
     if addon.CCRotation then
-        print("|cff00ff00CC Rotation Helper:|r Updating tracked spells and rebuilding queue...")
+        self:DebugPrint("Updating tracked spells and rebuilding queue...")
         addon.CCRotation.trackedCooldowns = self:GetTrackedSpells()
         if addon.CCRotation.RebuildQueue then
             addon.CCRotation:RebuildQueue()
-            print("|cff00ff00CC Rotation Helper:|r Queue rebuilt successfully")
+            self:DebugPrint("Queue rebuilt successfully")
         else
             print("|cffff0000CC Rotation Helper:|r Warning: RebuildQueue function not found")
         end
@@ -161,7 +169,7 @@ function addon.Config:OnProfileChanged()
     -- Notify UI to refresh
     if addon.UI then
         addon.UI:UpdateFromConfig()
-        print("|cff00ff00CC Rotation Helper:|r UI refreshed")
+        self:DebugPrint("UI refreshed")
     end
 end
 
@@ -274,9 +282,8 @@ end
 
 function addon.Config:GetProfileNames()
     local profiles = {}
-    for name, _ in pairs(self.database:GetProfiles()) do
-        table.insert(profiles, name)
-    end
+    -- AceDB's GetProfiles returns a numerically indexed array, not a key-value table
+    local profileArray, count = self.database:GetProfiles(profiles)
     table.sort(profiles)
     return profiles
 end
@@ -339,12 +346,8 @@ function addon.Config:SwitchProfile(profileName)
         return false, "Profile name cannot be empty"
     end
     
-    local profiles = self.database:GetProfiles()
-    if not profiles[profileName] then
-        return false, "Profile does not exist"
-    end
-    
     -- Use AceDB's profile switching (this will trigger OnProfileChanged callback)
+    -- AceDB will create the profile if it doesn't exist
     self.database:SetProfile(profileName)
     return true, "Switched to profile: " .. profileName
 end
@@ -353,4 +356,44 @@ function addon.Config:ResetProfile()
     -- Reset current profile to defaults
     self.database:ResetProfile()
     return true, "Profile reset to defaults"
+end
+
+-- Profile Sync Functions
+function addon.Config:SyncProfileToParty(profileName)
+    if not addon.ProfileSync then
+        return false, "Profile sync not initialized"
+    end
+    
+    return addon.ProfileSync:ShareProfile(profileName or self:GetCurrentProfileName())
+end
+
+function addon.Config:RequestProfileFromPlayer(playerName, profileName)
+    if not addon.ProfileSync then
+        return false, "Profile sync not initialized"
+    end
+    
+    return addon.ProfileSync:RequestProfile(playerName, profileName)
+end
+
+function addon.Config:RequestProfileListFromPlayer(playerName)
+    if not addon.ProfileSync then
+        return false, "Profile sync not initialized"
+    end
+    
+    return addon.ProfileSync:RequestProfileList(playerName)
+end
+
+function addon.Config:GetPartyMembers()
+    if not addon.ProfileSync then
+        return {}
+    end
+    
+    return addon.ProfileSync:GetPartyMembers()
+end
+
+-- Debug utility function
+function addon.Config:DebugPrint(...)
+    if self:Get("debugMode") then
+        print("|cff00ff00CC Rotation Helper [DEBUG]:|r", ...)
+    end
 end
