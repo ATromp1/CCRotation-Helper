@@ -11,26 +11,26 @@ local lib = LibStub("LibOpenRaid-1.0", true)
 function CCRotation:Initialize()
     -- Build NPC effectiveness map from database
     self.npcEffectiveness = addon.Database:BuildNPCEffectiveness()
-    
+
     -- Get tracked spells from config
     self.trackedCooldowns = addon.Config:GetTrackedSpells()
-    
+
     -- Initialize tracking variables
     self.cooldownQueue = {}
     self.GUIDToUnit = {}
     self.activeNPCs = {}
-    
+
     -- Initialize GUID mapping
     self:RefreshGUIDToUnit()
-    
+
     -- Register LibOpenRaid callbacks if library is available
     if lib then
         self:RegisterLibOpenRaidCallbacks()
     end
-    
+
     -- Register for events
     self:RegisterEvents()
-    
+
     -- Schedule delayed queue rebuild to ensure LibOpenRaid has data
     C_Timer.After(1, function()
         self:RebuildQueue()
@@ -40,18 +40,18 @@ end
 -- Function to rebuild GUID mapping
 function CCRotation:RefreshGUIDToUnit()
     self.GUIDToUnit = {}
-    
+
     -- Always include yourself
     local myGUID = UnitGUID("player")
     if myGUID then
         self.GUIDToUnit[myGUID] = "player"
     end
-    
+
     -- Then map everyone in your group/raid
     if IsInGroup() then
         local numGroupMembers = GetNumGroupMembers()
         local prefix = IsInRaid() and "raid" or "party"
-        
+
         for i = 1, numGroupMembers do
             local unit = prefix .. i
             if UnitExists(unit) then
@@ -67,13 +67,13 @@ end
 -- Register LibOpenRaid callbacks
 function CCRotation:RegisterLibOpenRaidCallbacks()
     if not lib then return end
-    
+
     local callbacks = {
         CooldownUpdate = function(...)
             self:OnCooldownUpdate(...)
         end,
     }
-    
+
     lib.RegisterCallback(callbacks, "CooldownUpdate", "CooldownUpdate")
 end
 
@@ -81,14 +81,14 @@ end
 function CCRotation:RegisterEvents()
     local frame = CreateFrame("Frame")
     self.eventFrame = frame
-    
+
     frame:RegisterEvent("PLAYER_ENTERING_WORLD")
     frame:RegisterEvent("CHALLENGE_MODE_START")
     frame:RegisterEvent("GROUP_ROSTER_UPDATE")
     frame:RegisterEvent("PLAYER_REGEN_DISABLED")
     frame:RegisterEvent("PLAYER_REGEN_ENABLED")
     frame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-    
+
     frame:SetScript("OnEvent", function(self, event, ...)
         CCRotation:OnEvent(event, ...)
     end)
@@ -127,13 +127,13 @@ end
 function CCRotation:UpdateEntry(unit, spellID, cooldownInfo)
     local info = self.trackedCooldowns[spellID]
     if not (unit and info and cooldownInfo and lib) then return end
-    
+
     local GUID = UnitGUID(unit)
     if not GUID then return end
-    
+
     local _, _, timeLeft, charges, _, _, _, duration = lib.GetCooldownStatusFromCooldownInfo(cooldownInfo)
     local currentTime = GetTime()
-    
+
     -- Check if entry already exists and update it
     for _, cooldownData in ipairs(self.cooldownQueue) do
         if cooldownData.GUID == GUID and cooldownData.spellID == spellID then
@@ -143,7 +143,7 @@ function CCRotation:UpdateEntry(unit, spellID, cooldownInfo)
             return true
         end
     end
-    
+
     -- Add new entry
     table.insert(self.cooldownQueue, {
         GUID = GUID,
@@ -153,7 +153,7 @@ function CCRotation:UpdateEntry(unit, spellID, cooldownInfo)
         duration = duration,
         charges = charges
     })
-    
+
     return true
 end
 
@@ -164,7 +164,7 @@ function CCRotation:RebuildQueue()
         self._rebuildTimer:Cancel()
         self._rebuildTimer = nil
     end
-    
+
     -- Schedule a new rebuild after a short delay
     self._rebuildTimer = C_Timer.After(0.1, function()
         self._rebuildTimer = nil
@@ -176,10 +176,10 @@ end
 function CCRotation:DoRebuildQueue()
     -- Refresh GUID→unit mapping
     self:RefreshGUIDToUnit()
-    
+
     -- Rebuild the queue
     self.cooldownQueue = {}
-    
+
     if lib then
         local allUnits = lib.GetAllUnitsCooldown()
         if allUnits then
@@ -192,11 +192,11 @@ function CCRotation:DoRebuildQueue()
             end
         end
     end
-    
+
     -- Determine if we have any known NPCs and handle filtering/effectiveness
     local hasKnownNPCs = false
     local hasUnknownNPCs = false
-    
+
     for npcID in pairs(self.activeNPCs) do
         local effectiveness = addon.Config:GetNPCEffectiveness(npcID)
         if effectiveness then
@@ -205,17 +205,17 @@ function CCRotation:DoRebuildQueue()
             hasUnknownNPCs = true
         end
     end
-    
+
     -- Filter by active NPCs if we have known NPCs (standard behavior)
     if hasKnownNPCs then
         local filtered = {}
         for _, cd in ipairs(self.cooldownQueue) do
             local info = self.trackedCooldowns[cd.spellID]
             local ccType = info and info.type
-            
+
             if not ccType then
                 -- Uncategorized spells always show
-                filtered[#filtered+1] = cd
+                filtered[#filtered + 1] = cd
                 cd.isEffective = true
             else
                 -- Only keep if ANY known NPC accepts this CC type
@@ -228,7 +228,7 @@ function CCRotation:DoRebuildQueue()
                     end
                 end
                 if isEffective then
-                    filtered[#filtered+1] = cd
+                    filtered[#filtered + 1] = cd
                     cd.isEffective = true
                 end
             end
@@ -240,10 +240,10 @@ function CCRotation:DoRebuildQueue()
             cd.isEffective = not hasUnknownNPCs
         end
     end
-    
+
     -- Sort and separate queues
     self:SortAndSeparateQueues()
-    
+
     -- Notify UI to update
     if addon.UI then
         addon.UI:UpdateDisplay(self.cooldownQueue, self.unavailableQueue)
@@ -255,20 +255,20 @@ function CCRotation:SortAndSeparateQueues()
     local now = GetTime()
     local availableQueue = {}
     local unavailableQueue = {}
-    
+
     -- Add status information and separate into available/unavailable
     for _, cooldownData in ipairs(self.cooldownQueue) do
         local unit = self.GUIDToUnit[cooldownData.GUID]
         if unit then
             cooldownData.isDead = UnitIsDeadOrGhost(unit)
-            
+
             -- Special case: when not in a group, treat yourself as always in range
             if unit == "player" and not IsInGroup() then
                 cooldownData.inRange = true
             else
                 cooldownData.inRange = UnitInRange(unit)
             end
-            
+
             if cooldownData.isDead or not cooldownData.inRange then
                 table.insert(unavailableQueue, cooldownData)
             else
@@ -276,27 +276,27 @@ function CCRotation:SortAndSeparateQueues()
             end
         end
     end
-    
+
     -- Sort available queue
     table.sort(availableQueue, function(a, b)
         local unitA, unitB = self.GUIDToUnit[a.GUID], self.GUIDToUnit[b.GUID]
         if not (unitA and unitB) then return false end
-        
+
         local nameA, nameB = UnitName(unitA), UnitName(unitB)
         local isPriorityA = addon.Config:IsPriorityPlayer(nameA)
         local isPriorityB = addon.Config:IsPriorityPlayer(nameB)
-        
+
         local readyA = a.charges > 0 or a.expirationTime <= now
         local readyB = b.charges > 0 or b.expirationTime <= now
-        
+
         -- 1. Ready spells first
         if readyA ~= readyB then return readyA end
-        
+
         -- 2. Among ready spells, prioritize priority players
         if readyA and readyB and (isPriorityA ~= isPriorityB) then
             return isPriorityA
         end
-        
+
         -- 3. Finally, fallback on configured priority (or soonest available cooldown)
         if readyA then
             return a.priority < b.priority
@@ -304,19 +304,19 @@ function CCRotation:SortAndSeparateQueues()
             return a.expirationTime < b.expirationTime
         end
     end)
-    
+
     -- Sort unavailable queue by what their priority WOULD be if available
     table.sort(unavailableQueue, function(a, b)
         local unitA, unitB = self.GUIDToUnit[a.GUID], self.GUIDToUnit[b.GUID]
         if not (unitA and unitB) then return false end
-        
+
         local nameA, nameB = UnitName(unitA), UnitName(unitB)
         local isPriorityA = addon.Config:IsPriorityPlayer(nameA)
         local isPriorityB = addon.Config:IsPriorityPlayer(nameB)
-        
+
         local readyA = a.charges > 0 or a.expirationTime <= now
         local readyB = b.charges > 0 or b.expirationTime <= now
-        
+
         -- Same sorting as available queue to show proper priority
         if readyA ~= readyB then return readyA end
         if readyA and readyB and (isPriorityA ~= isPriorityB) then
@@ -328,7 +328,7 @@ function CCRotation:SortAndSeparateQueues()
             return a.expirationTime < b.expirationTime
         end
     end)
-    
+
     -- Update the main queue and store unavailable queue
     self.cooldownQueue = availableQueue
     self.unavailableQueue = unavailableQueue
@@ -338,21 +338,21 @@ end
 function CCRotation:OnCombatStart()
     -- Reset active NPCs
     wipe(self.activeNPCs)
-    
+
     -- Start scanning for nameplates
     self:ScanNameplates()
-    
+
     -- Schedule quick scan
     self.quickScan = C_Timer.After(0.3, function()
         self:ScanNameplates()
     end)
-    
+
     -- Cancel non-combat timer if running
     if self.nonCombatTicker then
         self.nonCombatTicker:Cancel()
         self.nonCombatTicker = nil
     end
-    
+
     -- Start periodic scanning and guaranteed queue rebuilds every second
     if self.scanTicker then self.scanTicker:Cancel() end
     self.scanTicker = C_Timer.NewTicker(1, function()
@@ -373,7 +373,7 @@ function CCRotation:OnCombatEnd()
         self.quickScan:Cancel()
         self.quickScan = nil
     end
-    
+
     -- Start non-combat periodic queue rebuild every 3 seconds
     if self.nonCombatTicker then self.nonCombatTicker:Cancel() end
     self.nonCombatTicker = C_Timer.NewTicker(3, function()
@@ -416,14 +416,14 @@ end
 -- Check if addon should be active
 function CCRotation:ShouldBeActive()
     local config = addon.Config
-    
+
     if not config:Get("enabled") then
         return false
     end
-    
+
     if not config:Get("showInSolo") and not IsInGroup() then
         return false
     end
-    
+
     return true
 end

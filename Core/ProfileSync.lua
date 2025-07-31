@@ -24,34 +24,34 @@ local MSG_ADDON_PONG = "PONG"
 function addon.ProfileSync:Initialize()
     -- Register communication handler
     addon:RegisterComm(COMM_PREFIX, "OnCommReceived")
-    
+
     -- Register for group roster events
     addon:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupRosterUpdate")
     addon:RegisterEvent("GROUP_JOINED", "OnGroupJoined")
     addon:RegisterEvent("GROUP_LEFT", "OnGroupLeft")
-    
+
     -- Send ping to detect other addon users when joining a group
     C_Timer.After(2, function()
         self:PingAddonUsers()
     end)
-    
+
     print("|cff00ff00CC Rotation Helper|r: Profile sync initialized")
 end
 
 -- Handle incoming comm messages
 function addon:OnCommReceived(prefix, message, distribution, sender)
     if prefix ~= COMM_PREFIX then return end
-    
+
     -- Don't process our own messages
     if sender == UnitName("player") then return end
-    
+
     -- Deserialize the message
     local success, msgType, data = AceSerializer:Deserialize(message)
     if not success then
         print("|cffff0000CC Rotation Helper|r: Failed to deserialize sync message from " .. sender)
         return
     end
-    
+
     -- Handle different message types
     if msgType == MSG_PROFILE_REQUEST then
         addon.ProfileSync:HandleProfileRequest(sender, data)
@@ -60,7 +60,7 @@ function addon:OnCommReceived(prefix, message, distribution, sender)
     elseif msgType == MSG_PROFILE_LIST then
         addon.ProfileSync:HandleProfileList(sender, data)
     elseif msgType == MSG_ADDON_PING then
-        addon.ProfileSync:HandleAddonPing(sender, data) 
+        addon.ProfileSync:HandleAddonPing(sender, data)
     elseif msgType == MSG_ADDON_PONG then
         addon.ProfileSync:HandleAddonPong(sender, data)
     end
@@ -71,24 +71,24 @@ function addon.ProfileSync:RequestProfile(targetPlayer, profileName)
     if not IsInGroup() then
         return false, "Not in a party or raid"
     end
-    
+
     if not targetPlayer or targetPlayer == "" then
         return false, "Target player name required"
     end
-    
+
     if not profileName or profileName == "" then
         return false, "Profile name required"
     end
-    
+
     local requestData = {
         version = SYNC_VERSION,
         profileName = profileName,
         requester = UnitName("player")
     }
-    
+
     local serialized = AceSerializer:Serialize(MSG_PROFILE_REQUEST, requestData)
     addon:SendCommMessage(COMM_PREFIX, serialized, "WHISPER", targetPlayer)
-    
+
     print("|cff00ff00CC Rotation Helper|r: Requested profile '" .. profileName .. "' from " .. targetPlayer)
     return true, "Profile request sent"
 end
@@ -98,11 +98,11 @@ function addon.ProfileSync:ShareProfile(profileName, target)
     if not IsInGroup() and not target then
         return false, "Not in a party/raid and no target specified"
     end
-    
+
     if not profileName or profileName == "" then
         return false, "Profile name required"
     end
-    
+
     -- Check if profile exists by getting the profile list as array
     local profiles = {}
     addon.Config.database:GetProfiles(profiles)
@@ -113,11 +113,11 @@ function addon.ProfileSync:ShareProfile(profileName, target)
             break
         end
     end
-    
+
     if not profileExists then
         return false, "Profile '" .. profileName .. "' does not exist"
     end
-    
+
     -- Get the actual profile data from the internal profiles table
     local profileData = addon.Config.database.profiles[profileName]
     local shareData = {
@@ -126,12 +126,12 @@ function addon.ProfileSync:ShareProfile(profileName, target)
         profileData = profileData,
         sender = UnitName("player")
     }
-    
+
     local serialized = AceSerializer:Serialize(MSG_PROFILE_SHARE, shareData)
     local distribution = target and "WHISPER" or (IsInRaid() and "RAID" or "PARTY")
-    
+
     addon:SendCommMessage(COMM_PREFIX, serialized, distribution, target)
-    
+
     local targetStr = target or (IsInRaid() and "raid" or "party")
     print("|cff00ff00CC Rotation Helper|r: Shared profile '" .. profileName .. "' with " .. targetStr)
     return true, "Profile shared successfully"
@@ -142,19 +142,19 @@ function addon.ProfileSync:RequestProfileList(targetPlayer)
     if not IsInGroup() then
         return false, "Not in a party or raid"
     end
-    
+
     if not targetPlayer or targetPlayer == "" then
         return false, "Target player name required"
     end
-    
+
     local requestData = {
         version = SYNC_VERSION,
         requester = UnitName("player")
     }
-    
+
     local serialized = AceSerializer:Serialize(MSG_PROFILE_LIST, requestData)
     addon:SendCommMessage(COMM_PREFIX, serialized, "WHISPER", targetPlayer)
-    
+
     print("|cff00ff00CC Rotation Helper|r: Requested profile list from " .. targetPlayer)
     return true, "Profile list request sent"
 end
@@ -165,16 +165,16 @@ function addon.ProfileSync:HandleProfileRequest(sender, data)
         print("|cffff0000CC Rotation Helper|r: Invalid profile request from " .. sender)
         return
     end
-    
+
     print("|cff00ff00CC Rotation Helper|r: " .. sender .. " requested profile '" .. data.profileName .. "'")
-    
+
     -- Check if we have the profile
     local profiles = addon.Config.database:GetProfiles()
     if not profiles[data.profileName] then
         print("|cffff0000CC Rotation Helper|r: Profile '" .. data.profileName .. "' not found")
         return
     end
-    
+
     -- Automatically share the requested profile
     self:ShareProfile(data.profileName, sender)
 end
@@ -185,14 +185,14 @@ function addon.ProfileSync:HandleProfileShare(sender, data)
         print("|cffff0000CC Rotation Helper|r: Invalid profile share from " .. sender)
         return
     end
-    
+
     local profileName = data.profileName
     local profileData = data.profileData
-    
+
     -- Check if profile already exists
     local profiles = addon.Config.database:GetProfiles()
     local finalProfileName = profileName
-    
+
     if profiles[profileName] then
         -- Generate a unique name
         local counter = 1
@@ -201,15 +201,15 @@ function addon.ProfileSync:HandleProfileShare(sender, data)
             counter = counter + 1
         until not profiles[finalProfileName]
     end
-    
+
     -- Create the new profile
     addon.Config.database:SetProfile(finalProfileName)
-    
+
     -- Copy the profile data
     for key, value in pairs(profileData) do
         addon.Config.database.profile[key] = value
     end
-    
+
     print("|cff00ff00CC Rotation Helper|r: Received profile '" .. finalProfileName .. "' from " .. sender)
     print("|cff00ff00CC Rotation Helper|r: Use /ccr profile to switch to it")
 end
@@ -220,13 +220,13 @@ function addon.ProfileSync:HandleProfileList(sender, data)
         print("|cffff0000CC Rotation Helper|r: Invalid profile list request from " .. sender)
         return
     end
-    
+
     print("|cff00ff00CC Rotation Helper|r: " .. sender .. " requested your profile list")
-    
+
     -- Get our profile names
     local profileNames = addon.Config:GetProfileNames()
     local currentProfile = addon.Config:GetCurrentProfileName()
-    
+
     print("|cff00ff00CC Rotation Helper|r: Your profiles: " .. table.concat(profileNames, ", "))
     print("|cff00ff00CC Rotation Helper|r: Current: " .. currentProfile)
 end
@@ -234,7 +234,7 @@ end
 -- Get party members who might have the addon
 function addon.ProfileSync:GetPartyMembers()
     local members = {}
-    
+
     if IsInRaid() then
         for i = 1, GetNumGroupMembers() do
             local unit = "raid" .. i
@@ -252,21 +252,21 @@ function addon.ProfileSync:GetPartyMembers()
             end
         end
     end
-    
+
     return members
 end
 
 -- Ping party/raid members to detect who has the addon
 function addon.ProfileSync:PingAddonUsers()
     if not IsInGroup() then return end
-    
+
     addon.Config:DebugPrint("Pinging party members to detect addon users")
-    
+
     local pingData = {
         version = SYNC_VERSION,
         sender = UnitName("player")
     }
-    
+
     local serialized = AceSerializer:Serialize(MSG_ADDON_PING, pingData)
     local distribution = IsInRaid() and "RAID" or "PARTY"
     addon:SendCommMessage(COMM_PREFIX, serialized, distribution)
@@ -275,15 +275,15 @@ end
 -- Handle ping from another player
 function addon.ProfileSync:HandleAddonPing(sender, data)
     if not data or data.version ~= SYNC_VERSION then return end
-    
+
     addon.Config:DebugPrint("Received addon ping from", sender, "- responding with pong")
-    
+
     -- Respond with pong
     local pongData = {
         version = SYNC_VERSION,
         sender = UnitName("player")
     }
-    
+
     local serialized = AceSerializer:Serialize(MSG_ADDON_PONG, pongData)
     addon:SendCommMessage(COMM_PREFIX, serialized, "WHISPER", sender)
 end
@@ -291,16 +291,16 @@ end
 -- Handle pong response
 function addon.ProfileSync:HandleAddonPong(sender, data)
     if not data or data.version ~= SYNC_VERSION then return end
-    
+
     addon.Config:DebugPrint("Received addon pong from", sender, "- marking as addon user")
-    
+
     -- Mark this player as having the addon
     addonUsers[sender] = {
         hasAddon = true,
         lastSeen = time(),
         version = data.version
     }
-    
+
     addon.Config:DebugPrint("Detected addon user:", sender)
 end
 
@@ -308,7 +308,7 @@ end
 function addon.ProfileSync:GetAddonUsers()
     local users = {}
     local currentTime = time()
-    
+
     -- Clean up old entries (older than 5 minutes) and collect current users
     for playerName, info in pairs(addonUsers) do
         if currentTime - info.lastSeen > 300 then
@@ -317,7 +317,7 @@ function addon.ProfileSync:GetAddonUsers()
             table.insert(users, playerName)
         end
     end
-    
+
     return users
 end
 
@@ -325,13 +325,13 @@ end
 function addon.ProfileSync:PlayerHasAddon(playerName)
     local info = addonUsers[playerName]
     if not info then return false end
-    
+
     local currentTime = time()
     if currentTime - info.lastSeen > 300 then
         addonUsers[playerName] = nil
         return false
     end
-    
+
     return info.hasAddon
 end
 
@@ -345,9 +345,9 @@ end
 -- Event handlers for group changes
 function addon:OnGroupRosterUpdate()
     if not addon.ProfileSync then return end
-    
+
     addon.Config:DebugPrint("Group roster updated - pinging for addon users")
-    
+
     -- Ping after a short delay to allow the roster to stabilize
     C_Timer.After(1, function()
         addon.ProfileSync:PingAddonUsers()
@@ -356,12 +356,12 @@ end
 
 function addon:OnGroupJoined()
     if not addon.ProfileSync then return end
-    
+
     addon.Config:DebugPrint("Joined group - pinging for addon users")
-    
+
     -- Clear existing addon user data since we're in a new group
     addonUsers = {}
-    
+
     -- Ping after a short delay
     C_Timer.After(2, function()
         addon.ProfileSync:PingAddonUsers()
@@ -370,9 +370,9 @@ end
 
 function addon:OnGroupLeft()
     if not addon.ProfileSync then return end
-    
+
     addon.Config:DebugPrint("Left group - clearing addon user data")
-    
+
     -- Clear addon user data since we're no longer in a group
     addonUsers = {}
 end
