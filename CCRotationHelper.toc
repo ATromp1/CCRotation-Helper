@@ -33,6 +33,7 @@ Core\ProfileSync.lua
 UI\Templates.xml
 UI\MainFrame.lua
 UI\ConfigFrame.lua
+UI\Component.lua
 
 # Main addon file
 CCRotationHelper.lua
