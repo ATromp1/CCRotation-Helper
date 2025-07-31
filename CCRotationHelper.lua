@@ -91,9 +91,23 @@ SlashCmdList["CCROTATION"] = function(msg)
         addon.Config:Set("xOffset", 354)
         addon.Config:Set("yOffset", 134)
         if addon.UI then
-            addon.UI:UpdatePosition()
+            addon.UI:UpdatePosition(true)  -- Force update
         end
         print("|cff00ff00CC Rotation Helper|r: Position reset to default")
+    elseif command == "position" or command == "pos" then
+        -- Show position debug info
+        if addon.UI then
+            addon.UI:ShowPositionDebug()
+        else
+            print("|cff00ff00CC Rotation Helper|r: UI not initialized")
+        end
+    elseif command == "icons" or command == "icon" then
+        -- Show icon debug info and attempt recovery
+        if addon.UI then
+            addon.UI:ShowIconDebug()
+        else
+            print("|cff00ff00CC Rotation Helper|r: UI not initialized")
+        end
     elseif command == "profile" or command == "profiles" then
         -- Show current profile and available profiles
         local current = addon.Config:GetCurrentProfileName()
@@ -175,6 +189,8 @@ SlashCmdList["CCROTATION"] = function(msg)
         print("  /ccr config - Open configuration")
         print("  /ccr toggle - Enable/disable addon")
         print("  /ccr reset - Reset position to default")
+        print("  /ccr position - Show position debug info and toggle anchor")
+        print("  /ccr icons - Show icon debug info and attempt recovery")
         print("  /ccr profile - Show current profile info")
         print("  /ccr sync [profilename] - Share profile with party")
         print("  /ccr request PlayerName ProfileName - Request profile from player")
