@@ -32,6 +32,10 @@ function addon.UI:CreateConfigFrame()
         {text="Players", value="players"}
     })
     tabGroup:SetCallback("OnGroupSelected", function(container, event, group)
+        function container:RefreshCurrentTab()
+            tabGroup:SelectTab(group)
+        end
+
         container:ReleaseChildren()
         if group == "profiles" then
             self:CreateProfilesTab(container)
@@ -183,6 +187,39 @@ function addon.UI:CreateProfilesTab(container)
         end
     end)
     profileGroup:AddChild(resetBtn)
+
+    profileGroup:AddChild(addon.UI.Component:VerticalSpacer(5))
+    local deleteDropdown = addon.UI.Component:ProfilesDropdown("Delete profile", function(profile, widget)
+        if #addon.Config:GetProfileNames() <= 1 then
+            print("|cffff0000CC Rotation Helper|r: You cannot delete your last profile")
+            widget:SetValue(0)
+            return
+        end
+
+        addon.UI.Component:ConfirmationDialog(
+            "DELETE_PROFILE_CONFIRMATION",
+            "Do you want to delete profile: "..profile.."?", 
+            "Delete",
+            function()
+                local success, msg = addon.Config:DeleteProfile(profile)
+                if success then
+                    container:RefreshCurrentTab()
+                    print("|cff00ff00CC Rotation Helper|r: " .. msg)
+                else
+                    print("|cffff0000CC Rotation Helper|r: " .. msg)
+                end
+
+                -- Set dropdown to unselected value
+                widget:SetValue(0)
+            end,
+            "Cancel",
+            function()
+                -- Set dropdown to unselected value
+                widget:SetValue(0)
+            end
+        )
+    end)
+    profileGroup:AddChild(deleteDropdown)
     
     -- Profile Sync section
     local syncGroup = AceGUI:Create("InlineGroup")
