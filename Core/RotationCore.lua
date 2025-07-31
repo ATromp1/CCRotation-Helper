@@ -114,6 +114,10 @@ end
 -- Handle LibOpenRaid cooldown updates
 function CCRotation:OnCooldownUpdate(...)
     self:RebuildQueue()
+    -- Force immediate UI update since this is a real cooldown change
+    if addon.UI then
+        addon.UI:UpdateDisplay(self.cooldownQueue, self.unavailableQueue)
+    end
 end
 
 -- Extract NPC ID from a unit GUID
@@ -244,8 +248,8 @@ function CCRotation:DoRebuildQueue()
     -- Sort and separate queues
     self:SortAndSeparateQueues()
 
-    -- Notify UI to update
-    if addon.UI then
+    -- Only notify UI if queue actually changed
+    if addon.UI and self:HasQueueChanged() then
         addon.UI:UpdateDisplay(self.cooldownQueue, self.unavailableQueue)
     end
 end
@@ -353,11 +357,11 @@ function CCRotation:OnCombatStart()
         self.nonCombatTicker = nil
     end
 
-    -- Start periodic scanning and guaranteed queue rebuilds every second
+    -- Start periodic scanning every second
     if self.scanTicker then self.scanTicker:Cancel() end
     self.scanTicker = C_Timer.NewTicker(1, function()
         self:ScanNameplates()
-        -- Always rebuild queue to catch range/death changes
+        -- Rebuild queue (will only update UI if queue actually changed)
         self:RebuildQueue()
     end)
 end
@@ -411,6 +415,53 @@ end
 -- Get the current queue for display
 function CCRotation:GetQueue()
     return self.cooldownQueue
+end
+
+-- Check if the queue has actually changed since last update
+function CCRotation:HasQueueChanged()
+    if not self.lastQueue then
+        self.lastQueue = {}
+        return true
+    end
+
+    -- Quick length check
+    if #self.cooldownQueue ~= #self.lastQueue then
+        self:SaveCurrentQueue()
+        return true
+    end
+
+    -- Check if any items changed
+    local now = GetTime()
+    for i, cd in ipairs(self.cooldownQueue) do
+        local last = self.lastQueue[i]
+        if not last or
+            cd.GUID ~= last.GUID or
+            cd.spellID ~= last.spellID or
+            math.abs(cd.expirationTime - last.expirationTime) > 0.1 then
+            self:SaveCurrentQueue()
+            return true
+        end
+
+        -- Force update if ability is about to be ready (within 2 seconds)
+        local timeLeft = cd.expirationTime - now
+        if timeLeft <= 2 and timeLeft >= 0 then
+            return true
+        end
+    end
+
+    return false
+end
+
+-- Save current queue state for comparison
+function CCRotation:SaveCurrentQueue()
+    self.lastQueue = {}
+    for i, cd in ipairs(self.cooldownQueue) do
+        self.lastQueue[i] = {
+            GUID = cd.GUID,
+            spellID = cd.spellID,
+            expirationTime = cd.expirationTime
+        }
+    end
 end
 
 -- Check if addon should be active
