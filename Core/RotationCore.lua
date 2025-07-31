@@ -193,8 +193,21 @@ function CCRotation:DoRebuildQueue()
         end
     end
     
-    -- Filter by active NPCs if we have any
-    if next(self.activeNPCs) then
+    -- Determine if we have any known NPCs and handle filtering/effectiveness
+    local hasKnownNPCs = false
+    local hasUnknownNPCs = false
+    
+    for npcID in pairs(self.activeNPCs) do
+        local effectiveness = addon.Config:GetNPCEffectiveness(npcID)
+        if effectiveness then
+            hasKnownNPCs = true
+        else
+            hasUnknownNPCs = true
+        end
+    end
+    
+    -- Filter by active NPCs if we have known NPCs (standard behavior)
+    if hasKnownNPCs then
         local filtered = {}
         for _, cd in ipairs(self.cooldownQueue) do
             local info = self.trackedCooldowns[cd.spellID]
@@ -203,18 +216,29 @@ function CCRotation:DoRebuildQueue()
             if not ccType then
                 -- Uncategorized spells always show
                 filtered[#filtered+1] = cd
+                cd.isEffective = true
             else
-                -- Only keep if ANY active NPC accepts this CC type
+                -- Only keep if ANY known NPC accepts this CC type
+                local isEffective = false
                 for npcID in pairs(self.activeNPCs) do
                     local effectiveness = addon.Config:GetNPCEffectiveness(npcID)
                     if effectiveness and effectiveness[ccType] then
-                        filtered[#filtered+1] = cd
+                        isEffective = true
                         break
                     end
+                end
+                if isEffective then
+                    filtered[#filtered+1] = cd
+                    cd.isEffective = true
                 end
             end
         end
         self.cooldownQueue = filtered
+    else
+        -- No known NPCs - mark all as ineffective if we have unknown NPCs
+        for _, cd in ipairs(self.cooldownQueue) do
+            cd.isEffective = not hasUnknownNPCs
+        end
     end
     
     -- Sort and separate queues

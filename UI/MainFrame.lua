@@ -585,6 +585,9 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                 icon.displayTexture:SetTexture(icon.spellInfo.iconID)
                 icon.displayTexture:Show()
                 
+                -- Desaturate if not effective against current NPCs
+                icon.displayTexture:SetDesaturated(not cooldownData.isEffective)
+                
                 -- Set spell name (using both global and individual icon settings)
                 if config:Get("showSpellName") and config:Get("showSpellName" .. i) then
                     -- Use custom spell name if available, otherwise fall back to game spell name
@@ -1166,12 +1169,9 @@ function UI:UpdateStatusIndicators(icon, cooldownData)
         icon.rangeIndicator:Hide()
     end
     
-    -- Desaturate icon if any status indicator is shown
-    if hasStatusIndicator then
-        icon.displayTexture:SetDesaturated(true)
-    else
-        icon.displayTexture:SetDesaturated(false)
-    end
+    -- Desaturate icon if any status indicator is shown OR if not effective
+    local shouldDesaturate = hasStatusIndicator or (not cooldownData.isEffective)
+    icon.displayTexture:SetDesaturated(shouldDesaturate)
 end
 
 -- Update mouse settings based on tooltip config
