@@ -4,6 +4,7 @@ local addonName, addon = ...
 local AceConfig = LibStub("AceConfig-3.0")
 local AceConfigDialog = LibStub("AceConfigDialog-3.0") 
 local AceDB = LibStub("AceDB-3.0")
+local AceDBOptions = LibStub("AceDBOptions-3.0")
 local LSM = LibStub("LibSharedMedia-3.0")
 
 addon.Config = {}
@@ -118,16 +119,50 @@ local defaults = {
 }
 
 function addon.Config:Initialize()
-    -- Initialize saved variables
-    if not CCRotationDB then
-        CCRotationDB = {}
+    -- Initialize AceDB with profile support
+    self.database = AceDB:New("CCRotationDB", defaults, true)
+    
+    -- Reference to current profile data
+    self.db = self.database.profile
+    
+    -- Set up profile change callback
+    self.database.RegisterCallback(self, "OnProfileChanged", "OnProfileChanged")
+    self.database.RegisterCallback(self, "OnProfileCopied", "OnProfileChanged")
+    self.database.RegisterCallback(self, "OnProfileReset", "OnProfileChanged")
+    
+    -- Set up AceDBOptions for profile management
+    self.profileOptions = AceDBOptions:GetOptionsTable(self.database)
+    
+    -- Register profile options with AceConfig
+    AceConfig:RegisterOptionsTable("CCRotationHelper_Profiles", self.profileOptions)
+end
+
+-- Called when profile changes (switch, copy, reset)
+function addon.Config:OnProfileChanged()
+    print("|cff00ff00CC Rotation Helper:|r Profile changed to:", self.database:GetCurrentProfile())
+    
+    -- Update reference to current profile
+    self.db = self.database.profile
+    
+    -- Notify rotation system to update tracked spells
+    if addon.CCRotation then
+        print("|cff00ff00CC Rotation Helper:|r Updating tracked spells and rebuilding queue...")
+        addon.CCRotation.trackedCooldowns = self:GetTrackedSpells()
+        if addon.CCRotation.RebuildQueue then
+            addon.CCRotation:RebuildQueue()
+            print("|cff00ff00CC Rotation Helper:|r Queue rebuilt successfully")
+        else
+            print("|cffff0000CC Rotation Helper:|r Warning: RebuildQueue function not found")
+        end
+    else
+        print("|cffff0000CC Rotation Helper:|r Warning: CCRotation not initialized")
     end
     
-    -- Merge defaults with saved data
-    self:MergeDefaults(CCRotationDB, defaults)
-    
-    -- Reference to current profile
-    self.db = CCRotationDB.profile
+    -- Notify UI to refresh
+    if addon.UI then
+        addon.UI:UpdateFromConfig()
+        print("|cff00ff00CC Rotation Helper:|r UI refreshed")
+    end
 end
 
 function addon.Config:MergeDefaults(target, source)
@@ -230,4 +265,92 @@ function addon.Config:NormalizeCCType(ccType)
         return addon.Database.ccTypeLookup[ccType] and ccType or ccType
     end
     return nil
+end
+
+-- Profile Management Functions (using AceDB directly)
+function addon.Config:GetCurrentProfileName()
+    return self.database:GetCurrentProfile()
+end
+
+function addon.Config:GetProfileNames()
+    local profiles = {}
+    for name, _ in pairs(self.database:GetProfiles()) do
+        table.insert(profiles, name)
+    end
+    table.sort(profiles)
+    return profiles
+end
+
+function addon.Config:CreateProfile(profileName)
+    if not profileName or profileName == "" then
+        return false, "Profile name cannot be empty"
+    end
+    
+    local profiles = self.database:GetProfiles()
+    if profiles[profileName] then
+        return false, "Profile already exists"
+    end
+    
+    -- Create new profile (AceDB handles the creation)
+    self.database:SetProfile(profileName)
+    return true, "Profile created successfully"
+end
+
+function addon.Config:CopyProfile(sourceProfile, newProfileName)
+    if not sourceProfile or not newProfileName or sourceProfile == "" or newProfileName == "" then
+        return false, "Invalid profile names"
+    end
+    
+    local profiles = self.database:GetProfiles()
+    if not profiles[sourceProfile] then
+        return false, "Source profile does not exist"
+    end
+    
+    if profiles[newProfileName] then
+        return false, "Target profile already exists"
+    end
+    
+    -- Use AceDB's copy functionality
+    self.database:CopyProfile(sourceProfile, newProfileName)
+    return true, "Profile copied successfully"
+end
+
+function addon.Config:DeleteProfile(profileName)
+    if not profileName or profileName == "" then
+        return false, "Profile name cannot be empty"
+    end
+    
+    if profileName == "Default" then
+        return false, "Cannot delete Default profile"
+    end
+    
+    local profiles = self.database:GetProfiles()
+    if not profiles[profileName] then
+        return false, "Profile does not exist"
+    end
+    
+    -- Use AceDB's delete functionality
+    self.database:DeleteProfile(profileName)
+    return true, "Profile deleted successfully"
+end
+
+function addon.Config:SwitchProfile(profileName)
+    if not profileName or profileName == "" then
+        return false, "Profile name cannot be empty"
+    end
+    
+    local profiles = self.database:GetProfiles()
+    if not profiles[profileName] then
+        return false, "Profile does not exist"
+    end
+    
+    -- Use AceDB's profile switching (this will trigger OnProfileChanged callback)
+    self.database:SetProfile(profileName)
+    return true, "Switched to profile: " .. profileName
+end
+
+function addon.Config:ResetProfile()
+    -- Reset current profile to defaults
+    self.database:ResetProfile()
+    return true, "Profile reset to defaults"
 end

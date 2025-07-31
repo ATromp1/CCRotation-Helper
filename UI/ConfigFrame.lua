@@ -23,6 +23,7 @@ function addon.UI:CreateConfigFrame()
     tabGroup:SetFullWidth(true)
     tabGroup:SetFullHeight(true)
     tabGroup:SetTabs({
+        {text="Profiles", value="profiles"},
         {text="Display", value="display"},
         {text="Text", value="text"}, 
         {text="Icons", value="icons"},
@@ -32,7 +33,9 @@ function addon.UI:CreateConfigFrame()
     })
     tabGroup:SetCallback("OnGroupSelected", function(container, event, group)
         container:ReleaseChildren()
-        if group == "display" then
+        if group == "profiles" then
+            self:CreateProfilesTab(container)
+        elseif group == "display" then
             self:CreateDisplayTab(container)
         elseif group == "text" then
             self:CreateTextTab(container)
@@ -46,7 +49,7 @@ function addon.UI:CreateConfigFrame()
             self:CreatePlayersTab(container)
         end
     end)
-    tabGroup:SelectTab("display")
+    tabGroup:SelectTab("profiles")
     frame:AddChild(tabGroup)
     
     -- Store reference
@@ -56,6 +59,20 @@ function addon.UI:CreateConfigFrame()
     frame:SetCallback("OnClose", function(widget)
         widget:Hide()
     end)
+end
+
+-- Create Profiles tab content using AceDBOptions
+function addon.UI:CreateProfilesTab(container)
+    -- Create a BlizOptionsGroup container for AceDBOptions
+    local profileGroup = AceGUI:Create("BlizOptionsGroup")
+    profileGroup:SetFullWidth(true)
+    profileGroup:SetFullHeight(true)
+    profileGroup:SetTitle("Profile Management")
+    container:AddChild(profileGroup)
+    
+    -- Use AceConfigDialog to draw the profile options inside our container
+    local AceConfigDialog = LibStub("AceConfigDialog-3.0")
+    AceConfigDialog:Open("CCRotationHelper_Profiles", profileGroup)
 end
 
 -- Create Display tab content
@@ -85,8 +102,20 @@ function addon.UI:CreateDisplayTab(container)
     soloCheck:SetValue(addon.Config:Get("showInSolo"))
     soloCheck:SetCallback("OnValueChanged", function(widget, event, value)
         addon.Config:Set("showInSolo", value)
+        
+        -- Rebuild queue first in case visibility affects queue logic
+        if addon.CCRotation and addon.CCRotation.RebuildQueue then
+            addon.CCRotation:RebuildQueue()
+        end
+        
+        -- Update visibility (this shows/hides the frame)
         if addon.UI.UpdateVisibility then
             addon.UI:UpdateVisibility()
+        end
+        
+        -- Force display refresh to show the rebuilt queue
+        if addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
         end
     end)
     soloCheck:SetFullWidth(true)

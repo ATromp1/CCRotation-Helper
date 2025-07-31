@@ -86,11 +86,18 @@ SlashCmdList["CCROTATION"] = function(msg)
             addon.UI:UpdatePosition()
         end
         print("|cff00ff00CC Rotation Helper|r: Position reset to default")
+    elseif command == "profile" or command == "profiles" then
+        -- Show current profile and available profiles
+        local current = addon.Config:GetCurrentProfileName()
+        local profiles = addon.Config:GetProfileNames()
+        print("|cff00ff00CC Rotation Helper|r: Current profile: " .. current)
+        print("Available profiles: " .. table.concat(profiles, ", "))
     else
         print("|cff00ff00CC Rotation Helper|r Commands:")
         print("  /ccr config - Open configuration")
         print("  /ccr toggle - Enable/disable addon")
         print("  /ccr reset - Reset position to default")
+        print("  /ccr profile - Show current profile info")
     end
 end
 

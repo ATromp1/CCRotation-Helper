@@ -842,3 +842,38 @@ function UI:UpdateStatusIndicators(icon, cooldownData)
         icon.displayTexture:SetDesaturated(false)
     end
 end
+
+-- Update UI when configuration changes (called after profile switch)
+function UI:UpdateFromConfig()
+    if not self.mainFrame then return end
+    
+    -- First, release all current icons to prevent duplicates
+    for i = #activeIcons, 1, -1 do
+        self:ReleaseIcon(activeIcons[i])
+    end
+    wipe(activeIcons)
+    
+    for i = #activeUnavailableIcons, 1, -1 do
+        self:ReleaseUnavailableIcon(activeUnavailableIcons[i])
+    end
+    wipe(activeUnavailableIcons)
+    
+    -- Update position from new profile settings
+    self:UpdatePosition()
+    
+    -- Update visibility based on new profile settings
+    self:UpdateVisibility()
+    
+    -- Force refresh of all icon pools to apply new settings
+    self:InitializeIconPool()
+    
+    -- Refresh display to apply new visual settings
+    self:RefreshDisplay()
+    
+    -- Debug output to help troubleshoot
+    local config = addon.Config
+    print("|cff00ff00CC Rotation Helper:|r Profile switch complete - Position: " .. 
+          config:Get("xOffset") .. ", " .. config:Get("yOffset") .. 
+          " | Enabled: " .. tostring(config:Get("enabled")) .. 
+          " | MaxIcons: " .. config:Get("maxIcons"))
+end
