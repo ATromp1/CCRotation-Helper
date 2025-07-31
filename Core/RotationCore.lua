@@ -323,16 +323,24 @@ function CCRotation:OnCombatStart()
         self:ScanNameplates()
     end)
     
-    -- Start periodic scanning
+    -- Cancel non-combat timer if running
+    if self.nonCombatTicker then
+        self.nonCombatTicker:Cancel()
+        self.nonCombatTicker = nil
+    end
+    
+    -- Start periodic scanning and guaranteed queue rebuilds every second
     if self.scanTicker then self.scanTicker:Cancel() end
     self.scanTicker = C_Timer.NewTicker(1, function()
         self:ScanNameplates()
+        -- Always rebuild queue to catch range/death changes
+        self:RebuildQueue()
     end)
 end
 
 -- Combat end handler
 function CCRotation:OnCombatEnd()
-    -- Stop timers
+    -- Stop combat timers
     if self.scanTicker then
         self.scanTicker:Cancel()
         self.scanTicker = nil
@@ -341,6 +349,12 @@ function CCRotation:OnCombatEnd()
         self.quickScan:Cancel()
         self.quickScan = nil
     end
+    
+    -- Start non-combat periodic queue rebuild every 3 seconds
+    if self.nonCombatTicker then self.nonCombatTicker:Cancel() end
+    self.nonCombatTicker = C_Timer.NewTicker(3, function()
+        self:RebuildQueue()
+    end)
 end
 
 -- Nameplate added handler
@@ -367,11 +381,6 @@ function CCRotation:ScanNameplates()
                 self.activeNPCs[npcID] = true
             end
         end
-    end
-    
-    -- If we found new NPCs, rebuild queue
-    if next(self.activeNPCs) then
-        self:RebuildQueue()
     end
 end
 
