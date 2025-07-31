@@ -698,65 +698,75 @@ function UI:UpdateDisplay(queue, unavailableQueue)
         local unavailableSpacing = config:Get("unavailableSpacing")
         local unavailableIconSize = config:Get("unavailableIconSize")
         
-        for i = 1, math.min(#unavailableQueue, maxUnavailableIcons) do
+        local iconIndex = 0
+        for i = 1, #unavailableQueue do
             local cooldownData = unavailableQueue[i]
             if cooldownData then
-                local icon = self:GetUnavailableIcon()
-                table.insert(activeUnavailableIcons, icon)
-                
-                -- Set icon data
-                icon.queueData = cooldownData
-                icon.unit = addon.CCRotation.GUIDToUnit[cooldownData.GUID]
-                icon.spellInfo = C_Spell.GetSpellInfo(cooldownData.spellID)
-                icon.spellConfig = addon.Config:GetSpellInfo(cooldownData.spellID)
-                
-                if icon.spellInfo and icon.unit then
-                    -- Set icon texture
-                    icon.displayTexture:SetTexture(icon.spellInfo.iconID)
-                    icon.displayTexture:Show()
+                -- Filter: only show if cooldown < 3s or ready
+                local charges = cooldownData.charges or 0
+                local isReady = charges > 0 or cooldownData.expirationTime <= now
+                local timeLeft = cooldownData.expirationTime - now
+                if isReady or timeLeft < 3 then
+                    iconIndex = iconIndex + 1
+                    if iconIndex > maxUnavailableIcons then break end
                     
-                    -- Apply texture zoom within the frame (like WeakAuras)
-                    local iconZoom = config:Get("iconZoom") or 1.0
-                    icon.displayTexture:ClearAllPoints()
-                    if iconZoom ~= 1.0 then
-                        local textureSize = unavailableIconSize * iconZoom
-                        icon.displayTexture:SetSize(textureSize, textureSize)
-                        icon.displayTexture:SetPoint("CENTER", icon, "CENTER", 0, 0)
-                    else
-                        icon.displayTexture:SetAllPoints(icon)
+                    local icon = self:GetUnavailableIcon()
+                    table.insert(activeUnavailableIcons, icon)
+                    
+                    -- Set icon data
+                    icon.queueData = cooldownData
+                    icon.unit = addon.CCRotation.GUIDToUnit[cooldownData.GUID]
+                    icon.spellInfo = C_Spell.GetSpellInfo(cooldownData.spellID)
+                    icon.spellConfig = addon.Config:GetSpellInfo(cooldownData.spellID)
+                    
+                    if icon.spellInfo and icon.unit then
+                        -- Set icon texture
+                        icon.displayTexture:SetTexture(icon.spellInfo.iconID)
+                        icon.displayTexture:Show()
+                    
+                        -- Apply texture zoom within the frame (like WeakAuras)
+                        local iconZoom = config:Get("iconZoom") or 1.0
+                        icon.displayTexture:ClearAllPoints()
+                        if iconZoom ~= 1.0 then
+                            local textureSize = unavailableIconSize * iconZoom
+                            icon.displayTexture:SetSize(textureSize, textureSize)
+                            icon.displayTexture:SetPoint("CENTER", icon, "CENTER", 0, 0)
+                        else
+                            icon.displayTexture:SetAllPoints(icon)
+                        end
+                    
+                        -- Hide text for small unavailable icons
+                        icon.spellName:Hide()
+                        icon.playerName:Hide()
+                    
+                        -- Set cooldown (minimal display)
+                        local charges = cooldownData.charges or 0
+                        local isReady = charges > 0 or cooldownData.expirationTime <= now
+                        
+                        if isReady then
+                            icon.cooldown:Clear()
+                            icon.cooldown:Hide()
+                            icon.cooldownText:SetText("")
+                        else
+                            icon.cooldown:SetCooldown(now, cooldownData.expirationTime - now)
+                            icon.cooldown:Show()
+                            icon.cooldownText:SetText("")  -- No text for small icons
+                        end
+                    
+                        -- Add status indicators
+                        self:UpdateStatusIndicators(icon, cooldownData)
+                        
+                        -- Position and size icon
+                        icon:SetSize(unavailableIconSize, unavailableIconSize)
+                        
+                        if iconIndex == 1 then
+                            icon:SetPoint("TOPLEFT", self.mainFrame.unavailableContainer, "TOPLEFT", 0, 0)
+                        else
+                            icon:SetPoint("TOPLEFT", activeUnavailableIcons[iconIndex-1], "TOPRIGHT", unavailableSpacing, 0)
+                        end
+                        
+                        icon:Show()
                     end
-                    
-                    -- Hide text for small unavailable icons
-                    icon.spellName:Hide()
-                    icon.playerName:Hide()
-                    
-                    -- Set cooldown (minimal display)
-                    local charges = cooldownData.charges or 0
-                    local isReady = charges > 0 or cooldownData.expirationTime <= now
-                    
-                    if isReady then
-                        icon.cooldown:Clear()
-                        icon.cooldown:Hide()
-                        icon.cooldownText:SetText("")
-                    else
-                        icon.cooldown:SetCooldown(now, cooldownData.expirationTime - now)
-                        icon.cooldown:Show()
-                        icon.cooldownText:SetText("")  -- No text for small icons
-                    end
-                    
-                    -- Add status indicators
-                    self:UpdateStatusIndicators(icon, cooldownData)
-                    
-                    -- Position and size icon
-                    icon:SetSize(unavailableIconSize, unavailableIconSize)
-                    
-                    if i == 1 then
-                        icon:SetPoint("TOPLEFT", self.mainFrame.unavailableContainer, "TOPLEFT", 0, 0)
-                    else
-                        icon:SetPoint("TOPLEFT", activeUnavailableIcons[i-1], "TOPRIGHT", unavailableSpacing, 0)
-                    end
-                    
-                    icon:Show()
                 end
             end
         end
