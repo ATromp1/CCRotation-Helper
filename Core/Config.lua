@@ -112,7 +112,7 @@ local defaults = {
         iconZoom = 1.0,
         
         -- Debug mode
-        debugMode = false,
+        debugMode = true,
     }
 }
 

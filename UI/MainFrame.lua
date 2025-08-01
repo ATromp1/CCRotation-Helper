@@ -166,8 +166,8 @@ function UI:GetIcon()
         -- Enable clipping to properly mask zoomed textures (like WeakAuras)
         icon:SetClipsChildren(true)
         
-        -- Create working texture (XML template texture has issues)
-        icon.displayTexture = icon:CreateTexture("DisplayTexture_" .. numIconsCreated, "OVERLAY")
+        -- Create working texture (XML template texture has issues) - use ARTWORK layer
+        icon.displayTexture = icon:CreateTexture("DisplayTexture_" .. numIconsCreated, "ARTWORK")
         icon.displayTexture:SetAllPoints()
         icon.displayTexture:SetTexelSnappingBias(0.0)
         icon.displayTexture:SetSnapToPixelGrid(false)
@@ -278,8 +278,8 @@ function UI:GetUnavailableIcon()
         -- Enable clipping to properly mask zoomed textures (like WeakAuras)
         icon:SetClipsChildren(true)
         
-        -- Create working texture (smaller for unavailable queue)
-        icon.displayTexture = icon:CreateTexture("DisplayTextureUnavailable_" .. numUnavailableIconsCreated, "OVERLAY")
+        -- Create working texture (smaller for unavailable queue) - use ARTWORK layer
+        icon.displayTexture = icon:CreateTexture("DisplayTextureUnavailable_" .. numUnavailableIconsCreated, "ARTWORK")
         icon.displayTexture:SetAllPoints()
         icon.displayTexture:SetTexelSnappingBias(0.0)
         icon.displayTexture:SetSnapToPixelGrid(false)
@@ -559,18 +559,34 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                 icon.displayTexture:SetDesaturated(not cooldownData.isEffective)
                 
                 -- Set spell name (using both global and individual icon settings)
-                if config:Get("showSpellName") and config:Get("showSpellName" .. i) then
+                local globalSpellName = config:Get("showSpellName")
+                local individualSpellName = config:Get("showSpellName" .. i)
+                addon.Config:DebugPrint("Icon " .. i .. " - Global showSpellName:", globalSpellName, "Individual showSpellName" .. i .. ":", individualSpellName)
+                if globalSpellName and individualSpellName then
                     -- Use custom spell name if available, otherwise fall back to game spell name
                     local spellName = (icon.spellConfig and icon.spellConfig.name) or icon.spellInfo.name
                     local truncatedName = self:TruncateText(spellName, config:Get("spellNameMaxLength"))
                     icon.spellName:SetText(truncatedName)
+                    -- Re-set font properties to ensure correct size
+                    config:SetFontProperties(icon.spellName, config:Get("spellNameFont"), config:Get("spellNameFontSize"))
+                    -- Position spell name above the icon - parent to container to avoid clipping
+                    icon.spellName:SetParent(self.mainFrame.container)
+                    icon.spellName:ClearAllPoints()
+                    icon.spellName:SetPoint("BOTTOM", icon, "TOP", 0, 2)
+                    icon.spellName:SetAlpha(1)
                     icon.spellName:Show()
+                    addon.Config:DebugPrint("Spell name set for icon " .. i .. ": text='" .. truncatedName .. "' shown=" .. tostring(icon.spellName:IsShown()))
+                    -- Check font size after setting
+                    local font, size, flags = icon.spellName:GetFont()
+                    addon.Config:DebugPrint("Final spell name font size:", size)
                 else
                     icon.spellName:Hide()
                 end
                 
                 -- Set player name with class color (using both global and individual icon settings)
-                if config:Get("showPlayerName") and config:Get("showPlayerName" .. i) then
+                local globalPlayerName = config:Get("showPlayerName")
+                local individualPlayerName = config:Get("showPlayerName" .. i)
+                if globalPlayerName and individualPlayerName then
                     local name = UnitName(icon.unit)
                     if name then
                         local truncatedName = self:TruncateText(name, config:Get("playerNameMaxLength"))
@@ -584,7 +600,17 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                     else
                         icon.playerName:SetText("Unknown")
                     end
+                    -- Re-set font properties to ensure correct size
+                    config:SetFontProperties(icon.playerName, config:Get("playerNameFont"), config:Get("playerNameFontSize"))
+                    -- Position player name below the icon - parent to container to avoid clipping
+                    icon.playerName:SetParent(self.mainFrame.container)
+                    icon.playerName:ClearAllPoints()
+                    icon.playerName:SetPoint("TOP", icon, "BOTTOM", 0, -2)
+                    icon.playerName:SetAlpha(1)
                     icon.playerName:Show()
+                    -- Check font size after setting
+                    local font, size, flags = icon.playerName:GetFont()
+                    addon.Config:DebugPrint("Final player name font size:", size)
                 else
                     icon.playerName:Hide()
                 end
