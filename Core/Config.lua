@@ -164,6 +164,14 @@ function addon.Config:OnProfileChanged()
         addon.UI:UpdateFromConfig()
         self:DebugPrint("UI refreshed")
     end
+    
+    -- If we're the party leader, broadcast the profile change
+    if addon.ProfileSync and UnitIsGroupLeader("player") and IsInGroup() then
+        -- Delay broadcast slightly to allow profile switch to complete
+        C_Timer.After(0.5, function()
+            addon.ProfileSync:BroadcastProfileAsLeader()
+        end)
+    end
 end
 
 function addon.Config:MergeDefaults(target, source)
