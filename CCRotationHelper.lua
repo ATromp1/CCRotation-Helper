@@ -87,19 +87,15 @@ SlashCmdList["CCROTATION"] = function(msg)
             end
         end
     elseif command == "reset" then
-        -- Reset position to default
-        addon.Config:Set("xOffset", 354)
-        addon.Config:Set("yOffset", 134)
-        if addon.UI then
-            addon.UI:UpdatePosition(true)  -- Force update
-        end
-        print("|cff00ff00CC Rotation Helper|r: Position reset to default")
-    elseif command == "position" or command == "pos" then
-        -- Show position debug info
-        if addon.UI then
-            addon.UI:ShowPositionDebug()
+        -- Reset position to default and clear WoW's saved position
+        if addon.UI and addon.UI.mainFrame then
+            addon.UI.mainFrame:ClearAllPoints()
+            addon.UI.mainFrame:SetPoint("CENTER", UIParent, "CENTER", 354, 134)
+            -- Clear WoW's saved position so it uses our default
+            addon.UI.mainFrame:SetUserPlaced(false)
+            print("|cff00ff00CC Rotation Helper|r: Position reset to default")
         else
-            print("|cff00ff00CC Rotation Helper|r: UI not initialized")
+            print("|cff00ff00CC Rotation Helper|r: Cannot reset position - UI not initialized")
         end
     elseif command == "icons" or command == "icon" then
         -- Show icon debug info and attempt recovery

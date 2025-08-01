@@ -107,9 +107,8 @@ function UI:Initialize()
     -- Start cooldown text update timer
     self:StartCooldownTextUpdates()
     
-    -- Delay position update to ensure saved variables are loaded
+    -- Show UI if should be active
     C_Timer.After(0.1, function()
-        self:UpdatePosition(true)
         self:UpdateVisibility()
     end)
     
@@ -121,17 +120,13 @@ function UI:SetupMainFrame()
     local frame = self.mainFrame
     local config = addon.Config
     
-    -- Set initial size and position
     frame:SetSize(200, 64)
-    frame:SetPoint("CENTER", UIParent, "CENTER", 
-        config:Get("xOffset"), config:Get("yOffset"))
-    
-    -- Make frame movable
-    frame:SetMovable(true)
+
     -- Enable mouse if frame is unlocked OR tooltips are enabled
     frame:EnableMouse(not config:Get("anchorLocked") or config:Get("showTooltips"))
-    frame:RegisterForDrag("LeftButton")
     
+    -- Add drag functionality for Shift+click
+    frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", function(self)
         if IsShiftKeyDown() and not config:Get("anchorLocked") then
             self:StartMoving()
@@ -140,35 +135,10 @@ function UI:SetupMainFrame()
     
     frame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
-        
-        -- Robust position saving with validation
-        local success, point, _, relativePoint, x, y = pcall(function()
-            return self:GetPoint()
-        end)
-        
-        if success and point and x and y then
-            -- Validate position before saving
-            local validX, validY = addon.UI:ValidatePosition(x, y)
-            
-            addon.Config:DebugPrint("Saving position to profile:", addon.Config:GetCurrentProfileName(), "X:", validX, "Y:", validY)
-            addon.Config:Set("xOffset", validX)
-            addon.Config:Set("yOffset", validY)
-            addon.Config:DebugPrint("Position saved successfully")
-            
-            -- If position was corrected, update frame immediately
-            if validX ~= x or validY ~= y then
-                addon.Config:DebugPrint("Position was corrected, updating frame")
-                pcall(function()
-                    self:ClearAllPoints()
-                    self:SetPoint("CENTER", UIParent, "CENTER", validX, validY)
-                end)
-            end
-        else
-            addon.Config:DebugPrint("Failed to get position during drag stop, keeping current values")
-        end
+        -- Tell WoW that this frame has been moved by the user and should be saved
+        self:SetUserPlaced(true)
     end)
-    
-    
+
     -- Create unavailable queue container
     frame.unavailableContainer = CreateFrame("Frame", nil, frame)
     frame.unavailableContainer:SetSize(1, 1)
@@ -251,23 +221,23 @@ function UI:GetIcon()
             end
         end)
         
-        -- Pass through drag events to parent frame
+        -- Pass through drag events to main frame (for tooltip-enabled icons)
         icon:RegisterForDrag("LeftButton")
         icon:SetScript("OnDragStart", function(self)
-            local config = addon.Config
-            if IsShiftKeyDown() and not config:Get("anchorLocked") then
-                self:GetParent():GetParent():StartMoving() -- icon -> container -> mainFrame
+            if IsShiftKeyDown() and not addon.Config:Get("anchorLocked") then
+                -- Pass drag to main frame: icon -> container -> mainFrame
+                local mainFrame = self:GetParent():GetParent()
+                mainFrame:StartMoving()
             end
         end)
         
         icon:SetScript("OnDragStop", function(self)
-            self:GetParent():GetParent():StopMovingOrSizing()
-            -- Save position
             local mainFrame = self:GetParent():GetParent()
-            local point, _, relativePoint, x, y = mainFrame:GetPoint()
-            addon.Config:Set("xOffset", x)
-            addon.Config:Set("yOffset", y)
+            mainFrame:StopMovingOrSizing()
+            -- Tell WoW that this frame has been moved by the user and should be saved
+            mainFrame:SetUserPlaced(true)
         end)
+        
     end
     
     -- Set parent and reset state
@@ -370,12 +340,11 @@ function UI:GetUnavailableIcon()
             end
         end)
         
-        -- Pass through drag events to parent frame
+        -- Pass through drag events to main frame (for tooltip-enabled unavailable icons)
         icon:RegisterForDrag("LeftButton")
         icon:SetScript("OnDragStart", function(self)
-            local config = addon.Config
-            if IsShiftKeyDown() and not config:Get("anchorLocked") then
-                -- Navigate to main frame: icon -> unavailableContainer -> mainFrame
+            if IsShiftKeyDown() and not addon.Config:Get("anchorLocked") then
+                -- Pass drag to main frame: icon -> unavailableContainer -> mainFrame
                 local mainFrame = self:GetParent():GetParent()
                 mainFrame:StartMoving()
             end
@@ -384,11 +353,10 @@ function UI:GetUnavailableIcon()
         icon:SetScript("OnDragStop", function(self)
             local mainFrame = self:GetParent():GetParent()
             mainFrame:StopMovingOrSizing()
-            -- Save position
-            local point, _, relativePoint, x, y = mainFrame:GetPoint()
-            addon.Config:Set("xOffset", x)
-            addon.Config:Set("yOffset", y)
+            -- Tell WoW that this frame has been moved by the user and should be saved
+            mainFrame:SetUserPlaced(true)
         end)
+        
     end
     
     -- Set parent and reset state
@@ -879,90 +847,6 @@ function UI:UpdateFrameSize()
     self.mainFrame:SetSize(totalWidth, totalHeight)
 end
 
--- Validate and clamp position coordinates to screen bounds
-function UI:ValidatePosition(x, y)
-    if not x or not y or type(x) ~= "number" or type(y) ~= "number" then
-        addon.Config:DebugPrint("Invalid position coordinates, using defaults:", x, y, "types:", type(x), type(y))
-        return 354, 134  -- Default position
-    end
-    
-    -- Get screen dimensions
-    local screenWidth = UIParent:GetWidth()
-    local screenHeight = UIParent:GetHeight()
-    
-    -- Clamp to reasonable bounds (leave 50px margin from edges)
-    local margin = 50
-    local clampedX = math.max(-screenWidth/2 + margin, math.min(screenWidth/2 - margin, x))
-    local clampedY = math.max(-screenHeight/2 + margin, math.min(screenHeight/2 - margin, y))
-    
-    -- If we had to clamp, log it
-    if clampedX ~= x or clampedY ~= y then
-        addon.Config:DebugPrint("Position clamped from", x, y, "to", clampedX, clampedY)
-    end
-    
-    return clampedX, clampedY
-end
-
--- Update position from config with robust error handling
-function UI:UpdatePosition(forceUpdate)
-    if not self.mainFrame then 
-        addon.Config:DebugPrint("UpdatePosition called but mainFrame doesn't exist")
-        return false
-    end
-    
-    local config = addon.Config
-    local xOffset = config:Get("xOffset")
-    local yOffset = config:Get("yOffset")
-    
-    addon.Config:DebugPrint("UpdatePosition called with:", xOffset, yOffset, "forceUpdate:", forceUpdate)
-    
-    -- Validate position coordinates
-    local validX, validY = self:ValidatePosition(xOffset, yOffset)
-    
-    -- Update config if position was corrected (but only if we're sure the values are actually wrong)
-    if validX ~= xOffset or validY ~= yOffset then
-        addon.Config:DebugPrint("Position validation changed from", xOffset, yOffset, "to", validX, validY)
-        -- Only update config if the original values were actually invalid, not just clamped
-        if not xOffset or not yOffset or type(xOffset) ~= "number" or type(yOffset) ~= "number" then
-            config:Set("xOffset", validX)
-            config:Set("yOffset", validY)
-            addon.Config:DebugPrint("Corrected invalid position in config")
-        else
-            -- Use the clamped values for positioning but don't save them back to config
-            addon.Config:DebugPrint("Position was clamped but not saved to config")
-        end
-    end
-    
-    -- Check if we need to update (avoid unnecessary positioning)
-    if not forceUpdate then
-        local currentPoint, _, _, currentX, currentY = self.mainFrame:GetPoint()
-        if currentPoint == "CENTER" and 
-           math.abs((currentX or 0) - validX) < 1 and 
-           math.abs((currentY or 0) - validY) < 1 then
-            return true  -- Position is already correct
-        end
-    end
-    
-    -- Clear and set position with error handling
-    local success = pcall(function()
-        self.mainFrame:ClearAllPoints()
-        self.mainFrame:SetPoint("CENTER", UIParent, "CENTER", validX, validY)
-    end)
-    
-    if not success then
-        addon.Config:DebugPrint("Failed to set position, attempting recovery")
-        -- Try to recover with default position
-        pcall(function()
-            self.mainFrame:ClearAllPoints()
-            self.mainFrame:SetPoint("CENTER", UIParent, "CENTER", 354, 134)
-        end)
-        return false
-    end
-    
-    addon.Config:DebugPrint("Position updated successfully to", validX, validY)
-    return true
-end
-
 -- Update visibility based on config and group status with robust checking
 function UI:UpdateVisibility()
     if not self:ValidateFrameState() then
@@ -979,11 +863,6 @@ function UI:UpdateVisibility()
                            "ShowInSolo:", config:Get("showInSolo"))
     
     if shouldBeActive then
-        -- Ensure position is valid before showing
-        if not self:UpdatePosition() then
-            addon.Config:DebugPrint("Position update failed, but showing frame anyway")
-        end
-        
         self.mainFrame:Show()
         self:StartCooldownTextUpdates()
         addon.Config:DebugPrint("Frame shown and updates started")
@@ -1001,8 +880,6 @@ function UI:Show()
         return
     end
     
-    -- Ensure position is correct before showing
-    self:UpdatePosition()
     self.mainFrame:Show()
     self:StartCooldownTextUpdates()
     
@@ -1040,71 +917,6 @@ function UI:Toggle()
         self:Hide()
     else
         self:Show()
-    end
-end
-
--- Debug function to show positioning info and toggle debug anchor
-function UI:ShowPositionDebug()
-    if not self:ValidateFrameState() then
-        print("|cffff0000CC Rotation Helper:|r Frame state invalid")
-        return
-    end
-    
-    local config = addon.Config
-    local point, relativeTo, relativePoint, x, y = self.mainFrame:GetPoint()
-    
-    print("|cff00ff00CC Rotation Helper Position Debug:|r")
-    print("  Config Position: X=" .. tostring(config:Get("xOffset")) .. ", Y=" .. tostring(config:Get("yOffset")))
-    print("  Actual Position: " .. tostring(point) .. " X=" .. tostring(x) .. ", Y=" .. tostring(y))
-    print("  Frame Size: " .. tostring(self.mainFrame:GetWidth()) .. "x" .. tostring(self.mainFrame:GetHeight()))
-    print("  Frame Shown: " .. tostring(self.mainFrame:IsShown()))
-    print("  Should Be Active: " .. tostring(addon.CCRotation:ShouldBeActive()))
-    print("  Anchor Locked: " .. tostring(config:Get("anchorLocked")))
-    
-    -- Toggle debug anchor visibility
-    if self.mainFrame.anchor then
-        if self.mainFrame.anchor:IsShown() then
-            self.mainFrame.anchor:Hide()
-            print("  Debug anchor hidden")
-        else
-            -- Position anchor at the center of the main frame before showing
-            self.mainFrame.anchor:ClearAllPoints()
-            self.mainFrame.anchor:SetPoint("CENTER", self.mainFrame, "CENTER")
-            self.mainFrame.anchor:Show()
-            print("  Debug anchor shown (red box with black center, 20x20 pixels)")
-            print("  Anchor positioned at center of main frame")
-            
-            -- Additional debug info about the anchor
-            local anchorPoint, anchorRelativeTo, anchorRelativePoint, anchorX, anchorY = self.mainFrame.anchor:GetPoint()
-            print("  Anchor actual position: " .. tostring(anchorPoint) .. " X=" .. tostring(anchorX) .. ", Y=" .. tostring(anchorY))
-        end
-    else
-        print("  ERROR: No debug anchor available - this shouldn't happen!")
-        print("  Attempting to create debug anchor now...")
-        
-        -- Try to create it now
-        self.mainFrame.anchor = CreateFrame("Frame", "CCRotationDebugAnchor", UIParent)
-        self.mainFrame.anchor:SetSize(20, 20)
-        self.mainFrame.anchor:SetFrameStrata("TOOLTIP")
-        self.mainFrame.anchor:SetFrameLevel(1000)
-        
-        local border = self.mainFrame.anchor:CreateTexture(nil, "OVERLAY")
-        border:SetAllPoints()
-        border:SetColorTexture(1, 0, 0, 1.0)
-        
-        local inner = self.mainFrame.anchor:CreateTexture(nil, "BACKGROUND")
-        inner:SetPoint("TOPLEFT", 2, -2)
-        inner:SetPoint("BOTTOMRIGHT", -2, 2)
-        inner:SetColorTexture(0, 0, 0, 0.3)
-        
-        self.mainFrame.anchor.border = border
-        self.mainFrame.anchor.inner = inner
-        
-        -- Show it immediately
-        self.mainFrame.anchor:ClearAllPoints()
-        self.mainFrame.anchor:SetPoint("CENTER", self.mainFrame, "CENTER")
-        self.mainFrame.anchor:Show()
-        print("  Debug anchor created and shown!")
     end
 end
 
@@ -1302,12 +1114,6 @@ function UI:UpdateFromConfig()
     end
     wipe(activeUnavailableIcons)
     
-    -- Update position from new profile settings (force update)
-    local positionSuccess = self:UpdatePosition(true)
-    if not positionSuccess then
-        addon.Config:DebugPrint("Warning: Position update failed during profile switch")
-    end
-    
     -- Update visibility based on new profile settings
     self:UpdateVisibility()
     
@@ -1327,8 +1133,7 @@ function UI:UpdateFromConfig()
     
     -- Debug output to help troubleshoot
     local config = addon.Config
-    config:DebugPrint("Profile switch complete - Position: " .. 
-          config:Get("xOffset") .. ", " .. config:Get("yOffset") .. 
+    config:DebugPrint("Profile switch complete - Position: Handled by SetUserPlaced" .. 
           " | Enabled: " .. tostring(config:Get("enabled")) .. 
           " | MaxIcons: " .. config:Get("maxIcons") .. 
           " | Visible: " .. tostring(self.mainFrame:IsShown()))

@@ -46,14 +46,7 @@ local defaults = {
         unavailableIconSize = 24,
         unavailableSpacing = 2,
         unavailableQueueOffset = 5,
-        
-        -- Position
-        point = "CENTER",
-        relativeTo = "UIParent",
-        relativePoint = "CENTER", 
-        xOffset = 354,
-        yOffset = 134,
-        
+
         -- Display options
         showSpellName = true,
         showPlayerName = true,
@@ -105,7 +98,7 @@ local defaults = {
         nextSpellSound = "Interface\\AddOns\\CCRotation\\Sounds\\next.ogg",
         
         -- Anchor settings
-        anchorLocked = true,
+        anchorLocked = false,
         
         -- Minimap icon settings
         minimap = {
@@ -148,10 +141,7 @@ function addon.Config:OnProfileChanged()
     
     -- Update reference to current profile
     self.db = self.database.profile
-    
-    -- Debug: Show profile-specific position data
-    self:DebugPrint("Profile position data - X:", self.db.xOffset, "Y:", self.db.yOffset)
-    
+
     -- Notify rotation system to update tracked spells
     if addon.CCRotation then
         self:DebugPrint("Updating tracked spells and rebuilding queue...")
