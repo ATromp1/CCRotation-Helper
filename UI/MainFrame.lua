@@ -558,11 +558,8 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                 -- Desaturate if not effective against current NPCs
                 icon.displayTexture:SetDesaturated(not cooldownData.isEffective)
                 
-                -- Set spell name (using both global and individual icon settings)
-                local globalSpellName = config:Get("showSpellName")
-                local individualSpellName = config:Get("showSpellName" .. i)
-                addon.Config:DebugPrint("Icon " .. i .. " - Global showSpellName:", globalSpellName, "Individual showSpellName" .. i .. ":", individualSpellName)
-                if globalSpellName and individualSpellName then
+                -- Set spell name (only on first icon, using global setting)
+                if i == 1 and config:Get("showSpellName") then
                     -- Use custom spell name if available, otherwise fall back to game spell name
                     local spellName = (icon.spellConfig and icon.spellConfig.name) or icon.spellInfo.name
                     local truncatedName = self:TruncateText(spellName, config:Get("spellNameMaxLength"))
@@ -575,10 +572,6 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                     icon.spellName:SetPoint("BOTTOM", icon, "TOP", 0, 2)
                     icon.spellName:SetAlpha(1)
                     icon.spellName:Show()
-                    addon.Config:DebugPrint("Spell name set for icon " .. i .. ": text='" .. truncatedName .. "' shown=" .. tostring(icon.spellName:IsShown()))
-                    -- Check font size after setting
-                    local font, size, flags = icon.spellName:GetFont()
-                    addon.Config:DebugPrint("Final spell name font size:", size)
                 else
                     icon.spellName:Hide()
                 end
@@ -608,9 +601,6 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                     icon.playerName:SetPoint("TOP", icon, "BOTTOM", 0, -2)
                     icon.playerName:SetAlpha(1)
                     icon.playerName:Show()
-                    -- Check font size after setting
-                    local font, size, flags = icon.playerName:GetFont()
-                    addon.Config:DebugPrint("Final player name font size:", size)
                 else
                     icon.playerName:Hide()
                 end

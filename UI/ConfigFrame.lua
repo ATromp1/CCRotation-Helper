@@ -684,39 +684,10 @@ function addon.UI:CreateIconsTab(container)
         scroll:AddChild(iconSlider)
         iconSizeSliders[i] = iconSlider
         
-        -- Spell name checkbox for this icon
-        local spellNameCheck = AceGUI:Create("CheckBox")
-        spellNameCheck:SetLabel("Icon " .. i .. " - Show spell name")
-        spellNameCheck:SetValue(addon.Config:Get("showSpellName" .. i))
-        spellNameCheck:SetCallback("OnValueChanged", function(widget, event, value)
-            addon.Config:Set("showSpellName" .. i, value)
-            if addon.UI.RefreshDisplay then
-                addon.UI:RefreshDisplay()
-            end
-        end)
-        spellNameCheck:SetFullWidth(true)
-        scroll:AddChild(spellNameCheck)
-        iconSpellNameChecks[i] = spellNameCheck
-        
-        -- Player name checkbox for this icon
-        local playerNameCheck = AceGUI:Create("CheckBox")
-        playerNameCheck:SetLabel("Icon " .. i .. " - Show player name")
-        playerNameCheck:SetValue(addon.Config:Get("showPlayerName" .. i))
-        playerNameCheck:SetCallback("OnValueChanged", function(widget, event, value)
-            addon.Config:Set("showPlayerName" .. i, value)
-            if addon.UI.RefreshDisplay then
-                addon.UI:RefreshDisplay()
-            end
-        end)
-        playerNameCheck:SetFullWidth(true)
-        scroll:AddChild(playerNameCheck)
-        iconPlayerNameChecks[i] = playerNameCheck
         
         -- Initially hide controls beyond maxIcons
         if i > addon.Config:Get("maxIcons") then
             iconSlider.frame:Hide()
-            spellNameCheck.frame:Hide()
-            playerNameCheck.frame:Hide()
         end
     end
     
@@ -729,12 +700,8 @@ function addon.UI:CreateIconsTab(container)
             if iconSizeSliders[i] then
                 if i <= value then
                     iconSizeSliders[i].frame:Show()
-                    iconSpellNameChecks[i].frame:Show()
-                    iconPlayerNameChecks[i].frame:Show()
                 else
                     iconSizeSliders[i].frame:Hide()
-                    iconSpellNameChecks[i].frame:Hide()
-                    iconPlayerNameChecks[i].frame:Hide()
                 end
             end
         end
