@@ -119,7 +119,16 @@ function addon.ProfileSync:ShareProfile(profileName, target)
     end
     
     -- Get the actual profile data from the internal profiles table
-    local profileData = addon.Config.database.profiles[profileName]
+    local fullProfileData = addon.Config.database.profiles[profileName]
+    
+    -- Only share profile-specific settings (not UI/display settings)
+    local profileData = {
+        priorityPlayers = fullProfileData.priorityPlayers or {},
+        customNPCs = fullProfileData.customNPCs or {},
+        customSpells = fullProfileData.customSpells or {},
+        inactiveSpells = fullProfileData.inactiveSpells or {}
+    }
+    
     local shareData = {
         version = SYNC_VERSION,
         profileName = profileName,

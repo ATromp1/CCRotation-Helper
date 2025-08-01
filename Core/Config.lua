@@ -28,6 +28,18 @@ end
 -- Default configuration
 local defaults = {
     profile = {
+        -- Priority players (profile-specific)
+        priorityPlayers = {
+            ["Fúro"] = true,
+        },
+        
+        -- Custom NPCs and spells (profile-specific)
+        customNPCs = {},
+        customSpells = {},
+        inactiveSpells = {}, -- Spells that are disabled but not deleted
+    },
+    global = {
+        -- Core addon settings
         enabled = true,
         showInSolo = false,
         maxIcons = 2,
@@ -83,16 +95,6 @@ local defaults = {
         cooldownTextColor = {0.91, 1.0, 0.37, 1.0},
         spellNameColor = {1.0, 1.0, 1.0, 1.0},
         
-        -- Priority players
-        priorityPlayers = {
-            ["Fúro"] = true,
-        },
-        
-        -- Custom NPCs and spells (empty by default, uses database)
-        customNPCs = {},
-        customSpells = {},
-        inactiveSpells = {}, -- Spells that are disabled but not deleted
-        
         -- Sound options
         enableSounds = false,
         nextSpellSound = "Interface\\AddOns\\CCRotation\\Sounds\\next.ogg",
@@ -118,8 +120,9 @@ function addon.Config:Initialize()
     -- Initialize AceDB with profile support
     self.database = AceDB:New("CCRotationDB", defaults, true)
     
-    -- Reference to current profile data
+    -- Reference to current profile data and global data
     self.db = self.database.profile
+    self.global = self.database.global
     
     -- Set up profile change callback
     self.database.RegisterCallback(self, "OnProfileChanged", "OnProfileChanged")
@@ -179,11 +182,37 @@ function addon.Config:MergeDefaults(target, source)
 end
 
 function addon.Config:Get(key)
-    return self.db[key]
+    -- Check profile settings first, then global settings
+    if self.db[key] ~= nil then
+        return self.db[key]
+    end
+    return self.global[key]
 end
 
 function addon.Config:Set(key, value)
-    self.db[key] = value
+    -- Determine if this is a profile-specific or global setting
+    if self:IsProfileSetting(key) then
+        self.db[key] = value
+    else
+        self.global[key] = value
+    end
+end
+
+-- Helper function to determine if a setting belongs to profile or global
+function addon.Config:IsProfileSetting(key)
+    local profileSettings = {
+        "priorityPlayers",
+        "customNPCs", 
+        "customSpells",
+        "inactiveSpells"
+    }
+    
+    for _, setting in ipairs(profileSettings) do
+        if key == setting then
+            return true
+        end
+    end
+    return false
 end
 
 function addon.Config:GetNPCEffectiveness(npcID)

@@ -80,15 +80,15 @@ function addon.MinimapIcon:Initialize()
         end
     end
 
-    -- Initialize LibDBIcon with saved variables
-    if not addon.Config.db.minimap then
-        addon.Config.db.minimap = {
+    -- Initialize LibDBIcon with saved variables (now in global settings)
+    if not addon.Config.global.minimap then
+        addon.Config.global.minimap = {
             minimapPos = 220,
             radius = 80,
         }
     end
 
     -- Register the minimap icon
-    LibDBIcon:Register("CCRotationHelper", minimapLDB, addon.Config.db.minimap)
+    LibDBIcon:Register("CCRotationHelper", minimapLDB, addon.Config.global.minimap)
 end
 
