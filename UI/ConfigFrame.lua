@@ -23,13 +23,13 @@ function addon.UI:CreateConfigFrame()
     tabGroup:SetFullWidth(true)
     tabGroup:SetFullHeight(true)
     tabGroup:SetTabs({
-        {text="Profiles", value="profiles"},
         {text="Display", value="display"},
         {text="Text", value="text"}, 
         {text="Icons", value="icons"},
         {text="Spells", value="spells"},
         {text="Npcs", value="npcs"},
-        {text="Players", value="players"}
+        {text="Players", value="players"},
+        {text="Profiles", value="profiles"}
     })
     tabGroup:SetCallback("OnGroupSelected", function(container, event, group)
         function container:RefreshCurrentTab()
