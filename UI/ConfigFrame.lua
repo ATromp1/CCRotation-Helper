@@ -712,6 +712,172 @@ function addon.UI:CreateIconsTab(container)
     end)
     maxIconsSlider:SetFullWidth(true)
     scroll:AddChild(maxIconsSlider)
+    
+    -- Create dynamic glow settings
+    self:CreateGlowSettings(scroll)
+end
+
+-- Create dynamic glow settings that show/hide based on selected type
+function addon.UI:CreateGlowSettings(scroll)
+    -- Glow Settings Section
+    local glowHeader = AceGUI:Create("Heading")
+    glowHeader:SetText("Glow Settings")
+    glowHeader:SetFullWidth(true)
+    scroll:AddChild(glowHeader)
+    
+    -- Highlight Next checkbox
+    local highlightNextCheck = AceGUI:Create("CheckBox")
+    highlightNextCheck:SetLabel("Highlight Player's First Spell")
+    highlightNextCheck:SetValue(addon.Config:Get("highlightNext"))
+    highlightNextCheck:SetCallback("OnValueChanged", function(widget, event, value)
+        addon.Config:Set("highlightNext", value)
+        if addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
+    end)
+    highlightNextCheck:SetFullWidth(true)
+    scroll:AddChild(highlightNextCheck)
+    
+    -- Glow Only In Combat checkbox
+    local glowOnlyInCombatCheck = AceGUI:Create("CheckBox")
+    glowOnlyInCombatCheck:SetLabel("Only Show Glow In Combat")
+    glowOnlyInCombatCheck:SetValue(addon.Config:Get("glowOnlyInCombat"))
+    glowOnlyInCombatCheck:SetCallback("OnValueChanged", function(widget, event, value)
+        addon.Config:Set("glowOnlyInCombat", value)
+        if addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
+    end)
+    glowOnlyInCombatCheck:SetFullWidth(true)
+    scroll:AddChild(glowOnlyInCombatCheck)
+    
+    -- Glow Type dropdown
+    local glowTypeDropdown = AceGUI:Create("Dropdown")
+    glowTypeDropdown:SetLabel("Glow Type")
+    glowTypeDropdown:SetList({
+        Pixel = "Pixel Glow",
+        ACShine = "Autocast Shine",
+        Proc = "Proc Glow"
+    })
+    glowTypeDropdown:SetValue(addon.Config:Get("glowType"))
+    scroll:AddChild(glowTypeDropdown)
+    
+    -- Container for dynamic controls
+    local dynamicContainer = AceGUI:Create("SimpleGroup")
+    dynamicContainer:SetFullWidth(true)
+    dynamicContainer:SetLayout("Flow")
+    scroll:AddChild(dynamicContainer)
+    
+    -- Function to rebuild controls for selected glow type
+    local function rebuildGlowControls(glowType)
+        -- Clear existing controls
+        dynamicContainer:ReleaseChildren()
+        
+        -- Color picker (all types except Proc)
+        if glowType ~= "Proc" then
+            local glowColorPicker = AceGUI:Create("ColorPicker")
+            glowColorPicker:SetLabel("Glow Color")
+            local currentColor = addon.Config:Get("glowColor")
+            glowColorPicker:SetColor(currentColor[1], currentColor[2], currentColor[3], currentColor[4])
+            glowColorPicker:SetCallback("OnValueChanged", function(widget, event, r, g, b, a)
+                addon.Config:Set("glowColor", {r, g, b, a})
+                if addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
+            end)
+            glowColorPicker:SetFullWidth(true)
+            dynamicContainer:AddChild(glowColorPicker)
+        end
+        
+        -- Type-specific controls
+        if glowType == "Pixel" then
+            -- Frequency for Pixel glow
+            local glowFrequencySlider = AceGUI:Create("Slider")
+            glowFrequencySlider:SetLabel("Frequency/Speed")
+            glowFrequencySlider:SetSliderValues(-2, 2, 0.05)
+            glowFrequencySlider:SetValue(addon.Config:Get("glowFrequency"))
+            glowFrequencySlider:SetCallback("OnValueChanged", function(widget, event, value)
+                addon.Config:Set("glowFrequency", value)
+                if addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
+            end)
+            glowFrequencySlider:SetFullWidth(true)
+            dynamicContainer:AddChild(glowFrequencySlider)
+            
+            local pixelControls = {
+                {key = "glowLines", label = "Number of Lines", min = 1, max = 30, step = 1},
+                {key = "glowLength", label = "Line Length", min = 1, max = 20, step = 1},
+                {key = "glowThickness", label = "Line Thickness", min = 1, max = 20, step = 1},
+                {key = "glowXOffset", label = "X Offset", min = -20, max = 20, step = 1},
+                {key = "glowYOffset", label = "Y Offset", min = -20, max = 20, step = 1}
+            }
+            
+            for _, controlData in ipairs(pixelControls) do
+                local slider = AceGUI:Create("Slider")
+                slider:SetLabel(controlData.label)
+                slider:SetSliderValues(controlData.min, controlData.max, controlData.step)
+                slider:SetValue(addon.Config:Get(controlData.key))
+                slider:SetCallback("OnValueChanged", function(widget, event, value)
+                    addon.Config:Set(controlData.key, value)
+                    if addon.UI.RefreshDisplay then
+                        addon.UI:RefreshDisplay()
+                    end
+                end)
+                slider:SetFullWidth(true)
+                dynamicContainer:AddChild(slider)
+            end
+            
+            local glowBorderCheck = AceGUI:Create("CheckBox")
+            glowBorderCheck:SetLabel("Add Border")
+            glowBorderCheck:SetValue(addon.Config:Get("glowBorder"))
+            glowBorderCheck:SetCallback("OnValueChanged", function(widget, event, value)
+                addon.Config:Set("glowBorder", value)
+                if addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
+            end)
+            glowBorderCheck:SetFullWidth(true)
+            dynamicContainer:AddChild(glowBorderCheck)
+            
+        elseif glowType == "ACShine" then
+            local acControls = {
+                {key = "glowParticleGroups", label = "Particle Groups (N)", min = 1, max = 10, step = 1},
+                {key = "glowACFrequency", label = "Frequency (negative = reverse)", min = -2, max = 2, step = 0.025},
+                {key = "glowScale", label = "Scale", min = 0.1, max = 3.0, step = 0.1},
+                {key = "glowACXOffset", label = "X Offset", min = -20, max = 20, step = 1},
+                {key = "glowACYOffset", label = "Y Offset", min = -20, max = 20, step = 1}
+            }
+            
+            for _, controlData in ipairs(acControls) do
+                local slider = AceGUI:Create("Slider")
+                slider:SetLabel(controlData.label)
+                slider:SetSliderValues(controlData.min, controlData.max, controlData.step)
+                slider:SetValue(addon.Config:Get(controlData.key))
+                slider:SetCallback("OnValueChanged", function(widget, event, value)
+                    addon.Config:Set(controlData.key, value)
+                    if addon.UI.RefreshDisplay then
+                        addon.UI:RefreshDisplay()
+                    end
+                end)
+                slider:SetFullWidth(true)
+                dynamicContainer:AddChild(slider)
+            end
+        end
+        -- Proc glow has no additional settings
+    end
+    
+    -- Set initial controls
+    rebuildGlowControls(addon.Config:Get("glowType"))
+    
+    -- Update dropdown callback to rebuild controls
+    glowTypeDropdown:SetCallback("OnValueChanged", function(widget, event, value)
+        addon.Config:Set("glowType", value)
+        rebuildGlowControls(value)
+        if addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
+    end)
 end
 
 -- Function to renumber spell priorities to eliminate gaps

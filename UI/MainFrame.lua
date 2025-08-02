@@ -3,6 +3,9 @@ local addonName, addon = ...
 -- Get AceGUI reference
 local AceGUI = LibStub("AceGUI-3.0")
 
+-- Get LibCustomGlow reference
+local LCG = LibStub("LibCustomGlow-1.0")
+
 addon.UI = {}
 local UI = addon.UI
 
@@ -254,7 +257,11 @@ function UI:GetIcon()
     icon.displayTexture:Hide()
     icon.displayTexture:ClearAllPoints()
     icon.displayTexture:SetAllPoints(icon)
-    icon.glow:Hide()
+    -- Stop all possible glow types
+    LCG.ButtonGlow_Stop(icon)
+    LCG.PixelGlow_Stop(icon)
+    LCG.AutoCastGlow_Stop(icon)
+    LCG.ProcGlow_Stop(icon)
     icon.cooldown:Clear()
     icon.cooldown:Hide()
     icon.deadIndicator:Hide()
@@ -373,7 +380,11 @@ function UI:GetUnavailableIcon()
     icon.displayTexture:Hide()
     icon.displayTexture:ClearAllPoints()
     icon.displayTexture:SetAllPoints(icon)
-    icon.glow:Hide()
+    -- Stop all possible glow types
+    LCG.ButtonGlow_Stop(icon)
+    LCG.PixelGlow_Stop(icon)
+    LCG.AutoCastGlow_Stop(icon)
+    LCG.ProcGlow_Stop(icon)
     icon.cooldown:Clear()
     icon.cooldown:Hide()
     icon.deadIndicator:Hide()
@@ -663,17 +674,23 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                     end
                 end
                 
-                -- Handle glow effect for "next" spell (second in queue)
-                if i == 2 and config:Get("highlightNext") then
-                    icon.glow:SetAlpha(1)
-                    icon.glow:Show()
-                    icon.animFrame.pulseAnim:Play()
+                -- Handle glow effect for the first spell (only if it belongs to the player)
+                local shouldGlow = i == 1 and 
+                                 config:Get("highlightNext") and 
+                                 UnitIsUnit(icon.unit, "player") and
+                                 (not config:Get("glowOnlyInCombat") or InCombatLockdown())
+                
+                if shouldGlow then
+                    self:StartGlow(icon, config)
                 else
-                    icon.glow:Hide()
-                    icon.glow:SetAlpha(0)
-                    if icon.animFrame.pulseAnim:IsPlaying() then
-                        icon.animFrame.pulseAnim:Stop()
-                    end
+                    -- Stop all possible glow types
+    LCG.ButtonGlow_Stop(icon)
+    LCG.PixelGlow_Stop(icon)
+    LCG.AutoCastGlow_Stop(icon)
+    LCG.ProcGlow_Stop(icon)
+                    LCG.PixelGlow_Stop(icon)
+                    LCG.AutoCastGlow_Stop(icon)
+                    LCG.ProcGlow_Stop(icon)
                 end
                 
                 -- Add status indicators for dead/out-of-range
@@ -705,12 +722,6 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                     icon:SetPoint("BOTTOMLEFT", activeIcons[i-1], "BOTTOMRIGHT", spacing, 0)
                 end
                 
-                -- Set adaptive glow size (25% larger than icon)
-                local glowSize = iconSize * 1.25
-                icon.glow:SetSize(glowSize, glowSize)
-                if icon.animFrame and icon.animFrame.glowAnim then
-                    icon.animFrame.glowAnim:SetSize(glowSize, glowSize)
-                end
                 
                 icon:Show()
             end
@@ -1127,6 +1138,49 @@ function UI:ValidateFrameState()
     end
     
     return true
+end
+
+-- Start glow effect with configurable settings
+function UI:StartGlow(icon, config)
+    local glowType = config:Get("glowType")
+    local glowColor = config:Get("glowColor")
+    
+    -- Stop all existing glows first
+    -- Stop all possible glow types
+    LCG.ButtonGlow_Stop(icon)
+    LCG.PixelGlow_Stop(icon)
+    LCG.AutoCastGlow_Stop(icon)
+    LCG.ProcGlow_Stop(icon)
+    LCG.PixelGlow_Stop(icon)
+    LCG.AutoCastGlow_Stop(icon)
+    LCG.ProcGlow_Stop(icon)
+    
+    -- Start the appropriate glow type
+    if glowType == "Pixel" then
+        LCG.PixelGlow_Start(
+            icon, 
+            glowColor, 
+            config:Get("glowLines"), 
+            config:Get("glowFrequency"),
+            config:Get("glowLength"), 
+            config:Get("glowThickness"), 
+            config:Get("glowXOffset"),
+            config:Get("glowYOffset"), 
+            config:Get("glowBorder")
+        )
+    elseif glowType == "ACShine" then
+        LCG.AutoCastGlow_Start(
+            icon, 
+            glowColor, 
+            config:Get("glowParticleGroups"), 
+            config:Get("glowACFrequency"), 
+            config:Get("glowScale"), 
+            config:Get("glowACXOffset"), 
+            config:Get("glowACYOffset")
+        )
+    elseif glowType == "Proc" then
+        LCG.ProcGlow_Start(icon, glowColor)
+    end
 end
 
 -- Update UI when configuration changes (called after profile switch)

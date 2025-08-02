@@ -65,7 +65,28 @@ local defaults = {
         showCooldownText = true,
         showTooltips = true,
         highlightNext = false,
+        glowOnlyInCombat = false, -- Only show glow when in combat
         cooldownDecimalThreshold = 3,
+        
+        -- Glow settings
+        glowType = "Pixel", -- Pixel, ACShine, Proc
+        glowColor = {1, 1, 1, 1}, -- RGBA color for glow
+        glowFrequency = 0.25, -- Animation frequency/speed
+        
+        -- Pixel Glow settings
+        glowLines = 8, -- Number of lines for Pixel glow
+        glowLength = 10, -- Length of lines for Pixel glow
+        glowThickness = 2, -- Thickness of lines for Pixel glow
+        glowXOffset = 0, -- X offset for Pixel glow
+        glowYOffset = 0, -- Y offset for Pixel glow
+        glowBorder = false, -- Add border to Pixel glow
+        
+        -- AutoCast Glow settings
+        glowParticleGroups = 4, -- Number of particle groups (N parameter)
+        glowACFrequency = 0.125, -- AutoCast specific frequency (separate from general frequency)
+        glowScale = 1.0, -- Scale of particles
+        glowACXOffset = 0, -- X offset for AutoCast glow
+        glowACYOffset = 0, -- Y offset for AutoCast glow
         
         -- Individual icon text display (defaults: only main icon shows text)
         showSpellName1 = true,
