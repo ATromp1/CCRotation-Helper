@@ -135,54 +135,54 @@ addon.Database.defaultNPCs = {
 -- Default spell configurations
 addon.Database.defaultSpells = {
     -- Demon Hunter
-    [179057] = { name = "DH - Chaos nova", ccType = "stun", priority = 1 },
-    [207684] = { name = "DH - Sigil of misery", ccType = "fear", priority = 16 },
-    [202138] = { name = "DH - Sigil of chains", ccType = "knock", priority = 17 },
+    [179057] = { name = "Chaos nova", ccType = "stun", priority = 1 },
+    [207684] = { name = "Misery", ccType = "fear", priority = 16 },
+    [202138] = { name = "Chains", ccType = "knock", priority = 17 },
 
     -- Death Knight
-    [207167] = { name = "DK - blinding sleet", ccType = "disorient", priority = 8 },
+    [207167] = { name = "Sleet", ccType = "disorient", priority = 8 },
 
     -- Druid
-    [99] = { name = "Druid - Incapacitating roar", ccType = "incapacitate", priority = 14 },
-    [132469] = { name = "Druid - typhoon", ccType = "knock", priority = 15 },
+    [99] = { name = "Roar", ccType = "incapacitate", priority = 14 },
+    [132469] = { name = "Typhoon", ccType = "knock", priority = 15 },
 
     -- Evoker
-    [368970] = { name = "Evoker - Tail swipe", ccType = "knock", priority = 5 },
-    [357214] = { name = "Evoker - Wing buffet", ccType = "knock", priority = 24 },
+    [368970] = { name = "Tail swipe", ccType = "knock", priority = 5 },
+    [357214] = { name = "Wing buffet", ccType = "knock", priority = 24 },
 
     -- Hunter
-    [462031] = { name = "Hunter - explosive trap", ccType = "knock", priority = 22 },
-    [186387] = { name = "Hunter - bursting shot", ccType = "knock", priority = 23 },
+    [462031] = { name = "Explosive trap", ccType = "knock", priority = 22 },
+    [186387] = { name = "Bursting shot", ccType = "knock", priority = 23 },
 
     -- Mage
-    [157980] = { name = "Mage - Supernova", ccType = "knock", priority = 9 },
-    [458513] = { name = "Mage - Gravity lapse", ccType = "knock", priority = 10 },
-    [31661] = { name = "Mage - dragon's breath", ccType = "disorient", priority = 11 },
-    [157981] = { name = "Mage - blast wave", ccType = "knock", priority = 12 },
+    [157980] = { name = "Supernova", ccType = "knock", priority = 9 },
+    [458513] = { name = "Gravity lapse", ccType = "knock", priority = 10 },
+    [31661] = { name = "DB", ccType = "disorient", priority = 11 },
+    [157981] = { name = "Blastwave", ccType = "knock", priority = 12 },
 
     -- Monk
-    [119381] = { name = "Monk - Leg sweep", ccType = "stun", priority = 4 },
-    [116844] = { name = "Monk - Ring of peace", ccType = "knock", priority = 18 },
+    [119381] = { name = "Sweep", ccType = "stun", priority = 4 },
+    [116844] = { name = "Ring of peace", ccType = "knock", priority = 18 },
 
     -- Paladin
-    [115750] = { name = "Paladin - blinding light", ccType = "disorient", priority = 13 },
+    [115750] = { name = "Blinding light", ccType = "disorient", priority = 13 },
 
     -- Priest
-    [8122] = { name = "Priest - Psychic scream", ccType = "fear", priority = 7 },
+    [8122] = { name = "Fear", ccType = "fear", priority = 7 },
 
     -- Rogue
-    [2094] = { name = "Rogue - Blind", ccType = "disorient", priority = 21 },
+    [2094] = { name = "Blind", ccType = "disorient", priority = 21 },
 
     -- Shaman
-    [51490] = { name = "Shaman - Thunderstorm", ccType = "knock", priority = 2 },
-    [192058] = { name = "Shaman - Incap totem", ccType = "stun", priority = 3 },
+    [51490] = { name = "Thunderstorm", ccType = "knock", priority = 2 },
+    [192058] = { name = "Incap", ccType = "stun", priority = 3 },
 
     -- Warlock
-    [30283] = { name = "Warlock - Shadowfury", ccType = "stun", priority = 20 },
+    [30283] = { name = "Shadowfury", ccType = "stun", priority = 20 },
 
     -- Warrior
-    [46968] = { name = "Warrior - Shockwave", ccType = "stun", priority = 6 },
-    [5246] = { name = "Warrior - Intimidating shout", ccType = "fear", priority = 19 },
+    [46968] = { name = "Shockwave", ccType = "stun", priority = 6 },
+    [5246] = { name = "Fear", ccType = "fear", priority = 19 },
 }
 
 -- Convert CC array to effectiveness map
