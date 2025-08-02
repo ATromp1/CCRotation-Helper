@@ -262,6 +262,8 @@ function UI:GetIcon()
     LCG.PixelGlow_Stop(icon)
     LCG.AutoCastGlow_Stop(icon)
     LCG.ProcGlow_Stop(icon)
+    icon.isGlowing = false
+    icon.currentGlowType = nil
     icon.cooldown:Clear()
     icon.cooldown:Hide()
     icon.deadIndicator:Hide()
@@ -385,6 +387,8 @@ function UI:GetUnavailableIcon()
     LCG.PixelGlow_Stop(icon)
     LCG.AutoCastGlow_Stop(icon)
     LCG.ProcGlow_Stop(icon)
+    icon.isGlowing = false
+    icon.currentGlowType = nil
     icon.cooldown:Clear()
     icon.cooldown:Hide()
     icon.deadIndicator:Hide()
@@ -429,6 +433,8 @@ function UI:ReleaseIcon(icon)
         icon.spellInfo = nil
         icon.unit = nil
         icon.queueData = nil
+        icon.isGlowing = false
+        icon.currentGlowType = nil
         
         table.insert(iconPool, icon)
         
@@ -456,6 +462,8 @@ function UI:ReleaseUnavailableIcon(icon)
         icon.spellInfo = nil
         icon.unit = nil
         icon.queueData = nil
+        icon.isGlowing = false
+        icon.currentGlowType = nil
         
         table.insert(unavailableIconPool, icon)
         
@@ -672,16 +680,21 @@ function UI:UpdateExistingIcons(queue, now)
                                  (not config:Get("glowOnlyInCombat") or InCombatLockdown())
                 
                 if shouldGlow then
-                    self:StartGlow(icon, config)
+                    local glowType = config:Get("glowType")
+                    if not icon.isGlowing or icon.currentGlowType ~= glowType then
+                        self:StartGlow(icon, config)
+                        icon.isGlowing = true
+                        icon.currentGlowType = glowType
+                    end
                 else
-                    -- Stop all possible glow types
-    LCG.ButtonGlow_Stop(icon)
-    LCG.PixelGlow_Stop(icon)
-    LCG.AutoCastGlow_Stop(icon)
-    LCG.ProcGlow_Stop(icon)
-                    LCG.PixelGlow_Stop(icon)
-                    LCG.AutoCastGlow_Stop(icon)
-                    LCG.ProcGlow_Stop(icon)
+                    if icon.isGlowing then
+                        LCG.ButtonGlow_Stop(icon)
+                        LCG.PixelGlow_Stop(icon)
+                        LCG.AutoCastGlow_Stop(icon)
+                        LCG.ProcGlow_Stop(icon)
+                        icon.isGlowing = false
+                        icon.currentGlowType = nil
+                    end
                 end
                 
                 -- Add status indicators for dead/out-of-range
