@@ -45,11 +45,7 @@ function SpellsTab.create(container)
     end
 
     -- Current tracked spells display using TrackedSpellsList component
-    local spellListGroup = AceGUI:Create("InlineGroup")
-    spellListGroup:SetTitle("Currently Tracked Spells")
-    spellListGroup:SetFullWidth(true)
-    spellListGroup:SetLayout("Flow")
-    scroll:AddChild(spellListGroup)
+    local spellListGroup = addon.BaseComponent:createInlineGroup("Currently Tracked Spells", scroll)
     
     -- Load and create TrackedSpellsList component
     if not addon.Components or not addon.Components.TrackedSpellsList then
@@ -115,11 +111,7 @@ function SpellsTab.createManagementSections(scroll, container, trackedSpellsList
     -- Get data provider for components
     local dataProvider = addon.DataProviders and addon.DataProviders.Spells
     -- COMPONENT-BASED: Add new spell section using AddSpellForm component
-    local addSpellGroup = AceGUI:Create("InlineGroup")
-    addSpellGroup:SetTitle("Add Custom Spell")
-    addSpellGroup:SetFullWidth(true)
-    addSpellGroup:SetLayout("Flow")
-    scroll:AddChild(addSpellGroup)
+    local addSpellGroup = addon.BaseComponent:createInlineGroup("Add Custom Spell", scroll)
     
     -- Load and create AddSpellForm component  
     if not addon.Components or not addon.Components.AddSpellForm then
@@ -148,11 +140,7 @@ function SpellsTab.createManagementSections(scroll, container, trackedSpellsList
     addSpellForm:buildUI()
     
     -- Disabled spells section using DisabledSpellsList component
-    local inactiveSpellsGroup = AceGUI:Create("InlineGroup")
-    inactiveSpellsGroup:SetTitle("Disabled Spells")
-    inactiveSpellsGroup:SetFullWidth(true)
-    inactiveSpellsGroup:SetLayout("Flow")
-    scroll:AddChild(inactiveSpellsGroup)
+    local inactiveSpellsGroup = addon.BaseComponent:createInlineGroup("Disabled Spells", scroll)
     
     -- Load and create DisabledSpellsList component
     if not addon.Components or not addon.Components.DisabledSpellsList then

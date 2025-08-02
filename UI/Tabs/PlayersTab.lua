@@ -22,11 +22,7 @@ function PlayersTab.create(container)
     scroll:AddChild(helpText)
     
     -- Add player form using AddPlayerForm component (placed above the list)
-    local addPlayerGroup = AceGUI:Create("InlineGroup")
-    addPlayerGroup:SetTitle("Add Priority Player")
-    addPlayerGroup:SetFullWidth(true)
-    addPlayerGroup:SetLayout("Flow")
-    scroll:AddChild(addPlayerGroup)
+    local addPlayerGroup = addon.BaseComponent:createInlineGroup("Add Priority Player", scroll)
     
     if not addon.Components or not addon.Components.AddPlayerForm then
         error("AddPlayerForm component not loaded. Make sure UI/Components/PlayersList.lua is loaded first.")
@@ -47,11 +43,7 @@ function PlayersTab.create(container)
     addPlayerForm:buildUI()
     
     -- Current priority players display using PriorityPlayersList component
-    local priorityPlayersGroup = AceGUI:Create("InlineGroup")
-    priorityPlayersGroup:SetTitle("Priority Players")
-    priorityPlayersGroup:SetFullWidth(true)
-    priorityPlayersGroup:SetLayout("Flow")
-    scroll:AddChild(priorityPlayersGroup)
+    local priorityPlayersGroup = addon.BaseComponent:createInlineGroup("Priority Players", scroll)
     
     if not addon.Components or not addon.Components.PriorityPlayersList then
         error("PriorityPlayersList component not loaded. Make sure UI/Components/PlayersList.lua is loaded first.")

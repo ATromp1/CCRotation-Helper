@@ -22,11 +22,7 @@ function NPCsTab.create(container)
     scroll:AddChild(helpText)
     
     -- Current location and filtering using CurrentLocationComponent
-    local currentLocationGroup = AceGUI:Create("InlineGroup")
-    currentLocationGroup:SetTitle("Current Location")
-    currentLocationGroup:SetFullWidth(true)
-    currentLocationGroup:SetLayout("Flow")
-    scroll:AddChild(currentLocationGroup)
+    local currentLocationGroup = addon.BaseComponent:createInlineGroup("Current Location", scroll)
     
     if not addon.Components or not addon.Components.CurrentLocationComponent then
         error("CurrentLocationComponent not loaded. Make sure UI/Components/NPCsList.lua is loaded first.")
@@ -53,10 +49,7 @@ function NPCsTab.create(container)
     currentLocationComponent:buildUI()
     
     -- NPC list grouped by dungeon using DungeonNPCListComponent
-    local dungeonNPCGroup = AceGUI:Create("SimpleGroup")
-    dungeonNPCGroup:SetFullWidth(true)
-    dungeonNPCGroup:SetLayout("Flow")
-    scroll:AddChild(dungeonNPCGroup)
+    local dungeonNPCGroup = addon.BaseComponent:createInlineGroup("NPCs by Dungeon", scroll)
     
     if not addon.Components or not addon.Components.DungeonNPCListComponent then
         error("DungeonNPCListComponent not loaded. Make sure UI/Components/NPCsList.lua is loaded first.")
@@ -81,11 +74,7 @@ function NPCsTab.create(container)
     dungeonNPCList:buildUI()
     
     -- Quick NPC lookup using NPCSearchComponent
-    local lookupGroup = AceGUI:Create("InlineGroup")
-    lookupGroup:SetTitle("Quick NPC Lookup")
-    lookupGroup:SetFullWidth(true)
-    lookupGroup:SetLayout("Flow")
-    scroll:AddChild(lookupGroup)
+    local lookupGroup = addon.BaseComponent:createInlineGroup("Quick NPC Lookup", scroll)
     
     if not addon.Components or not addon.Components.NPCSearchComponent then
         error("NPCSearchComponent not loaded. Make sure UI/Components/NPCsList.lua is loaded first.")
@@ -104,11 +93,7 @@ function NPCsTab.create(container)
     npcSearchComponent:buildUI()
     
     -- Add custom NPC using AddNPCComponent
-    local addNPCGroup = AceGUI:Create("InlineGroup")
-    addNPCGroup:SetTitle("Add Custom NPC")
-    addNPCGroup:SetFullWidth(true)
-    addNPCGroup:SetLayout("Flow")
-    scroll:AddChild(addNPCGroup)
+    local addNPCGroup = addon.BaseComponent:createInlineGroup("Add Custom NPC", scroll)
     
     if not addon.Components or not addon.Components.AddNPCComponent then
         error("AddNPCComponent not loaded. Make sure UI/Components/NPCsList.lua is loaded first.")

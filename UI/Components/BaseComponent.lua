@@ -94,4 +94,20 @@ function BaseComponent:validateImplementation(componentName)
     end
 end
 
+-- Helper function to create InlineGroup containers with consistent setup
+function BaseComponent:createInlineGroup(title, container)
+    local group = self.AceGUI:Create("InlineGroup")
+    if title then
+        group:SetTitle(title)
+    end
+    group:SetFullWidth(true)
+    group:SetLayout("Flow")
+    
+    if container then
+        container:AddChild(group)
+    end
+    
+    return group
+end
+
 return BaseComponent
