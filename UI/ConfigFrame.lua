@@ -57,7 +57,16 @@ function addon.UI:CreateConfigFrame()
             end
             addon.UI.SpellsTab.create(container)
         elseif group == "npcs" then
-            self:CreateNpcsTab(container)
+            if not addon.UI.NPCsTab then
+                local NPCsTab = addon.NPCsTabModule or {}
+                addon.UI.NPCsTab = NPCsTab
+            end
+            
+            if addon.UI.NPCsTab.create then
+                addon.UI.NPCsTab.create(container)
+            else
+                error("NPCsTab module not loaded. Check that UI/Tabs/NPCsTab.lua is loaded.")
+            end
         elseif group == "players" then
             if not addon.UI.PlayersTab then
                 local PlayersTab = addon.PlayersTabModule or {}

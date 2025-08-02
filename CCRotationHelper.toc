@@ -37,8 +37,11 @@ UI\Components\SpellsDataProvider.lua
 UI\Components\SpellsList.lua
 UI\Components\PlayersDataProvider.lua
 UI\Components\PlayersList.lua
+UI\Components\NPCsDataProvider.lua
+UI\Components\NPCsList.lua
 UI\Tabs\SpellsTab.lua
 UI\Tabs\PlayersTab.lua
+UI\Tabs\NPCsTab.lua
 UI\MainFrame.lua
 UI\ConfigFrame.lua
 UI\Component.lua
