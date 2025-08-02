@@ -30,8 +30,12 @@ Core\RotationCore.lua
 Core\MinimapIcon.lua
 Core\ProfileSync.lua
 
-# UI files
+# UI files  
 UI\Templates.xml
+UI\Components\BaseComponent.lua
+UI\Components\SpellsDataProvider.lua
+UI\Components\SpellsList.lua
+UI\Tabs\SpellsTab.lua
 UI\MainFrame.lua
 UI\ConfigFrame.lua
 UI\Component.lua
