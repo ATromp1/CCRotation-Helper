@@ -180,8 +180,34 @@ end
 
 -- Actual queue rebuild implementation
 function CCRotation:DoRebuildQueue()
+    -- Store old GUID mapping to detect group changes
+    local oldGUIDToUnit = {}
+    for guid, unit in pairs(self.GUIDToUnit) do
+        oldGUIDToUnit[guid] = unit
+    end
+    
     -- Refresh GUID→unit mapping
     self:RefreshGUIDToUnit()
+    
+    -- Check if group composition changed
+    local groupChanged = false
+    
+    -- Check for added/removed players
+    for guid, unit in pairs(self.GUIDToUnit) do
+        if not oldGUIDToUnit[guid] then
+            groupChanged = true
+            break
+        end
+    end
+    
+    if not groupChanged then
+        for guid, unit in pairs(oldGUIDToUnit) do
+            if not self.GUIDToUnit[guid] then
+                groupChanged = true
+                break
+            end
+        end
+    end
     
     -- Track if any cooldowns actually changed
     local hasChanges = false
@@ -202,8 +228,8 @@ function CCRotation:DoRebuildQueue()
         end
     end
     
-    -- Only recalculate if there were actual changes
-    if hasChanges then
+    -- Recalculate if there were cooldown changes OR group composition changed
+    if hasChanges or groupChanged then
         self:RecalculateQueue()
     end
 end
