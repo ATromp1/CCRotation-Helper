@@ -17,6 +17,7 @@ function CCRotation:Initialize()
     
     -- Initialize tracking variables
     self.cooldownQueue = {}
+    self.spellCooldowns = {}  -- Individual spell tracking
     self.GUIDToUnit = {}
     self.activeNPCs = {}
     
@@ -113,11 +114,8 @@ end
 
 -- Handle LibOpenRaid cooldown updates
 function CCRotation:OnCooldownUpdate(...)
+    -- Only rebuild queue, it will handle UI updates if needed
     self:RebuildQueue()
-    -- Force immediate UI update since this is a real cooldown change
-    if addon.UI then
-        addon.UI:UpdateDisplay(self.cooldownQueue, self.unavailableQueue)
-    end
 end
 
 -- Extract NPC ID from a unit GUID
@@ -127,8 +125,8 @@ function CCRotation:GetNPCIDFromGUID(guid)
     return tonumber(npcID)
 end
 
--- Update or add an entry in the queue
-function CCRotation:UpdateEntry(unit, spellID, cooldownInfo)
+-- Update individual spell cooldown data
+function CCRotation:UpdateSpellCooldown(unit, spellID, cooldownInfo)
     local info = self.trackedCooldowns[spellID]
     if not (unit and info and cooldownInfo and lib) then return end
     
@@ -138,27 +136,31 @@ function CCRotation:UpdateEntry(unit, spellID, cooldownInfo)
     local _, _, timeLeft, charges, _, _, _, duration = lib.GetCooldownStatusFromCooldownInfo(cooldownInfo)
     local currentTime = GetTime()
     
-    -- Check if entry already exists and update it
-    for _, cooldownData in ipairs(self.cooldownQueue) do
-        if cooldownData.GUID == GUID and cooldownData.spellID == spellID then
-            cooldownData.expirationTime = timeLeft + currentTime
-            cooldownData.duration = duration
-            cooldownData.charges = charges
-            return true
-        end
+    -- Create unique key for this spell/player combination
+    local key = GUID .. ":" .. spellID
+    
+    -- Check if this is actually a significant update to avoid unnecessary refreshes
+    local existingData = self.spellCooldowns[key]
+    local newExpirationTime = timeLeft + currentTime
+    
+    -- Only update if this is a new spell or the cooldown changed significantly (more than 0.2 seconds)
+    if not existingData or 
+       math.abs(existingData.expirationTime - newExpirationTime) > 0.2 or
+       (existingData.charges or 0) ~= charges then
+        
+        self.spellCooldowns[key] = {
+            GUID = GUID,
+            spellID = spellID,
+            priority = info.priority,
+            expirationTime = newExpirationTime,
+            duration = duration,
+            charges = charges,
+            lastUpdate = currentTime
+        }
+        return true
     end
     
-    -- Add new entry
-    table.insert(self.cooldownQueue, {
-        GUID = GUID,
-        spellID = spellID,
-        priority = info.priority,
-        expirationTime = timeLeft + currentTime,
-        duration = duration,
-        charges = charges
-    })
-    
-    return true
+    return false -- No significant change
 end
 
 -- Debounced queue rebuild
@@ -181,20 +183,38 @@ function CCRotation:DoRebuildQueue()
     -- Refresh GUID→unit mapping
     self:RefreshGUIDToUnit()
     
-    -- Rebuild the queue
-    self.cooldownQueue = {}
+    -- Track if any cooldowns actually changed
+    local hasChanges = false
     
+    -- Update individual spell cooldowns without affecting others
     if lib then
         local allUnits = lib.GetAllUnitsCooldown()
         if allUnits then
             for unit, cds in pairs(allUnits) do
                 for spellID, info in pairs(cds) do
                     if self.trackedCooldowns[spellID] then
-                        self:UpdateEntry(unit, spellID, info)
+                        if self:UpdateSpellCooldown(unit, spellID, info) then
+                            hasChanges = true
+                        end
                     end
                 end
             end
         end
+    end
+    
+    -- Only recalculate if there were actual changes
+    if hasChanges then
+        self:RecalculateQueue()
+    end
+end
+
+-- Recalculate queue order from individual spell cooldowns
+function CCRotation:RecalculateQueue()
+    self.cooldownQueue = {}
+    
+    -- Convert spell cooldowns to queue format
+    for key, spellData in pairs(self.spellCooldowns) do
+        table.insert(self.cooldownQueue, spellData)
     end
     
     -- Determine if we have any known NPCs and handle filtering/effectiveness

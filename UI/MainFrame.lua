@@ -551,17 +551,9 @@ function UI:UpdateDisplay(queue, unavailableQueue)
     local spacing = config:Get("spacing")
     local now = GetTime()
     
-    -- Release all current icons back to pool
-    for i = #activeIcons, 1, -1 do
-        self:ReleaseIcon(activeIcons[i])
-    end
-    wipe(activeIcons)
-    
-    -- Release all current unavailable icons back to pool
-    for i = #activeUnavailableIcons, 1, -1 do
-        self:ReleaseUnavailableIcon(activeUnavailableIcons[i])
-    end
-    wipe(activeUnavailableIcons)
+    -- Instead of releasing all icons, update existing ones and add/remove as needed
+    self:UpdateExistingIcons(queue, now)
+    self:UpdateExistingUnavailableIcons(unavailableQueue or {}, now)
     
     -- Update frame visibility
     if not addon.CCRotation:ShouldBeActive() then
@@ -571,25 +563,56 @@ function UI:UpdateDisplay(queue, unavailableQueue)
     
     self.mainFrame:Show()
     
-    -- Create and position icons for current queue
+    -- Update main frame size
+    self:UpdateFrameSize()
+end
+
+-- Update existing icons without recreating them
+function UI:UpdateExistingIcons(queue, now)
+    local config = addon.Config
+    local maxIcons = config:Get("maxIcons")
+    local spacing = config:Get("spacing")
+    
+    -- Hide icons that are no longer needed
+    for i = math.min(#queue, maxIcons) + 1, #activeIcons do
+        if activeIcons[i] then
+            activeIcons[i]:Hide()
+        end
+    end
+    
+    -- Update or create icons for current queue
     for i = 1, math.min(#queue, maxIcons) do
         local cooldownData = queue[i]
         if cooldownData then
-            local icon = self:GetIcon()
-            table.insert(activeIcons, icon)
+            -- Reuse existing icon or get new one
+            local icon = activeIcons[i]
+            if not icon then
+                icon = self:GetIcon()
+                activeIcons[i] = icon
+            end
             
-            -- Set icon data
+            -- Update icon data only if it changed
+            local needsUpdate = not icon.queueData or 
+                               icon.queueData.GUID ~= cooldownData.GUID or 
+                               icon.queueData.spellID ~= cooldownData.spellID or
+                               math.abs((icon.queueData.expirationTime or 0) - cooldownData.expirationTime) > 0.1
+            
             icon.queueData = cooldownData
             icon.unit = addon.CCRotation.GUIDToUnit[cooldownData.GUID]
-            icon.spellInfo = C_Spell.GetSpellInfo(cooldownData.spellID)
-            icon.spellConfig = addon.Config:GetSpellInfo(cooldownData.spellID)
+            
+            if needsUpdate then
+                icon.spellInfo = C_Spell.GetSpellInfo(cooldownData.spellID)
+                icon.spellConfig = addon.Config:GetSpellInfo(cooldownData.spellID)
+            end
             
             if icon.spellInfo and icon.unit then
-                -- Set icon texture using working approach
-                icon.displayTexture:SetTexture(icon.spellInfo.iconID)
-                icon.displayTexture:Show()
+                -- Update texture only if spell changed
+                if needsUpdate then
+                    icon.displayTexture:SetTexture(icon.spellInfo.iconID)
+                    icon.displayTexture:Show()
+                end
                 
-                -- Desaturate if not effective against current NPCs
+                -- Always update effectiveness state
                 icon.displayTexture:SetDesaturated(not cooldownData.isEffective)
                 
                 -- Set spell name (only on first icon, using global setting)
@@ -639,40 +662,8 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                     icon.playerName:Hide()
                 end
                 
-                -- Set cooldown
-                local charges = cooldownData.charges or 0
-                local isReady = charges > 0 or cooldownData.expirationTime <= now
-                
-                if isReady then
-                    -- Don't clear if cooldown animation is still running - let it finish naturally
-                    if icon.cooldown:IsShown() and (cooldownData.expirationTime - now) > -0.5 then
-                        -- Let both swipe and text finish naturally
-                        if config:Get("showCooldownText") then
-                            local timeLeft = math.max(0, cooldownData.expirationTime - now)
-                            icon.cooldownText:SetText(timeLeft > 0 and self:FormatTime(timeLeft) or "")
-                        else
-                            icon.cooldownText:SetText("")
-                        end
-                    else
-                        icon.cooldown:Clear()
-                        icon.cooldown:Hide()
-                        icon.cooldownEndTime = nil
-                        icon.cooldownText:SetText("")
-                    end
-                else
-                    -- Only set cooldown if it's not already running with the same end time
-                    if not icon.cooldown:IsShown() or math.abs((icon.cooldownEndTime or 0) - cooldownData.expirationTime) > 0.1 then
-                        icon.cooldown:SetCooldown(now, cooldownData.expirationTime - now)
-                        icon.cooldownEndTime = cooldownData.expirationTime
-                        icon.cooldown:Show()
-                    end
-                    if config:Get("showCooldownText") then
-                        local timeLeft = cooldownData.expirationTime - now
-                        icon.cooldownText:SetText(self:FormatTime(timeLeft))
-                    else
-                        icon.cooldownText:SetText("")
-                    end
-                end
+                -- Update cooldown independently - only change if cooldown data actually changed
+                self:UpdateIconCooldown(icon, cooldownData, now, config)
                 
                 -- Handle glow effect for the first spell (only if it belongs to the player)
                 local shouldGlow = i == 1 and 
@@ -727,12 +718,47 @@ function UI:UpdateDisplay(queue, unavailableQueue)
             end
         end
     end
+end
+
+-- Update existing unavailable icons without recreating them
+function UI:UpdateExistingUnavailableIcons(unavailableQueue, now)
+    local config = addon.Config
     
-    -- Create and position unavailable queue icons
-    if config:Get("showUnavailableQueue") and unavailableQueue and #unavailableQueue > 0 then
+    if not config:Get("showUnavailableQueue") or not unavailableQueue or #unavailableQueue == 0 then
+        -- Hide all unavailable icons if not showing queue
+        for i = 1, #activeUnavailableIcons do
+            if activeUnavailableIcons[i] then
+                activeUnavailableIcons[i]:Hide()
+            end
+        end
+        return
+    end
+    
+    if #unavailableQueue > 0 then
         local maxUnavailableIcons = config:Get("maxUnavailableIcons")
         local unavailableSpacing = config:Get("unavailableSpacing")
         local unavailableIconSize = config:Get("unavailableIconSize")
+        
+        -- Hide icons that are no longer needed
+        local validIconCount = 0
+        for i = 1, #unavailableQueue do
+            local cooldownData = unavailableQueue[i]
+            if cooldownData then
+                local charges = cooldownData.charges or 0
+                local isReady = charges > 0 or cooldownData.expirationTime <= now
+                local timeLeft = cooldownData.expirationTime - now
+                if isReady or timeLeft < 3 then
+                    validIconCount = validIconCount + 1
+                    if validIconCount > maxUnavailableIcons then break end
+                end
+            end
+        end
+        
+        for i = validIconCount + 1, #activeUnavailableIcons do
+            if activeUnavailableIcons[i] then
+                activeUnavailableIcons[i]:Hide()
+            end
+        end
         
         local iconIndex = 0
         for i = 1, #unavailableQueue do
@@ -746,19 +772,33 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                     iconIndex = iconIndex + 1
                     if iconIndex > maxUnavailableIcons then break end
                     
-                    local icon = self:GetUnavailableIcon()
-                    table.insert(activeUnavailableIcons, icon)
+                    -- Reuse existing icon or get new one
+                    local icon = activeUnavailableIcons[iconIndex]
+                    if not icon then
+                        icon = self:GetUnavailableIcon()
+                        activeUnavailableIcons[iconIndex] = icon
+                    end
                     
-                    -- Set icon data
+                    -- Update icon data only if it changed
+                    local needsUpdate = not icon.queueData or 
+                                       icon.queueData.GUID ~= cooldownData.GUID or 
+                                       icon.queueData.spellID ~= cooldownData.spellID or
+                                       math.abs((icon.queueData.expirationTime or 0) - cooldownData.expirationTime) > 0.1
+                    
                     icon.queueData = cooldownData
                     icon.unit = addon.CCRotation.GUIDToUnit[cooldownData.GUID]
-                    icon.spellInfo = C_Spell.GetSpellInfo(cooldownData.spellID)
-                    icon.spellConfig = addon.Config:GetSpellInfo(cooldownData.spellID)
+                    
+                    if needsUpdate then
+                        icon.spellInfo = C_Spell.GetSpellInfo(cooldownData.spellID)
+                        icon.spellConfig = addon.Config:GetSpellInfo(cooldownData.spellID)
+                    end
                     
                     if icon.spellInfo and icon.unit then
-                        -- Set icon texture
-                        icon.displayTexture:SetTexture(icon.spellInfo.iconID)
-                        icon.displayTexture:Show()
+                        -- Update texture only if spell changed
+                        if needsUpdate then
+                            icon.displayTexture:SetTexture(icon.spellInfo.iconID)
+                            icon.displayTexture:Show()
+                        end
                     
                         -- Apply texture zoom within the frame (like WeakAuras)
                         local iconZoom = config:Get("iconZoom") or 1.0
@@ -775,30 +815,8 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                         icon.spellName:Hide()
                         icon.playerName:Hide()
                     
-                        -- Set cooldown (minimal display)
-                        local charges = cooldownData.charges or 0
-                        local isReady = charges > 0 or cooldownData.expirationTime <= now
-                        
-                        if isReady then
-                            -- Don't clear if cooldown animation is still running - let it finish naturally
-                            if icon.cooldown:IsShown() and (cooldownData.expirationTime - now) > -0.5 then
-                                -- Let swipe finish naturally, no text for unavailable icons anyway
-                                icon.cooldownText:SetText("")
-                            else
-                                icon.cooldown:Clear()
-                                icon.cooldown:Hide()
-                                icon.cooldownEndTime = nil
-                                icon.cooldownText:SetText("")
-                            end
-                        else
-                            -- Only set cooldown if it's not already running with the same end time
-                            if not icon.cooldown:IsShown() or math.abs((icon.cooldownEndTime or 0) - cooldownData.expirationTime) > 0.1 then
-                                icon.cooldown:SetCooldown(now, cooldownData.expirationTime - now)
-                                icon.cooldownEndTime = cooldownData.expirationTime
-                                icon.cooldown:Show()
-                            end
-                            icon.cooldownText:SetText("")  -- No text for small icons
-                        end
+                        -- Update cooldown independently
+                        self:UpdateIconCooldown(icon, cooldownData, now, config, true)
                     
                         -- Add status indicators
                         self:UpdateStatusIndicators(icon, cooldownData)
@@ -808,7 +826,7 @@ function UI:UpdateDisplay(queue, unavailableQueue)
                         
                         if iconIndex == 1 then
                             icon:SetPoint("TOPLEFT", self.mainFrame.unavailableContainer, "TOPLEFT", 0, 0)
-                        else
+                        elseif activeUnavailableIcons[iconIndex-1] then
                             icon:SetPoint("TOPLEFT", activeUnavailableIcons[iconIndex-1], "TOPRIGHT", unavailableSpacing, 0)
                         end
                         
@@ -818,9 +836,47 @@ function UI:UpdateDisplay(queue, unavailableQueue)
             end
         end
     end
+end
+
+-- Update individual icon cooldown without affecting others
+function UI:UpdateIconCooldown(icon, cooldownData, now, config, isUnavailable)
+    local charges = cooldownData.charges or 0
+    local isReady = charges > 0 or cooldownData.expirationTime <= now
     
-    -- Update main frame size
-    self:UpdateFrameSize()
+    if isReady then
+        -- Don't clear if cooldown animation is still running - let it finish naturally
+        if icon.cooldown:IsShown() and (cooldownData.expirationTime - now) > -0.5 then
+            -- Let both swipe and text finish naturally
+            if config:Get("showCooldownText") and not isUnavailable then
+                local timeLeft = math.max(0, cooldownData.expirationTime - now)
+                icon.cooldownText:SetText(timeLeft > 0 and self:FormatTime(timeLeft) or "")
+            else
+                icon.cooldownText:SetText("")
+            end
+        else
+            icon.cooldown:Clear()
+            icon.cooldown:Hide()
+            icon.cooldownEndTime = nil
+            icon.cooldownText:SetText("")
+        end
+    else
+        -- Only set cooldown if it's not already running with the same end time (increased threshold)
+        if not icon.cooldown:IsShown() or math.abs((icon.cooldownEndTime or 0) - cooldownData.expirationTime) > 0.5 then
+            local remainingTime = math.max(0, cooldownData.expirationTime - now)
+            -- Use the duration from cooldown data if available, otherwise calculate
+            local duration = cooldownData.duration or remainingTime
+            local startTime = cooldownData.expirationTime - duration
+            icon.cooldown:SetCooldown(startTime, duration)
+            icon.cooldownEndTime = cooldownData.expirationTime
+            icon.cooldown:Show()
+        end
+        if config:Get("showCooldownText") and not isUnavailable then
+            local timeLeft = cooldownData.expirationTime - now
+            icon.cooldownText:SetText(self:FormatTime(timeLeft))
+        else
+            icon.cooldownText:SetText("")
+        end
+    end
 end
 
 -- Truncate text to max length (simple cut-off)
