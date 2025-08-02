@@ -387,9 +387,29 @@ function UI:GetUnavailableIcon()
     return icon
 end
 
+-- Helper function to clear icon text elements
+function UI:ClearIconText(icon)
+    if not icon then return end
+    
+    if icon.spellName then
+        icon.spellName:Hide()
+        icon.spellName:SetText("")
+    end
+    if icon.playerName then
+        icon.playerName:Hide()
+        icon.playerName:SetText("")
+    end
+    if icon.cooldownText then
+        icon.cooldownText:SetText("")
+    end
+end
+
 -- Return icon to pool
 function UI:ReleaseIcon(icon)
     if icon then
+        -- Clear text elements first
+        self:ClearIconText(icon)
+        
         icon:Hide()
         icon:SetParent(UIParent)
         icon:ClearAllPoints()
@@ -414,6 +434,9 @@ end
 -- Return unavailable icon to pool
 function UI:ReleaseUnavailableIcon(icon)
     if icon then
+        -- Clear text elements first
+        self:ClearIconText(icon)
+        
         icon:Hide()
         icon:SetParent(UIParent)
         icon:ClearAllPoints()
@@ -1119,8 +1142,9 @@ function UI:UpdateFromConfig()
     -- Store current visibility state
     local wasVisible = self.mainFrame:IsShown()
     
-    -- First, release all current icons to prevent duplicates
+    -- First, clear all text elements before releasing icons
     for i = #activeIcons, 1, -1 do
+        self:ClearIconText(activeIcons[i])
         self:ReleaseIcon(activeIcons[i])
     end
     wipe(activeIcons)
