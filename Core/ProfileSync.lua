@@ -17,7 +17,7 @@ local addonUsers = {}
 local partySyncState = {
     isActive = false,
     leaderName = nil,
-    originalProfile = nil,
+    lastActiveProfile = nil,  -- Profile that was active before sync started
     syncProfileName = "Party Sync"
 }
 
@@ -39,6 +39,12 @@ function addon.ProfileSync:Initialize()
     addon:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupRosterUpdate")
     addon:RegisterEvent("GROUP_JOINED", "OnGroupJoined")
     addon:RegisterEvent("GROUP_LEFT", "OnGroupLeft")
+    
+    -- Ensure the permanent Party Sync profile exists
+    self:EnsurePartySyncProfileExists()
+    
+    -- Check if we need to restore profile after login
+    self:CheckProfileRestoreOnLogin()
     
     -- Send ping to detect other addon users when joining a group
     C_Timer.After(2, function()
@@ -377,14 +383,28 @@ function addon:OnGroupRosterUpdate()
         
         -- Check for party sync after addon detection
         C_Timer.After(3, function()
-            if addon.ProfileSync:CheckPartySyncConditions() then
-                addon.ProfileSync:StartPartySync()
-            else
-                -- Check if we need to clean up sync (leader left, etc.)
-                local leader = addon.ProfileSync:GetGroupLeader()
-                if partySyncState.isActive and (not leader or leader ~= partySyncState.leaderName) then
-                    addon.ProfileSync:CleanupPartySync()
+            local leader = addon.ProfileSync:GetGroupLeader()
+            
+            -- Handle leadership changes
+            if partySyncState.isActive and leader and leader ~= partySyncState.leaderName then
+                -- If we became the leader, transition to leader mode
+                if leader == UnitName("player") then
+                    addon.ProfileSync:TransitionToLeader()
+                else
+                    -- New leader, restart sync with them if they have addon
+                    if addon.ProfileSync:PlayerHasAddon(leader) then
+                        partySyncState.leaderName = leader
+                        addon.ProfileSync:RequestLeaderProfile(leader)
+                    else
+                        -- New leader doesn't have addon, cleanup
+                        addon.ProfileSync:CleanupPartySync()
+                    end
                 end
+            elseif addon.ProfileSync:CheckPartySyncConditions() then
+                addon.ProfileSync:StartPartySync()
+            elseif partySyncState.isActive and not leader then
+                -- Leader left completely, cleanup
+                addon.ProfileSync:CleanupPartySync()
             end
         end)
     end)
@@ -466,11 +486,34 @@ function addon.ProfileSync:StartPartySync()
     local leader = self:GetGroupLeader()
     if not leader or not self:PlayerHasAddon(leader) then return end
     
-    -- Save current profile if not already in party sync
+    -- If we're the leader, we don't sync - we just broadcast our current profile
+    if leader == UnitName("player") then
+        if not partySyncState.isActive then
+            partySyncState.isActive = true
+            partySyncState.leaderName = leader
+            self:EnsurePartySyncProfileExists()
+            print("|cff00ff00CC Rotation Helper|r: Started party sync as leader")
+            -- Broadcast our current profile to party members
+            C_Timer.After(1, function()
+                self:BroadcastProfileAsLeader()
+            end)
+        end
+        return
+    end
+    
+    -- Save current profile if not already in party sync (and it's not already the Party Sync profile)
+    local currentProfile = addon.Config:GetCurrentProfileName()
     if not partySyncState.isActive then
-        partySyncState.originalProfile = addon.Config:GetCurrentProfileName()
+        if currentProfile ~= partySyncState.syncProfileName then
+            partySyncState.lastActiveProfile = currentProfile
+            -- Persist this to saved variables
+            addon.Config.global.partySyncLastActiveProfile = currentProfile
+        end
         partySyncState.isActive = true
         partySyncState.leaderName = leader
+        
+        -- Ensure Party Sync profile exists
+        self:EnsurePartySyncProfileExists()
         
         print("|cff00ff00CC Rotation Helper|r: Starting party sync with leader " .. leader)
         
@@ -559,20 +602,40 @@ function addon.ProfileSync:HandleProfileUpdate(sender, data)
     print("|cff00ff00CC Rotation Helper|r: Updated party sync profile from " .. sender)
 end
 
+-- Ensure the Party Sync profile exists
+function addon.ProfileSync:EnsurePartySyncProfileExists()
+    if not addon.Config:ProfileExists(partySyncState.syncProfileName) then
+        local currentProfile = addon.Config:GetCurrentProfileName()
+        addon.Config.database:SetProfile(partySyncState.syncProfileName)
+        addon.Config:DebugPrint("Created Party Sync profile")
+        -- Switch back to the original profile if we weren't creating it intentionally
+        if currentProfile ~= partySyncState.syncProfileName then
+            addon.Config.database:SetProfile(currentProfile)
+        end
+    end
+end
+
 -- Create or update the party sync profile
 function addon.ProfileSync:CreatePartySyncProfile(profileData)
+    -- Ensure the profile exists first
+    self:EnsurePartySyncProfileExists()
+    
     -- Switch to party sync profile
     addon.Config.database:SetProfile(partySyncState.syncProfileName)
     
-    -- Clear existing data and copy new data
+    -- Clear existing profile-specific data and copy new data
+    local profile = addon.Config.database.profile
+    profile.priorityPlayers = {}
+    profile.customNPCs = {}
+    profile.customSpells = {}
+    profile.inactiveSpells = {}
+    
+    -- Copy the new profile data
     for key, value in pairs(profileData) do
-        addon.Config.database.profile[key] = value
+        profile[key] = value
     end
     
-    -- Mark that we're now using the sync profile
-    if addon.Config:GetCurrentProfileName() ~= partySyncState.syncProfileName then
-        addon.Config.database:SetProfile(partySyncState.syncProfileName)
-    end
+    addon.Config:DebugPrint("Updated Party Sync profile with leader's data")
 end
 
 -- Clean up party sync when leaving group
@@ -581,22 +644,21 @@ function addon.ProfileSync:CleanupPartySync()
     
     addon.Config:DebugPrint("Cleaning up party sync")
     
-    -- Switch back to original profile
-    if partySyncState.originalProfile then
-        addon.Config.database:SetProfile(partySyncState.originalProfile)
-        print("|cff00ff00CC Rotation Helper|r: Restored profile: " .. partySyncState.originalProfile)
+    -- Switch back to last active profile (only if we're not the leader and we have a saved profile)
+    if partySyncState.lastActiveProfile and partySyncState.leaderName ~= UnitName("player") then
+        addon.Config.database:SetProfile(partySyncState.lastActiveProfile)
+        print("|cff00ff00CC Rotation Helper|r: Restored profile: " .. partySyncState.lastActiveProfile)
     end
     
-    -- Delete the party sync profile
-    if addon.Config:ProfileExists(partySyncState.syncProfileName) then
-        addon.Config.database:DeleteProfile(partySyncState.syncProfileName)
-        addon.Config:DebugPrint("Deleted party sync profile")
-    end
+    -- Keep the Party Sync profile - it's permanent and always available
+    
+    -- Clear persistent data since party sync ended normally
+    addon.Config.global.partySyncLastActiveProfile = nil
     
     -- Reset sync state
     partySyncState.isActive = false
     partySyncState.leaderName = nil
-    partySyncState.originalProfile = nil
+    partySyncState.lastActiveProfile = nil
 end
 
 -- Check if currently in party sync mode
@@ -609,7 +671,82 @@ function addon.ProfileSync:GetPartySyncInfo()
     return {
         isActive = partySyncState.isActive,
         leaderName = partySyncState.leaderName,
-        originalProfile = partySyncState.originalProfile,
+        lastActiveProfile = partySyncState.lastActiveProfile,
         syncProfile = partySyncState.syncProfileName
     }
+end
+
+-- Check if profile selection should be locked (when in party sync as non-leader)
+function addon.ProfileSync:IsProfileSelectionLocked()
+    return partySyncState.isActive and partySyncState.leaderName ~= UnitName("player")
+end
+
+-- Get the name of the permanent party sync profile
+function addon.ProfileSync:GetPartySyncProfileName()
+    return partySyncState.syncProfileName
+end
+
+-- Check if we need to restore profile after login (in case we logged out during party sync)
+function addon.ProfileSync:CheckProfileRestoreOnLogin()
+    local currentProfile = addon.Config:GetCurrentProfileName()
+    local savedProfile = addon.Config.global.partySyncLastActiveProfile
+    local inGroup = IsInGroup()
+    
+    print("|cff00ff00CC Rotation Helper|r: Login check - Current profile: " .. currentProfile)
+    print("|cff00ff00CC Rotation Helper|r: Login check - Saved profile: " .. (savedProfile or "none"))
+    print("|cff00ff00CC Rotation Helper|r: Login check - In group: " .. tostring(inGroup))
+    print("|cff00ff00CC Rotation Helper|r: Login check - Sync profile name: " .. partySyncState.syncProfileName)
+    
+    -- If we're on the Party Sync profile but not in active party sync, switch away from it
+    if currentProfile == partySyncState.syncProfileName and not partySyncState.isActive then
+        if savedProfile then
+            -- We have a saved profile to restore
+            print("|cff00ff00CC Rotation Helper|r: Restoring saved profile: " .. savedProfile)
+            addon.Config.database:SetProfile(savedProfile)
+            addon.Config.global.partySyncLastActiveProfile = nil
+            print("|cff00ff00CC Rotation Helper|r: Restored profile after login: " .. savedProfile)
+        else
+            -- No saved profile, switch to Default as fallback
+            print("|cff00ff00CC Rotation Helper|r: No saved profile found, switching to Default")
+            addon.Config.database:SetProfile("Default")
+            print("|cff00ff00CC Rotation Helper|r: Switched to Default profile as fallback")
+        end
+        return
+    end
+    
+    -- Handle party sync state restoration if we're still in a group
+    if currentProfile == partySyncState.syncProfileName and inGroup and savedProfile then
+        -- We're on Party Sync profile and in group - save the profile for later restoration
+        partySyncState.lastActiveProfile = savedProfile
+        print("|cff00ff00CC Rotation Helper|r: Restored party sync state from saved data")
+    elseif not inGroup and savedProfile then
+        -- We're not in group but have saved profile data - clear it since it's no longer relevant
+        addon.Config.global.partySyncLastActiveProfile = nil
+        print("|cff00ff00CC Rotation Helper|r: Cleared stale party sync profile data")
+    else
+        print("|cff00ff00CC Rotation Helper|r: No profile restoration needed")
+    end
+end
+
+-- Transition from follower to leader mode when leadership is passed to us
+function addon.ProfileSync:TransitionToLeader()
+    if not partySyncState.isActive then return end
+    
+    local currentProfile = addon.Config:GetCurrentProfileName()
+    
+    -- Update leader name
+    partySyncState.leaderName = UnitName("player")
+    
+    -- If we're currently on the Party Sync profile and have a saved profile, switch back
+    if currentProfile == partySyncState.syncProfileName and partySyncState.lastActiveProfile then
+        addon.Config.database:SetProfile(partySyncState.lastActiveProfile)
+        print("|cff00ff00CC Rotation Helper|r: Became party leader - switched to profile: " .. partySyncState.lastActiveProfile)
+    else
+        print("|cff00ff00CC Rotation Helper|r: Became party leader - staying on current profile: " .. currentProfile)
+    end
+    
+    -- Broadcast our current profile to party members
+    C_Timer.After(1, function()
+        self:BroadcastProfileAsLeader()
+    end)
 end

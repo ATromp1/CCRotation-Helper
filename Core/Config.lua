@@ -42,6 +42,9 @@ local defaults = {
         -- Core addon settings
         enabled = true,
         showInSolo = false,
+        
+        -- Party sync persistent data
+        partySyncLastActiveProfile = nil,
         maxIcons = 2,
         iconSize = 64,
         iconSize1 = 64,
@@ -186,8 +189,8 @@ function addon.Config:OnProfileChanged()
         self:DebugPrint("UI refreshed")
     end
     
-    -- If we're the party leader, broadcast the profile change
-    if addon.ProfileSync and UnitIsGroupLeader("player") and IsInGroup() then
+    -- If we're the party leader and in party sync mode, broadcast the profile change
+    if addon.ProfileSync and UnitIsGroupLeader("player") and IsInGroup() and addon.ProfileSync:IsInPartySync() then
         -- Delay broadcast slightly to allow profile switch to complete
         C_Timer.After(0.5, function()
             addon.ProfileSync:BroadcastProfileAsLeader()
@@ -222,6 +225,8 @@ function addon.Config:Set(key, value)
     -- Determine if this is a profile-specific or global setting
     if self:IsProfileSetting(key) then
         self.db[key] = value
+        -- If we're the party leader and this is a profile setting, broadcast the change
+        self:BroadcastProfileChangeIfLeader()
     else
         self.global[key] = value
     end
@@ -305,10 +310,12 @@ end
 
 function addon.Config:AddPriorityPlayer(playerName)
     self.db.priorityPlayers[playerName] = true
+    self:BroadcastProfileChangeIfLeader()
 end
 
 function addon.Config:RemovePriorityPlayer(playerName)
     self.db.priorityPlayers[playerName] = nil
+    self:BroadcastProfileChangeIfLeader()
 end
 
 -- Normalize CC type to string format (handle both old numeric and new string values)
@@ -329,11 +336,27 @@ function addon.Config:GetCurrentProfileName()
 end
 
 function addon.Config:GetProfileNames()
+    -- Ensure Party Sync profile exists before getting profile list
+    if addon.ProfileSync then
+        addon.ProfileSync:EnsurePartySyncProfileExists()
+    end
+    
     local profiles = {}
     -- AceDB's GetProfiles returns a numerically indexed array, not a key-value table
     local profileArray, count = self.database:GetProfiles(profiles)
-    table.sort(profiles)
-    return profiles
+    
+    -- Filter out the Party Sync profile from the user-visible list
+    local filteredProfiles = {}
+    local partySyncProfileName = addon.ProfileSync and addon.ProfileSync:GetPartySyncProfileName() or "Party Sync"
+    
+    for _, profileName in ipairs(profiles) do
+        if profileName ~= partySyncProfileName then
+            table.insert(filteredProfiles, profileName)
+        end
+    end
+    
+    table.sort(filteredProfiles)
+    return filteredProfiles
 end
 
 function addon.Config:ProfileExists(profileName)
@@ -388,6 +411,12 @@ function addon.Config:DeleteProfile(profileName)
         return false, "Cannot delete Default profile"
     end
     
+    -- Prevent deletion of Party Sync profile (and ensure it exists)
+    if addon.ProfileSync and profileName == addon.ProfileSync:GetPartySyncProfileName() then
+        addon.ProfileSync:EnsurePartySyncProfileExists()
+        return false, "Cannot delete the Party Sync profile"
+    end
+    
     if not self:ProfileExists(profileName) then
         return false, "Profile does not exist"
     end
@@ -404,6 +433,11 @@ end
 function addon.Config:SwitchProfile(profileName)
     if not profileName or profileName == "" then
         return false, "Profile name cannot be empty"
+    end
+    
+    -- Check if profile switching is locked (during party sync as non-leader)
+    if addon.ProfileSync and addon.ProfileSync:IsProfileSelectionLocked() then
+        return false, "Profile switching is locked during party sync"
     end
     
     -- Use AceDB's profile switching (this will trigger OnProfileChanged callback)
@@ -449,6 +483,30 @@ function addon.Config:GetPartyMembers()
     end
     
     return addon.ProfileSync:GetPartyMembers()
+end
+
+-- Check if profile selection is currently locked (during party sync)
+function addon.Config:IsProfileSelectionLocked()
+    return addon.ProfileSync and addon.ProfileSync:IsProfileSelectionLocked() or false
+end
+
+-- Get party sync information for UI display
+function addon.Config:GetPartySyncStatus()
+    if not addon.ProfileSync then
+        return { isActive = false }
+    end
+    
+    return addon.ProfileSync:GetPartySyncInfo()
+end
+
+-- Broadcast profile changes if we're the party leader in sync mode
+function addon.Config:BroadcastProfileChangeIfLeader()
+    if addon.ProfileSync and UnitIsGroupLeader("player") and IsInGroup() and addon.ProfileSync:IsInPartySync() then
+        -- Delay broadcast slightly to allow the change to be saved
+        C_Timer.After(0.2, function()
+            addon.ProfileSync:BroadcastProfileAsLeader()
+        end)
+    end
 end
 
 -- Debug utility function

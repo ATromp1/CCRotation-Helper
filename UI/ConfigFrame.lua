@@ -86,6 +86,23 @@ function addon.UI:CreateProfilesTab(container)
     currentLabel:SetFullWidth(true)
     profileGroup:AddChild(currentLabel)
     
+    -- Party sync status display
+    local partySyncStatus = addon.Config:GetPartySyncStatus()
+    local syncStatusLabel = AceGUI:Create("Label")
+    if partySyncStatus.isActive then
+        if partySyncStatus.leaderName == UnitName("player") then
+            syncStatusLabel:SetText("|cff00ff00Party Sync Active|r - You are the leader")
+        else
+            syncStatusLabel:SetText("|cff00ff00Party Sync Active|r - Leader: " .. (partySyncStatus.leaderName or "Unknown"))
+        end
+        syncStatusLabel:SetColor(0, 1, 0) -- Green color
+    else
+        syncStatusLabel:SetText("Party Sync: Inactive")
+        syncStatusLabel:SetColor(0.7, 0.7, 0.7) -- Gray color
+    end
+    syncStatusLabel:SetFullWidth(true)
+    profileGroup:AddChild(syncStatusLabel)
+    
     -- Profile dropdown for switching
     local profileDropdown = AceGUI:Create("Dropdown")
     profileDropdown:SetLabel("Switch to Profile")
@@ -110,6 +127,16 @@ function addon.UI:CreateProfilesTab(container)
     end
     if currentIndex then
         profileDropdown:SetValue(currentIndex)
+    end
+    
+    -- Check if profile selection should be locked
+    local isLocked = addon.Config:IsProfileSelectionLocked()
+    if isLocked then
+        profileDropdown:SetDisabled(true)
+        profileDropdown:SetLabel("Switch to Profile (Locked - Party Sync Active)")
+    else
+        profileDropdown:SetDisabled(false)
+        profileDropdown:SetLabel("Switch to Profile")
     end
     profileDropdown:SetCallback("OnValueChanged", function(widget, event, value)
         -- Get fresh profile list since it might have changed
