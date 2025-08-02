@@ -203,6 +203,9 @@ function UI:GetIcon()
         
         -- Hide countdown numbers from cooldown frame
         icon.cooldown:SetHideCountdownNumbers(true)
+
+        -- Initialize glows
+        InitializeIconGlow(icon)
         
         -- Setup click handlers and drag passthrough
         -- Only enable mouse if tooltips are enabled
@@ -258,10 +261,7 @@ function UI:GetIcon()
     icon.displayTexture:ClearAllPoints()
     icon.displayTexture:SetAllPoints(icon)
     -- Stop all possible glow types
-    LCG.ButtonGlow_Stop(icon)
-    LCG.PixelGlow_Stop(icon)
-    LCG.AutoCastGlow_Stop(icon)
-    LCG.ProcGlow_Stop(icon)
+    icon:StopGlow()
     icon.cooldown:Clear()
     icon.cooldown:Hide()
     icon.deadIndicator:Hide()
@@ -672,16 +672,10 @@ function UI:UpdateExistingIcons(queue, now)
                                  (not config:Get("glowOnlyInCombat") or InCombatLockdown())
                 
                 if shouldGlow then
-                    self:StartGlow(icon, config)
+                    icon:StartGlow(config)
                 else
                     -- Stop all possible glow types
-    LCG.ButtonGlow_Stop(icon)
-    LCG.PixelGlow_Stop(icon)
-    LCG.AutoCastGlow_Stop(icon)
-    LCG.ProcGlow_Stop(icon)
-                    LCG.PixelGlow_Stop(icon)
-                    LCG.AutoCastGlow_Stop(icon)
-                    LCG.ProcGlow_Stop(icon)
+                    icon:StopGlow()
                 end
                 
                 -- Add status indicators for dead/out-of-range
@@ -1196,49 +1190,6 @@ function UI:ValidateFrameState()
     return true
 end
 
--- Start glow effect with configurable settings
-function UI:StartGlow(icon, config)
-    local glowType = config:Get("glowType")
-    local glowColor = config:Get("glowColor")
-    
-    -- Stop all existing glows first
-    -- Stop all possible glow types
-    LCG.ButtonGlow_Stop(icon)
-    LCG.PixelGlow_Stop(icon)
-    LCG.AutoCastGlow_Stop(icon)
-    LCG.ProcGlow_Stop(icon)
-    LCG.PixelGlow_Stop(icon)
-    LCG.AutoCastGlow_Stop(icon)
-    LCG.ProcGlow_Stop(icon)
-    
-    -- Start the appropriate glow type
-    if glowType == "Pixel" then
-        LCG.PixelGlow_Start(
-            icon, 
-            glowColor, 
-            config:Get("glowLines"), 
-            config:Get("glowFrequency"),
-            config:Get("glowLength"), 
-            config:Get("glowThickness"), 
-            config:Get("glowXOffset"),
-            config:Get("glowYOffset"), 
-            config:Get("glowBorder")
-        )
-    elseif glowType == "ACShine" then
-        LCG.AutoCastGlow_Start(
-            icon, 
-            glowColor, 
-            config:Get("glowParticleGroups"), 
-            config:Get("glowACFrequency"), 
-            config:Get("glowScale"), 
-            config:Get("glowACXOffset"), 
-            config:Get("glowACYOffset")
-        )
-    elseif glowType == "Proc" then
-        LCG.ProcGlow_Start(icon, glowColor)
-    end
-end
-
 -- Update UI when configuration changes (called after profile switch)
 function UI:UpdateFromConfig()
     addon.Config:DebugPrint("UpdateFromConfig started")
@@ -1287,4 +1238,67 @@ function UI:UpdateFromConfig()
           " | Enabled: " .. tostring(config:Get("enabled")) .. 
           " | MaxIcons: " .. config:Get("maxIcons") .. 
           " | Visible: " .. tostring(self.mainFrame:IsShown()))
+end
+
+
+function InitializeIconGlow(icon)
+    icon.glowing = false
+    icon.glowType = nil
+
+    function icon:StartGlow(config)
+        local glowType = config:Get("glowType")
+        local glowColor = config:Get("glowColor")
+
+        if self.glowing and glowType == self.glowType then return end
+
+        -- If we swapped glowtype, then stop the existing glow before creating new
+        if glowType ~= self.glowType then
+            self:StopGlow()
+        end
+
+        -- Start the appropriate glow type
+        if glowType == "Pixel" then
+            LCG.PixelGlow_Start(
+                self,
+                glowColor,
+                config:Get("glowLines"),
+                config:Get("glowFrequency"),
+                config:Get("glowLength"),
+                config:Get("glowThickness"),
+                config:Get("glowXOffset"),
+                config:Get("glowYOffset"),
+                config:Get("glowBorder")
+            )
+        elseif glowType == "ACShine" then
+            LCG.AutoCastGlow_Start(
+                self,
+                glowColor,
+                config:Get("glowParticleGroups"),
+                config:Get("glowACFrequency"),
+                config:Get("glowScale"),
+                config:Get("glowACXOffset"),
+                config:Get("glowACYOffset")
+            )
+        elseif glowType == "Proc" then
+            LCG.ProcGlow_Start(self, glowColor)
+        end
+
+        self.glowing = true
+        self.glowType = glowType
+    end
+
+    function icon:StopGlow()
+        -- If we're not glowing, we don't need to stop glowing
+        if not self.glowing then return end
+
+        LCG.ButtonGlow_Stop(self)
+        LCG.PixelGlow_Stop(self)
+        LCG.AutoCastGlow_Stop(self)
+        LCG.ProcGlow_Stop(self)
+        LCG.PixelGlow_Stop(self)
+        LCG.AutoCastGlow_Stop(self)
+        LCG.ProcGlow_Stop(self)
+
+        self.glowing = false
+    end
 end
