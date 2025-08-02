@@ -83,7 +83,7 @@ end
 local DungeonNPCListComponent = {}
 setmetatable(DungeonNPCListComponent, {__index = BaseComponent})
 
-function DungeonNPCListComponent:new(container, callbacks, dataProvider)
+function DungeonNPCListComponent:new(container, callbacks, dataProvider, scrollFrame)
     local instance = BaseComponent:new(container, callbacks, dataProvider)
     setmetatable(instance, {__index = self})
     instance:validateImplementation("DungeonNPCListComponent")
@@ -91,6 +91,7 @@ function DungeonNPCListComponent:new(container, callbacks, dataProvider)
     -- Initialize state
     instance.collapsedDungeons = {}
     instance.filterToDungeon = nil
+    instance.scrollFrame = scrollFrame
     
     return instance
 end
@@ -151,6 +152,11 @@ function DungeonNPCListComponent:buildUI()
         if not isCollapsed then
             self:createDungeonContent(dungeonGroup, dungeonName, dungeonData, ccTypes)
         end
+    end
+    
+    -- Force scroll frame to recalculate its content size after building UI
+    if self.scrollFrame and self.scrollFrame.DoLayout then
+        self.scrollFrame:DoLayout()
     end
 end
 

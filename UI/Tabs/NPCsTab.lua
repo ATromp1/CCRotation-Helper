@@ -69,7 +69,7 @@ function NPCsTab.create(container)
             container:ReleaseChildren()
             NPCsTab.create(container)
         end
-    }, dataProvider)
+    }, dataProvider, scroll)
     
     dungeonNPCList:buildUI()
     
