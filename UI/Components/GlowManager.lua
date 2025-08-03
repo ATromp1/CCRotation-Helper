@@ -100,11 +100,16 @@ function GlowManager:stopAllGlows(icon)
 end
 
 -- Check if glow should be active for an icon
-function GlowManager:shouldGlow(iconIndex, unit, config)
+function GlowManager:shouldGlow(iconIndex, unit, config, cooldownData)
+    -- Check if there are any active NPCs (from RotationCore)
+    local hasActiveNPCs = addon.CCRotation and addon.CCRotation.activeNPCs and next(addon.CCRotation.activeNPCs) ~= nil
+    
     return iconIndex == 1 and 
            config:Get("highlightNext") and 
            UnitIsUnit(unit, "player") and
-           (not config:Get("glowOnlyInCombat") or InCombatLockdown())
+           (not config:Get("glowOnlyInCombat") or InCombatLockdown()) and
+           (cooldownData and cooldownData.isEffective) and
+           hasActiveNPCs
 end
 
 -- Register component

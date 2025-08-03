@@ -444,6 +444,9 @@ function CCRotation:OnCombatEnd()
         self.quickScan = nil
     end
     
+    -- Clear active NPCs when combat ends
+    wipe(self.activeNPCs)
+    
     -- Start non-combat periodic queue rebuild every 3 seconds
     if self.nonCombatTicker then self.nonCombatTicker:Cancel() end
     self.nonCombatTicker = C_Timer.NewTicker(3, function()

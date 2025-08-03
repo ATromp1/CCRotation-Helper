@@ -205,7 +205,7 @@ function IconRenderer:updateIconDisplay(icon, iconIndex, cooldownData, needsUpda
     self:updateIconCooldown(icon, cooldownData, now, config)
     
     -- Handle glow effect for the first spell
-    if self.glowManager:shouldGlow(iconIndex, icon.unit, config) then
+    if self.glowManager:shouldGlow(iconIndex, icon.unit, config, cooldownData) then
         self.glowManager:startGlow(icon, config)
     else
         self.glowManager:stopGlow(icon)
