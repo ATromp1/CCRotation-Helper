@@ -27,7 +27,6 @@ Libs\LibCustomGlow\LibCustomGlow-1.0.xml
 Core\Database.lua
 Core\Config.lua  
 Core\RotationCore.lua
-Core\MinimapIcon.lua
 Core\ProfileSync.lua
 
 # UI files  
@@ -59,6 +58,7 @@ UI\Tabs\TextTab.lua
 UI\Tabs\IconsTab.lua
 UI\MainFrame.lua
 UI\ConfigFrame.lua
+UI\MinimapIcon.lua
 UI\UIHelpers.lua
 
 # Main addon file
