@@ -3,23 +3,10 @@ local addonName, addon = ...
 -- Get AceGUI reference
 local AceGUI = LibStub("AceGUI-3.0")
 
--- Get LibCustomGlow reference
-local LCG = LibStub("LibCustomGlow-1.0")
-
 addon.UI = {}
 local UI = addon.UI
 
--- Icon pooling system (following OmniCD's approach)
-local iconPool = {}
-local activeIcons = {}
-local numIconsCreated = 0
-
--- Unavailable queue icon pooling
-local unavailableIconPool = {}
-local activeUnavailableIcons = {}
-local numUnavailableIconsCreated = 0
-
--- Initialize UI system with robust error handling
+-- Initialize UI system with component-based architecture
 function UI:Initialize()
     if self.mainFrame then 
         addon.Config:DebugPrint("Initialize called but mainFrame already exists")
@@ -28,46 +15,58 @@ function UI:Initialize()
     
     addon.Config:DebugPrint("Initializing UI system")
     
-    -- Create main frame using XML template with error handling
+    -- Initialize components
+    self.iconPool = addon.Components.IconPool:new()
+    self.glowManager = addon.Components.GlowManager:new()
+    self.iconRenderer = addon.Components.IconRenderer:new(self.iconPool, self.glowManager)
+    
+    -- Create main frame
+    self:createMainFrame()
+    
+    -- Initialize component systems
+    self.iconPool:initialize()
+    
+    -- Start cooldown text update timer
+    self:startCooldownTextUpdates()
+    
+    -- Show UI if should be active
+    C_Timer.After(0.1, function()
+        self:UpdateVisibility()
+    end)
+    
+    addon.Config:DebugPrint("UI initialization complete")
+end
+
+-- Create main frame with error handling
+function UI:createMainFrame()
     local success = pcall(function()
         self.mainFrame = CreateFrame("Frame", "CCRotationMainFrame", UIParent, "CCRotationTemplate")
     end)
     
     if not success or not self.mainFrame then
         addon.Config:DebugPrint("Failed to create mainFrame with template, creating basic frame")
-        -- Fallback: create basic frame without template
-        self.mainFrame = CreateFrame("Frame", "CCRotationMainFrame", UIParent)
-        self.mainFrame:SetSize(200, 64)
-        
-        -- Create basic container
-        self.mainFrame.container = CreateFrame("Frame", nil, self.mainFrame)
-        self.mainFrame.container:SetAllPoints()
-        
-        -- Create visible debug anchor (the "red box")
-        self.mainFrame.anchor = CreateFrame("Frame", nil, UIParent)  -- Parent to UIParent so it's always on top
-        self.mainFrame.anchor:SetSize(20, 20)  -- Larger size
-        self.mainFrame.anchor:SetFrameStrata("TOOLTIP")  -- High strata to appear on top
-        self.mainFrame.anchor:SetFrameLevel(1000)  -- Very high frame level
-        
-        -- Create border texture
-        local border = self.mainFrame.anchor:CreateTexture(nil, "OVERLAY")
-        border:SetAllPoints()
-        border:SetColorTexture(1, 0, 0, 1.0)  -- Solid red border
-        
-        -- Create inner transparent area
-        local inner = self.mainFrame.anchor:CreateTexture(nil, "BACKGROUND")
-        inner:SetPoint("TOPLEFT", 2, -2)
-        inner:SetPoint("BOTTOMRIGHT", -2, 2)
-        inner:SetColorTexture(0, 0, 0, 0.3)  -- Semi-transparent black center
-        
-        -- Store references
-        self.mainFrame.anchor.border = border
-        self.mainFrame.anchor.inner = inner
-        
-        self.mainFrame.anchor:Hide()  -- Hidden by default
+        self:createBasicFrame()
     end
 
-    -- Always create debug anchor regardless of which frame creation method was used
+    -- Always create debug anchor
+    self:createDebugAnchor()
+    
+    -- Setup main frame properties
+    self:setupMainFrame()
+end
+
+-- Create basic frame fallback
+function UI:createBasicFrame()
+    self.mainFrame = CreateFrame("Frame", "CCRotationMainFrame", UIParent)
+    self.mainFrame:SetSize(200, 64)
+    
+    -- Create basic container
+    self.mainFrame.container = CreateFrame("Frame", nil, self.mainFrame)
+    self.mainFrame.container:SetAllPoints()
+end
+
+-- Create debug anchor
+function UI:createDebugAnchor()
     if not self.mainFrame.anchor then
         addon.Config:DebugPrint("Creating debug anchor")
         self.mainFrame.anchor = CreateFrame("Frame", "CCRotationDebugAnchor", UIParent)
@@ -78,48 +77,25 @@ function UI:Initialize()
         -- Create border texture
         local border = self.mainFrame.anchor:CreateTexture(nil, "OVERLAY")
         border:SetAllPoints()
-        border:SetColorTexture(1, 0, 0, 1.0)  -- Solid red border
+        border:SetColorTexture(1, 0, 0, 1.0)
         
         -- Create inner transparent area
         local inner = self.mainFrame.anchor:CreateTexture(nil, "BACKGROUND")
         inner:SetPoint("TOPLEFT", 2, -2)
         inner:SetPoint("BOTTOMRIGHT", -2, 2)
-        inner:SetColorTexture(0, 0, 0, 0.3)  -- Semi-transparent black center
+        inner:SetColorTexture(0, 0, 0, 0.3)
         
         -- Store references
         self.mainFrame.anchor.border = border
         self.mainFrame.anchor.inner = inner
         
-        self.mainFrame.anchor:Hide()  -- Hidden by default
+        self.mainFrame.anchor:Hide()
         addon.Config:DebugPrint("Debug anchor created successfully")
     end
-
-    -- Setup main frame properties
-    local setupSuccess = pcall(function()
-        self:SetupMainFrame()
-    end)
-    
-    if not setupSuccess then
-        addon.Config:DebugPrint("Failed to setup mainFrame properly")
-        return
-    end
-    
-    -- Initialize icon pool
-    self:InitializeIconPool()
-    
-    -- Start cooldown text update timer
-    self:StartCooldownTextUpdates()
-    
-    -- Show UI if should be active
-    C_Timer.After(0.1, function()
-        self:UpdateVisibility()
-    end)
-    
-    addon.Config:DebugPrint("UI initialization complete")
 end
 
 -- Setup main frame properties
-function UI:SetupMainFrame()
+function UI:setupMainFrame()
     local frame = self.mainFrame
     local config = addon.Config
     
@@ -138,345 +114,22 @@ function UI:SetupMainFrame()
     
     frame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
-        -- Tell WoW that this frame has been moved by the user and should be saved
         self:SetUserPlaced(true)
     end)
 
     -- Create unavailable queue container
     frame.unavailableContainer = CreateFrame("Frame", nil, frame)
     frame.unavailableContainer:SetSize(1, 1)
-    -- Position will be set dynamically in UpdateFrameSize based on content
-end
-
-
--- Initialize icon pool system
-function UI:InitializeIconPool()
-    iconPool = {}
-    activeIcons = {}
-    numIconsCreated = 0
-    unavailableIconPool = {}
-    activeUnavailableIcons = {}
-    numUnavailableIconsCreated = 0
-end
-
--- Get icon from pool or create new one (OmniCD approach)
-function UI:GetIcon()
-    local icon = table.remove(iconPool)
-    if not icon then
-        numIconsCreated = numIconsCreated + 1
-        icon = CreateFrame("Button", "CCRotationIcon" .. numIconsCreated, UIParent, "CCRotationIconTemplate")
-        
-        -- Enable clipping to properly mask zoomed textures (like WeakAuras)
-        icon:SetClipsChildren(true)
-        
-        -- Create working texture (XML template texture has issues) - use ARTWORK layer
-        icon.displayTexture = icon:CreateTexture("DisplayTexture_" .. numIconsCreated, "ARTWORK")
-        icon.displayTexture:SetAllPoints()
-        icon.displayTexture:SetTexelSnappingBias(0.0)
-        icon.displayTexture:SetSnapToPixelGrid(false)
-        
-        -- Create status indicator textures
-        icon.deadIndicator = icon:CreateTexture("DeadIndicator_" .. numIconsCreated, "OVERLAY", nil, 1)
-        icon.deadIndicator:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Skull")
-        icon.deadIndicator:SetPoint("TOPRIGHT", icon, "TOPRIGHT", -2, -2)
-        icon.deadIndicator:Hide()
-        
-        icon.rangeIndicator = icon:CreateTexture("RangeIndicator_" .. numIconsCreated, "OVERLAY", nil, 1)
-        icon.rangeIndicator:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
-        icon.rangeIndicator:SetPoint("TOPLEFT", icon, "TOPLEFT", 2, -2)
-        icon.rangeIndicator:Hide()
-        
-        -- Hide the XML template icon texture
-        if icon.icon then
-            icon.icon:Hide()
-        end
-        
-        -- Setup fonts using LibSharedMedia (cooldown font size will be set per icon)
-        local config = addon.Config
-        config:SetFontProperties(icon.spellName, config:Get("spellNameFont"), config:Get("spellNameFontSize"))
-        config:SetFontProperties(icon.playerName, config:Get("playerNameFont"), config:Get("playerNameFontSize"))
-        
-        -- Set text colors
-        icon.spellName:SetTextColor(unpack(config:Get("spellNameColor")))
-        icon.playerName:SetTextColor(unpack(config:Get("spellNameColor")))
-        icon.cooldownText:SetTextColor(unpack(config:Get("cooldownTextColor")))
-        
-        -- Hide countdown numbers from cooldown frame
-        icon.cooldown:SetHideCountdownNumbers(true)
-
-        -- Initialize glows
-        InitializeIconGlow(icon)
-        
-        -- Setup click handlers and drag passthrough
-        -- Only enable mouse if tooltips are enabled
-        icon:EnableMouse(addon.Config:Get("showTooltips"))
-        
-        icon:SetScript("OnEnter", function(self)
-            if addon.Config:Get("showTooltips") and self.spellInfo and self.unit then
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetSpellByID(self.spellInfo.spellID)
-                GameTooltip:AddLine(" ")
-                GameTooltip:AddLine("Player: " .. (UnitName(self.unit) or "Unknown"), 1, 1, 1)
-                GameTooltip:Show()
-            end
-        end)
-        
-        icon:SetScript("OnLeave", function(self)
-            if addon.Config:Get("showTooltips") then
-                GameTooltip:Hide()
-            end
-        end)
-        
-        -- Pass through drag events to main frame (for tooltip-enabled icons)
-        icon:RegisterForDrag("LeftButton")
-        icon:SetScript("OnDragStart", function(self)
-            if IsShiftKeyDown() and not addon.Config:Get("anchorLocked") then
-                -- Pass drag to main frame: icon -> container -> mainFrame
-                local mainFrame = self:GetParent():GetParent()
-                mainFrame:StartMoving()
-            end
-        end)
-        
-        icon:SetScript("OnDragStop", function(self)
-            local mainFrame = self:GetParent():GetParent()
-            mainFrame:StopMovingOrSizing()
-            -- Tell WoW that this frame has been moved by the user and should be saved
-            mainFrame:SetUserPlaced(true)
-        end)
-        
-    end
-    
-    -- Set parent and reset state
-    icon:SetParent(self.mainFrame.container)
-    icon:ClearAllPoints()
-    icon:Hide()
-    
-    -- Reset all visual state
-    icon.spellName:SetText("")
-    icon.playerName:SetText("")
-    icon.cooldownText:SetText("")
-    icon.displayTexture:SetTexture(nil)
-    icon.displayTexture:SetDesaturated(false)
-    icon.displayTexture:Hide()
-    icon.displayTexture:ClearAllPoints()
-    icon.displayTexture:SetAllPoints(icon)
-    -- Stop all possible glow types
-    icon:StopGlow()
-    icon.cooldown:Clear()
-    icon.cooldown:Hide()
-    icon.deadIndicator:Hide()
-    icon.rangeIndicator:Hide()
-    
-    -- Stop any animations
-    if icon.animFrame.pulseAnim:IsPlaying() then
-        icon.animFrame.pulseAnim:Stop()
-    end
-    
-    return icon
-end
-
--- Get unavailable icon from pool or create new one
-function UI:GetUnavailableIcon()
-    local icon = table.remove(unavailableIconPool)
-    if not icon then
-        numUnavailableIconsCreated = numUnavailableIconsCreated + 1
-        icon = CreateFrame("Button", "CCRotationUnavailableIcon" .. numUnavailableIconsCreated, UIParent, "CCRotationIconTemplate")
-        
-        -- Enable clipping to properly mask zoomed textures (like WeakAuras)
-        icon:SetClipsChildren(true)
-        
-        -- Create working texture (smaller for unavailable queue) - use ARTWORK layer
-        icon.displayTexture = icon:CreateTexture("DisplayTextureUnavailable_" .. numUnavailableIconsCreated, "ARTWORK")
-        icon.displayTexture:SetAllPoints()
-        icon.displayTexture:SetTexelSnappingBias(0.0)
-        icon.displayTexture:SetSnapToPixelGrid(false)
-        
-        -- Create status indicator textures (same as main icons)
-        icon.deadIndicator = icon:CreateTexture("DeadIndicatorUnavailable_" .. numUnavailableIconsCreated, "OVERLAY", nil, 1)
-        icon.deadIndicator:SetTexture("Interface\\TargetingFrame\\UI-TargetingFrame-Skull")
-        icon.deadIndicator:SetPoint("TOPRIGHT", icon, "TOPRIGHT", -1, -1)
-        icon.deadIndicator:Hide()
-        
-        icon.rangeIndicator = icon:CreateTexture("RangeIndicatorUnavailable_" .. numUnavailableIconsCreated, "OVERLAY", nil, 1)
-        icon.rangeIndicator:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
-        icon.rangeIndicator:SetPoint("TOPLEFT", icon, "TOPLEFT", 1, -1)
-        icon.rangeIndicator:Hide()
-        
-        -- Hide the XML template icon texture
-        if icon.icon then
-            icon.icon:Hide()
-        end
-        
-        -- Setup smaller fonts for unavailable icons
-        local config = addon.Config
-        local fontSize = math.max(8, config:Get("unavailableIconSize") * 0.2)
-        config:SetFontProperties(icon.spellName, config:Get("spellNameFont"), fontSize)
-        config:SetFontProperties(icon.playerName, config:Get("playerNameFont"), fontSize)
-        config:SetFontProperties(icon.cooldownText, config:Get("cooldownFont"), fontSize)
-        
-        -- Set text colors
-        icon.spellName:SetTextColor(unpack(config:Get("spellNameColor")))
-        icon.playerName:SetTextColor(unpack(config:Get("spellNameColor")))
-        icon.cooldownText:SetTextColor(unpack(config:Get("cooldownTextColor")))
-        
-        -- Hide countdown numbers from cooldown frame
-        icon.cooldown:SetHideCountdownNumbers(true)
-        
-        -- Setup click handlers and drag passthrough (minimal for unavailable)
-        -- Only enable mouse if tooltips are enabled
-        icon:EnableMouse(addon.Config:Get("showTooltips"))
-        
-        icon:SetScript("OnEnter", function(self)
-            if addon.Config:Get("showTooltips") and self.spellInfo and self.unit then
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetSpellByID(self.spellInfo.spellID)
-                GameTooltip:AddLine(" ")
-                GameTooltip:AddLine("Player: " .. (UnitName(self.unit) or "Unknown"), 1, 1, 1)
-                if self.queueData and self.queueData.isDead then
-                    GameTooltip:AddLine("Status: Dead", 1, 0, 0)
-                elseif self.queueData and not self.queueData.inRange then
-                    GameTooltip:AddLine("Status: Out of Range", 1, 1, 0)
-                end
-                GameTooltip:Show()
-            end
-        end)
-        
-        icon:SetScript("OnLeave", function(self)
-            if addon.Config:Get("showTooltips") then
-                GameTooltip:Hide()
-            end
-        end)
-        
-        -- Pass through drag events to main frame (for tooltip-enabled unavailable icons)
-        icon:RegisterForDrag("LeftButton")
-        icon:SetScript("OnDragStart", function(self)
-            if IsShiftKeyDown() and not addon.Config:Get("anchorLocked") then
-                -- Pass drag to main frame: icon -> unavailableContainer -> mainFrame
-                local mainFrame = self:GetParent():GetParent()
-                mainFrame:StartMoving()
-            end
-        end)
-        
-        icon:SetScript("OnDragStop", function(self)
-            local mainFrame = self:GetParent():GetParent()
-            mainFrame:StopMovingOrSizing()
-            -- Tell WoW that this frame has been moved by the user and should be saved
-            mainFrame:SetUserPlaced(true)
-        end)
-        
-    end
-    
-    -- Set parent and reset state
-    icon:SetParent(self.mainFrame.unavailableContainer)
-    icon:ClearAllPoints()
-    icon:Hide()
-    
-    -- Reset all visual state
-    icon.spellName:SetText("")
-    icon.playerName:SetText("")
-    icon.cooldownText:SetText("")
-    icon.displayTexture:SetTexture(nil)
-    icon.displayTexture:SetDesaturated(true)  -- Always desaturated for unavailable
-    icon.displayTexture:Hide()
-    icon.displayTexture:ClearAllPoints()
-    icon.displayTexture:SetAllPoints(icon)
-    -- Stop all possible glow types
-    LCG.ButtonGlow_Stop(icon)
-    LCG.PixelGlow_Stop(icon)
-    LCG.AutoCastGlow_Stop(icon)
-    LCG.ProcGlow_Stop(icon)
-    icon.cooldown:Clear()
-    icon.cooldown:Hide()
-    icon.deadIndicator:Hide()
-    icon.rangeIndicator:Hide()
-    
-    -- Stop any animations
-    if icon.animFrame.pulseAnim:IsPlaying() then
-        icon.animFrame.pulseAnim:Stop()
-    end
-    
-    return icon
-end
-
--- Helper function to clear icon text elements
-function UI:ClearIconText(icon)
-    if not icon then return end
-    
-    if icon.spellName then
-        icon.spellName:Hide()
-        icon.spellName:SetText("")
-    end
-    if icon.playerName then
-        icon.playerName:Hide()
-        icon.playerName:SetText("")
-    end
-    if icon.cooldownText then
-        icon.cooldownText:SetText("")
-    end
-end
-
--- Return icon to pool
-function UI:ReleaseIcon(icon)
-    if icon then
-        -- Clear text elements first
-        self:ClearIconText(icon)
-        
-        icon:Hide()
-        icon:SetParent(UIParent)
-        icon:ClearAllPoints()
-        
-        -- Clear references
-        icon.spellInfo = nil
-        icon.unit = nil
-        icon.queueData = nil
-        
-        table.insert(iconPool, icon)
-        
-        -- Remove from active icons
-        for i, activeIcon in ipairs(activeIcons) do
-            if activeIcon == icon then
-                table.remove(activeIcons, i)
-                break
-            end
-        end
-    end
-end
-
--- Return unavailable icon to pool
-function UI:ReleaseUnavailableIcon(icon)
-    if icon then
-        -- Clear text elements first
-        self:ClearIconText(icon)
-        
-        icon:Hide()
-        icon:SetParent(UIParent)
-        icon:ClearAllPoints()
-        
-        -- Clear references
-        icon.spellInfo = nil
-        icon.unit = nil
-        icon.queueData = nil
-        
-        table.insert(unavailableIconPool, icon)
-        
-        -- Remove from active unavailable icons
-        for i, activeIcon in ipairs(activeUnavailableIcons) do
-            if activeIcon == icon then
-                table.remove(activeUnavailableIcons, i)
-                break
-            end
-        end
-    end
 end
 
 -- Start continuous cooldown text updates
-function UI:StartCooldownTextUpdates()
+function UI:startCooldownTextUpdates()
     if self.cooldownUpdateTimer then
         self.cooldownUpdateTimer:Cancel()
     end
     
     local function updateCooldownText()
-        self:UpdateCooldownText()
+        self:updateCooldownText()
         self.cooldownUpdateTimer = C_Timer.After(0.1, updateCooldownText)
     end
     
@@ -484,7 +137,7 @@ function UI:StartCooldownTextUpdates()
 end
 
 -- Stop cooldown text updates
-function UI:StopCooldownTextUpdates()
+function UI:stopCooldownTextUpdates()
     if self.cooldownUpdateTimer then
         self.cooldownUpdateTimer:Cancel()
         self.cooldownUpdateTimer = nil
@@ -492,12 +145,13 @@ function UI:StopCooldownTextUpdates()
 end
 
 -- Update only the cooldown text on visible icons
-function UI:UpdateCooldownText()
+function UI:updateCooldownText()
     if not addon.Config:Get("showCooldownText") then
         return
     end
     
     local now = GetTime()
+    local activeIcons = self.iconPool:getActiveMainIcons()
     
     for i, icon in ipairs(activeIcons) do
         if icon.queueData and icon:IsShown() then
@@ -509,7 +163,7 @@ function UI:UpdateCooldownText()
                 icon.cooldownText:SetText("")
             else
                 local timeLeft = cooldownData.expirationTime - now
-                icon.cooldownText:SetText(self:FormatTime(timeLeft))
+                icon.cooldownText:SetText(self.iconRenderer:formatTime(timeLeft))
             end
         end
     end
@@ -519,6 +173,8 @@ end
 function UI:RefreshDisplay()
     -- Update font properties for existing icons
     local config = addon.Config
+    local activeIcons = self.iconPool:getActiveMainIcons()
+    
     for i, icon in ipairs(activeIcons) do
         if icon then
             config:SetFontProperties(icon.spellName, config:Get("spellNameFont"), config:Get("spellNameFontSize"))
@@ -541,19 +197,15 @@ end
 function UI:UpdateDisplay(queue, unavailableQueue)
     if not self.mainFrame or not self.mainFrame.container then return end
     
-    -- Add null check for queue
     if not queue then
         return
     end
     
-    local config = addon.Config
-    local maxIcons = config:Get("maxIcons")
-    local spacing = config:Get("spacing")
     local now = GetTime()
     
-    -- Instead of releasing all icons, update existing ones and add/remove as needed
-    self:UpdateExistingIcons(queue, now)
-    self:UpdateExistingUnavailableIcons(unavailableQueue or {}, now)
+    -- Use component-based rendering
+    self.iconRenderer:updateMainIcons(queue, now, self.mainFrame)
+    self.iconRenderer:updateUnavailableIcons(unavailableQueue or {}, now, self.mainFrame)
     
     -- Update frame visibility
     if not addon.CCRotation:ShouldBeActive() then
@@ -564,354 +216,22 @@ function UI:UpdateDisplay(queue, unavailableQueue)
     self.mainFrame:Show()
     
     -- Update main frame size
-    self:UpdateFrameSize()
-end
-
--- Update existing icons without recreating them
-function UI:UpdateExistingIcons(queue, now)
-    local config = addon.Config
-    local maxIcons = config:Get("maxIcons")
-    local spacing = config:Get("spacing")
-    
-    -- Hide icons that are no longer needed
-    for i = math.min(#queue, maxIcons) + 1, #activeIcons do
-        if activeIcons[i] then
-            activeIcons[i]:Hide()
-        end
-    end
-    
-    -- Update or create icons for current queue
-    for i = 1, math.min(#queue, maxIcons) do
-        local cooldownData = queue[i]
-        if cooldownData then
-            -- Reuse existing icon or get new one
-            local icon = activeIcons[i]
-            if not icon then
-                icon = self:GetIcon()
-                activeIcons[i] = icon
-            end
-            
-            -- Update icon data only if it changed
-            local needsUpdate = not icon.queueData or 
-                               icon.queueData.GUID ~= cooldownData.GUID or 
-                               icon.queueData.spellID ~= cooldownData.spellID or
-                               math.abs((icon.queueData.expirationTime or 0) - cooldownData.expirationTime) > 0.1
-            
-            icon.queueData = cooldownData
-            icon.unit = addon.CCRotation.GUIDToUnit[cooldownData.GUID]
-            
-            if needsUpdate then
-                icon.spellInfo = C_Spell.GetSpellInfo(cooldownData.spellID)
-                icon.spellConfig = addon.Config:GetSpellInfo(cooldownData.spellID)
-            end
-            
-            if icon.spellInfo and icon.unit then
-                -- Update texture only if spell changed
-                if needsUpdate then
-                    icon.displayTexture:SetTexture(icon.spellInfo.iconID)
-                    icon.displayTexture:Show()
-                end
-                
-                -- Always update effectiveness state
-                icon.displayTexture:SetDesaturated(not cooldownData.isEffective)
-                
-                -- Set spell name (only on first icon, using global setting)
-                if i == 1 and config:Get("showSpellName") then
-                    -- Use custom spell name if available, otherwise fall back to game spell name
-                    local spellName = (icon.spellConfig and icon.spellConfig.name) or icon.spellInfo.name
-                    local truncatedName = self:TruncateText(spellName, config:Get("spellNameMaxLength"))
-                    icon.spellName:SetText(truncatedName)
-                    -- Re-set font properties to ensure correct size
-                    config:SetFontProperties(icon.spellName, config:Get("spellNameFont"), config:Get("spellNameFontSize"))
-                    -- Position spell name above the icon - parent to container to avoid clipping
-                    icon.spellName:SetParent(self.mainFrame.container)
-                    icon.spellName:ClearAllPoints()
-                    icon.spellName:SetPoint("BOTTOM", icon, "TOP", 0, 2)
-                    icon.spellName:SetAlpha(1)
-                    icon.spellName:Show()
-                else
-                    icon.spellName:Hide()
-                end
-                
-                -- Set player name with class color (using both global and individual icon settings)
-                local globalPlayerName = config:Get("showPlayerName")
-                local individualPlayerName = config:Get("showPlayerName" .. i)
-                if globalPlayerName and individualPlayerName then
-                    local name = UnitName(icon.unit)
-                    if name then
-                        local truncatedName = self:TruncateText(name, config:Get("playerNameMaxLength"))
-                        local classFileName = UnitClassBase(icon.unit)
-                        local classColor = RAID_CLASS_COLORS[classFileName]
-                        if classColor and classColor.colorStr then
-                            icon.playerName:SetText(string.format("|c%s%s|r", classColor.colorStr, truncatedName))
-                        else
-                            icon.playerName:SetText(truncatedName)
-                        end
-                    else
-                        icon.playerName:SetText("Unknown")
-                    end
-                    -- Re-set font properties to ensure correct size
-                    config:SetFontProperties(icon.playerName, config:Get("playerNameFont"), config:Get("playerNameFontSize"))
-                    -- Position player name below the icon - parent to container to avoid clipping
-                    icon.playerName:SetParent(self.mainFrame.container)
-                    icon.playerName:ClearAllPoints()
-                    icon.playerName:SetPoint("TOP", icon, "BOTTOM", 0, -2)
-                    icon.playerName:SetAlpha(1)
-                    icon.playerName:Show()
-                else
-                    icon.playerName:Hide()
-                end
-                
-                -- Update cooldown independently - only change if cooldown data actually changed
-                self:UpdateIconCooldown(icon, cooldownData, now, config)
-                
-                -- Handle glow effect for the first spell (only if it belongs to the player)
-                local shouldGlow = i == 1 and 
-                                 config:Get("highlightNext") and 
-                                 UnitIsUnit(icon.unit, "player") and
-                                 (not config:Get("glowOnlyInCombat") or InCombatLockdown())
-                
-                if shouldGlow then
-                    icon:StartGlow(config)
-                else
-                    -- Stop all possible glow types
-                    icon:StopGlow()
-                end
-                
-                -- Add status indicators for dead/out-of-range
-                self:UpdateStatusIndicators(icon, cooldownData)
-                
-                -- Position and size icon using individual size (frame size unchanged)
-                local iconSize = config:Get("iconSize" .. i)
-                icon:SetSize(iconSize, iconSize)
-                
-                -- Apply texture zoom within the frame (like WeakAuras)
-                local iconZoom = config:Get("iconZoom") or 1.0
-                icon.displayTexture:ClearAllPoints()
-                if iconZoom ~= 1.0 then
-                    local textureSize = iconSize * iconZoom
-                    icon.displayTexture:SetSize(textureSize, textureSize)
-                    icon.displayTexture:SetPoint("CENTER", icon, "CENTER", 0, 0)
-                else
-                    icon.displayTexture:SetAllPoints(icon)
-                end
-                
-                -- Set cooldown font size based on icon size and percentage
-                local cooldownFontPercent = config:Get("cooldownFontSizePercent") or 25
-                local cooldownFontSize = math.floor(iconSize * cooldownFontPercent / 100)
-                config:SetFontProperties(icon.cooldownText, config:Get("cooldownFont"), cooldownFontSize)
-                
-                if i == 1 then
-                    icon:SetPoint("BOTTOMLEFT", self.mainFrame.container, "BOTTOMLEFT", 0, 0)
-                else
-                    icon:SetPoint("BOTTOMLEFT", activeIcons[i-1], "BOTTOMRIGHT", spacing, 0)
-                end
-                
-                
-                icon:Show()
-            end
-        end
-    end
-end
-
--- Update existing unavailable icons without recreating them
-function UI:UpdateExistingUnavailableIcons(unavailableQueue, now)
-    local config = addon.Config
-    
-    if not config:Get("showUnavailableQueue") or not unavailableQueue or #unavailableQueue == 0 then
-        -- Hide all unavailable icons if not showing queue
-        for i = 1, #activeUnavailableIcons do
-            if activeUnavailableIcons[i] then
-                activeUnavailableIcons[i]:Hide()
-            end
-        end
-        return
-    end
-    
-    if #unavailableQueue > 0 then
-        local maxUnavailableIcons = config:Get("maxUnavailableIcons")
-        local unavailableSpacing = config:Get("unavailableSpacing")
-        local unavailableIconSize = config:Get("unavailableIconSize")
-        
-        -- Hide icons that are no longer needed
-        local validIconCount = 0
-        for i = 1, #unavailableQueue do
-            local cooldownData = unavailableQueue[i]
-            if cooldownData then
-                local charges = cooldownData.charges or 0
-                local isReady = charges > 0 or cooldownData.expirationTime <= now
-                local timeLeft = cooldownData.expirationTime - now
-                if isReady or timeLeft < 3 then
-                    validIconCount = validIconCount + 1
-                    if validIconCount > maxUnavailableIcons then break end
-                end
-            end
-        end
-        
-        for i = validIconCount + 1, #activeUnavailableIcons do
-            if activeUnavailableIcons[i] then
-                activeUnavailableIcons[i]:Hide()
-            end
-        end
-        
-        local iconIndex = 0
-        for i = 1, #unavailableQueue do
-            local cooldownData = unavailableQueue[i]
-            if cooldownData then
-                -- Filter: only show if cooldown < 3s or ready
-                local charges = cooldownData.charges or 0
-                local isReady = charges > 0 or cooldownData.expirationTime <= now
-                local timeLeft = cooldownData.expirationTime - now
-                if isReady or timeLeft < 3 then
-                    iconIndex = iconIndex + 1
-                    if iconIndex > maxUnavailableIcons then break end
-                    
-                    -- Reuse existing icon or get new one
-                    local icon = activeUnavailableIcons[iconIndex]
-                    if not icon then
-                        icon = self:GetUnavailableIcon()
-                        activeUnavailableIcons[iconIndex] = icon
-                    end
-                    
-                    -- Update icon data only if it changed
-                    local needsUpdate = not icon.queueData or 
-                                       icon.queueData.GUID ~= cooldownData.GUID or 
-                                       icon.queueData.spellID ~= cooldownData.spellID or
-                                       math.abs((icon.queueData.expirationTime or 0) - cooldownData.expirationTime) > 0.1
-                    
-                    icon.queueData = cooldownData
-                    icon.unit = addon.CCRotation.GUIDToUnit[cooldownData.GUID]
-                    
-                    if needsUpdate then
-                        icon.spellInfo = C_Spell.GetSpellInfo(cooldownData.spellID)
-                        icon.spellConfig = addon.Config:GetSpellInfo(cooldownData.spellID)
-                    end
-                    
-                    if icon.spellInfo and icon.unit then
-                        -- Update texture only if spell changed
-                        if needsUpdate then
-                            icon.displayTexture:SetTexture(icon.spellInfo.iconID)
-                            icon.displayTexture:Show()
-                        end
-                    
-                        -- Apply texture zoom within the frame (like WeakAuras)
-                        local iconZoom = config:Get("iconZoom") or 1.0
-                        icon.displayTexture:ClearAllPoints()
-                        if iconZoom ~= 1.0 then
-                            local textureSize = unavailableIconSize * iconZoom
-                            icon.displayTexture:SetSize(textureSize, textureSize)
-                            icon.displayTexture:SetPoint("CENTER", icon, "CENTER", 0, 0)
-                        else
-                            icon.displayTexture:SetAllPoints(icon)
-                        end
-                    
-                        -- Hide text for small unavailable icons
-                        icon.spellName:Hide()
-                        icon.playerName:Hide()
-                    
-                        -- Update cooldown independently
-                        self:UpdateIconCooldown(icon, cooldownData, now, config, true)
-                    
-                        -- Add status indicators
-                        self:UpdateStatusIndicators(icon, cooldownData)
-                        
-                        -- Position and size icon
-                        icon:SetSize(unavailableIconSize, unavailableIconSize)
-                        
-                        if iconIndex == 1 then
-                            icon:SetPoint("TOPLEFT", self.mainFrame.unavailableContainer, "TOPLEFT", 0, 0)
-                        elseif activeUnavailableIcons[iconIndex-1] then
-                            icon:SetPoint("TOPLEFT", activeUnavailableIcons[iconIndex-1], "TOPRIGHT", unavailableSpacing, 0)
-                        end
-                        
-                        icon:Show()
-                    end
-                end
-            end
-        end
-    end
-end
-
--- Update individual icon cooldown without affecting others
-function UI:UpdateIconCooldown(icon, cooldownData, now, config, isUnavailable)
-    local charges = cooldownData.charges or 0
-    local isReady = charges > 0 or cooldownData.expirationTime <= now
-    
-    if isReady then
-        -- Don't clear if cooldown animation is still running - let it finish naturally
-        if icon.cooldown:IsShown() and (cooldownData.expirationTime - now) > -0.5 then
-            -- Let both swipe and text finish naturally
-            if config:Get("showCooldownText") and not isUnavailable then
-                local timeLeft = math.max(0, cooldownData.expirationTime - now)
-                icon.cooldownText:SetText(timeLeft > 0 and self:FormatTime(timeLeft) or "")
-            else
-                icon.cooldownText:SetText("")
-            end
-        else
-            icon.cooldown:Clear()
-            icon.cooldown:Hide()
-            icon.cooldownEndTime = nil
-            icon.cooldownText:SetText("")
-        end
-    else
-        -- Only set cooldown if it's not already running with the same end time (increased threshold)
-        if not icon.cooldown:IsShown() or math.abs((icon.cooldownEndTime or 0) - cooldownData.expirationTime) > 0.5 then
-            local remainingTime = math.max(0, cooldownData.expirationTime - now)
-            -- Use the duration from cooldown data if available, otherwise calculate
-            local duration = cooldownData.duration or remainingTime
-            local startTime = cooldownData.expirationTime - duration
-            icon.cooldown:SetCooldown(startTime, duration)
-            icon.cooldownEndTime = cooldownData.expirationTime
-            icon.cooldown:Show()
-        end
-        if config:Get("showCooldownText") and not isUnavailable then
-            local timeLeft = cooldownData.expirationTime - now
-            icon.cooldownText:SetText(self:FormatTime(timeLeft))
-        else
-            icon.cooldownText:SetText("")
-        end
-    end
-end
-
--- Truncate text to max length (simple cut-off)
-function UI:TruncateText(text, maxLength)
-    if not text or text == "" then
-        return ""
-    end
-    
-    if string.len(text) <= maxLength then
-        return text
-    else
-        return string.sub(text, 1, maxLength)
-    end
-end
-
--- Format time for display (same as before)
-function UI:FormatTime(seconds)
-    if seconds <= 0 then
-        return ""
-    elseif seconds < addon.Config:Get("cooldownDecimalThreshold") then
-        return string.format("%.1f", seconds)
-    elseif seconds < 60 then
-        return string.format("%.0f", seconds)
-    else
-        local minutes = math.floor(seconds / 60)
-        local secs = seconds % 60
-        return string.format("%d:%02d", minutes, secs)
-    end
+    self:updateFrameSize()
 end
 
 -- Update main frame size based on visible icons
-function UI:UpdateFrameSize()
+function UI:updateFrameSize()
     local config = addon.Config
     local spacing = config:Get("spacing")
+    local activeIcons = self.iconPool:getActiveMainIcons()
+    local activeUnavailableIcons = self.iconPool:getActiveUnavailableIcons()
     local visibleIcons = #activeIcons
     local visibleUnavailableIcons = #activeUnavailableIcons
     
     local totalWidth = 0
     local totalHeight = 0
     
-    -- Calculate main queue dimensions (keep frame size same as before)
+    -- Calculate main queue dimensions
     if visibleIcons > 0 then
         local maxHeight = 0
         
@@ -930,26 +250,23 @@ function UI:UpdateFrameSize()
         totalHeight = maxHeight
     end
     
-    -- Position unavailable container below main container but don't affect main frame size
+    -- Position unavailable container below main container
     if visibleUnavailableIcons > 0 and config:Get("showUnavailableQueue") then
-        local unavailableIconSize = config:Get("unavailableIconSize")
         local offset = config:Get("unavailableQueueOffset")
-        
-        -- Position unavailable container below the main container
         self.mainFrame.unavailableContainer:ClearAllPoints()
         self.mainFrame.unavailableContainer:SetPoint("TOP", self.mainFrame.container, "BOTTOM", 0, -offset)
     end
     
-    -- Set minimum size (keep main frame size unchanged)
+    -- Set minimum size
     if totalWidth == 0 then totalWidth = 1 end
     if totalHeight == 0 then totalHeight = 1 end
     
     self.mainFrame:SetSize(totalWidth, totalHeight)
 end
 
--- Update visibility based on config and group status with robust checking
+-- Update visibility based on config and group status
 function UI:UpdateVisibility()
-    if not self:ValidateFrameState() then
+    if not self:validateFrameState() then
         addon.Config:DebugPrint("Cannot update visibility - frame state invalid")
         return
     end
@@ -964,28 +281,27 @@ function UI:UpdateVisibility()
     
     if shouldBeActive then
         self.mainFrame:Show()
-        self:StartCooldownTextUpdates()
+        self:startCooldownTextUpdates()
         addon.Config:DebugPrint("Frame shown and updates started")
     else
         self.mainFrame:Hide()
-        self:StopCooldownTextUpdates()
+        self:stopCooldownTextUpdates()
         addon.Config:DebugPrint("Frame hidden and updates stopped")
     end
 end
 
 -- Show the UI with validation
 function UI:Show()
-    if not self:ValidateFrameState() then
+    if not self:validateFrameState() then
         addon.Config:DebugPrint("Cannot show UI - frame state invalid")
         return
     end
     
     self.mainFrame:Show()
-    self:StartCooldownTextUpdates()
+    self:startCooldownTextUpdates()
     
     -- Position and show debug anchor if in debug mode
     if addon.Config and addon.Config:Get("debugMode") and self.mainFrame.anchor then
-        -- Position anchor at the center of the main frame
         self.mainFrame.anchor:ClearAllPoints()
         self.mainFrame.anchor:SetPoint("CENTER", self.mainFrame, "CENTER")
         self.mainFrame.anchor:Show()
@@ -1002,13 +318,13 @@ function UI:Hide()
             self.mainFrame.anchor:Hide()
         end
     end
-    self:StopCooldownTextUpdates()
+    self:stopCooldownTextUpdates()
     addon.Config:DebugPrint("UI hidden manually")
 end
 
 -- Toggle the UI
 function UI:Toggle()
-    if not self:ValidateFrameState() then
+    if not self:validateFrameState() then
         addon.Config:DebugPrint("Cannot toggle UI - frame state invalid")
         return
     end
@@ -1020,7 +336,7 @@ function UI:Toggle()
     end
 end
 
--- Debug function to show detailed icon state and attempt recovery
+-- Debug function to show detailed icon state
 function UI:ShowIconDebug()
     print("|cff00ff00CC Rotation Helper Icon Debug:|r")
     
@@ -1029,6 +345,7 @@ function UI:ShowIconDebug()
         return
     end
     
+    local activeIcons = self.iconPool:getActiveMainIcons()
     print("  Active Icons: " .. tostring(#activeIcons))
     for i, icon in ipairs(activeIcons) do
         if icon then
@@ -1038,9 +355,6 @@ function UI:ShowIconDebug()
             print("    Icon " .. i .. ": NIL")
         end
     end
-    
-    print("  Icon Pool Size: " .. tostring(#iconPool))
-    print("  Icons Created: " .. tostring(numIconsCreated))
     
     -- Check rotation system
     if addon.CCRotation then
@@ -1073,7 +387,7 @@ function UI:ShowIconDebug()
     end
 end
 
--- AceGUI utility functions (keeping from previous implementation)
+-- AceGUI utility functions
 function UI:ShowNotification(title, message, callback)
     local notification = AceGUI:Create("Frame")
     notification:SetTitle(title)
@@ -1101,39 +415,6 @@ function UI:ShowNotification(title, message, callback)
     return notification
 end
 
--- Update status indicators for dead/out-of-range players
-function UI:UpdateStatusIndicators(icon, cooldownData)
-    if not icon or not cooldownData then return end
-    
-    -- Calculate indicator size (20% of icon size)
-    local iconSize = icon:GetWidth()
-    local indicatorSize = math.max(16, iconSize * 0.2)
-    
-    local hasStatusIndicator = false
-    
-    -- Update dead indicator
-    if cooldownData.isDead then
-        icon.deadIndicator:SetSize(indicatorSize, indicatorSize)
-        icon.deadIndicator:Show()
-        hasStatusIndicator = true
-    else
-        icon.deadIndicator:Hide()
-    end
-    
-    -- Update range indicator (only show if alive but out of range)
-    if not cooldownData.isDead and not cooldownData.inRange then
-        icon.rangeIndicator:SetSize(indicatorSize, indicatorSize)
-        icon.rangeIndicator:Show()
-        hasStatusIndicator = true
-    else
-        icon.rangeIndicator:Hide()
-    end
-    
-    -- Desaturate icon if any status indicator is shown OR if not effective
-    local shouldDesaturate = hasStatusIndicator or (not cooldownData.isEffective)
-    icon.displayTexture:SetDesaturated(shouldDesaturate)
-end
-
 -- Update mouse settings based on tooltip config
 function UI:UpdateMouseSettings()
     if not self.mainFrame then return end
@@ -1142,22 +423,17 @@ function UI:UpdateMouseSettings()
     local showTooltips = config:Get("showTooltips")
     local anchorLocked = config:Get("anchorLocked")
     
-    -- Update main frame mouse settings: enable if unlocked OR tooltips are enabled
+    -- Update main frame mouse settings
     self.mainFrame:EnableMouse(not anchorLocked or showTooltips)
     
-    -- Update active icon mouse settings: only enable if tooltips are enabled
-    for _, icon in ipairs(activeIcons) do
-        icon:EnableMouse(showTooltips)
-    end
-    
-    -- Update active unavailable icon mouse settings: only enable if tooltips are enabled
-    for _, icon in ipairs(activeUnavailableIcons) do
-        icon:EnableMouse(showTooltips)
+    -- Update icon mouse settings via IconPool
+    if self.iconPool then
+        self.iconPool:updateMouseSettings()
     end
 end
 
 -- Validate frame state and recover if necessary
-function UI:ValidateFrameState()
+function UI:validateFrameState()
     if not self.mainFrame then
         addon.Config:DebugPrint("MainFrame is nil, attempting to recreate")
         self:Initialize()
@@ -1195,7 +471,7 @@ function UI:UpdateFromConfig()
     addon.Config:DebugPrint("UpdateFromConfig started")
     
     -- Validate frame state first
-    if not self:ValidateFrameState() then
+    if not self:validateFrameState() then
         addon.Config:DebugPrint("Failed to validate/recover frame state")
         return
     end
@@ -1203,26 +479,28 @@ function UI:UpdateFromConfig()
     -- Store current visibility state
     local wasVisible = self.mainFrame:IsShown()
     
-    -- First, clear all text elements before releasing icons
-    for i = #activeIcons, 1, -1 do
-        self:ClearIconText(activeIcons[i])
-        self:ReleaseIcon(activeIcons[i])
+    -- Clear all icons using component system
+    if self.iconPool then
+        local activeIcons = self.iconPool:getActiveMainIcons()
+        local activeUnavailableIcons = self.iconPool:getActiveUnavailableIcons()
+        
+        for i = #activeIcons, 1, -1 do
+            self.iconPool:releaseMainIcon(activeIcons[i])
+        end
+        
+        for i = #activeUnavailableIcons, 1, -1 do
+            self.iconPool:releaseUnavailableIcon(activeUnavailableIcons[i])
+        end
+        
+        -- Re-initialize icon pools
+        self.iconPool:initialize()
     end
-    wipe(activeIcons)
-    
-    for i = #activeUnavailableIcons, 1, -1 do
-        self:ReleaseUnavailableIcon(activeUnavailableIcons[i])
-    end
-    wipe(activeUnavailableIcons)
     
     -- Update visibility based on new profile settings
     self:UpdateVisibility()
     
     -- Update mouse settings
     self:UpdateMouseSettings()
-    
-    -- Force refresh of all icon pools to apply new settings
-    self:InitializeIconPool()
     
     -- Refresh display to apply new visual settings
     self:RefreshDisplay()
@@ -1232,73 +510,10 @@ function UI:UpdateFromConfig()
         self.mainFrame:Show()
     end
     
-    -- Debug output to help troubleshoot
+    -- Debug output
     local config = addon.Config
     config:DebugPrint("Profile switch complete - Position: Handled by SetUserPlaced" .. 
           " | Enabled: " .. tostring(config:Get("enabled")) .. 
           " | MaxIcons: " .. config:Get("maxIcons") .. 
           " | Visible: " .. tostring(self.mainFrame:IsShown()))
-end
-
-
-function InitializeIconGlow(icon)
-    icon.glowing = false
-    icon.glowType = nil
-
-    function icon:StartGlow(config)
-        local glowType = config:Get("glowType")
-        local glowColor = config:Get("glowColor")
-
-        if self.glowing and glowType == self.glowType then return end
-
-        -- If we swapped glowtype, then stop the existing glow before creating new
-        if glowType ~= self.glowType then
-            self:StopGlow()
-        end
-
-        -- Start the appropriate glow type
-        if glowType == "Pixel" then
-            LCG.PixelGlow_Start(
-                self,
-                glowColor,
-                config:Get("glowLines"),
-                config:Get("glowFrequency"),
-                config:Get("glowLength"),
-                config:Get("glowThickness"),
-                config:Get("glowXOffset"),
-                config:Get("glowYOffset"),
-                config:Get("glowBorder")
-            )
-        elseif glowType == "ACShine" then
-            LCG.AutoCastGlow_Start(
-                self,
-                glowColor,
-                config:Get("glowParticleGroups"),
-                config:Get("glowACFrequency"),
-                config:Get("glowScale"),
-                config:Get("glowACXOffset"),
-                config:Get("glowACYOffset")
-            )
-        elseif glowType == "Proc" then
-            LCG.ProcGlow_Start(self, glowColor)
-        end
-
-        self.glowing = true
-        self.glowType = glowType
-    end
-
-    function icon:StopGlow()
-        -- If we're not glowing, we don't need to stop glowing
-        if not self.glowing then return end
-
-        LCG.ButtonGlow_Stop(self)
-        LCG.PixelGlow_Stop(self)
-        LCG.AutoCastGlow_Stop(self)
-        LCG.ProcGlow_Stop(self)
-        LCG.PixelGlow_Stop(self)
-        LCG.AutoCastGlow_Stop(self)
-        LCG.ProcGlow_Stop(self)
-
-        self.glowing = false
-    end
 end

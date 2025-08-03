@@ -4,6 +4,29 @@
 local addonName, addon = ...
 local BaseComponent = addon.BaseComponent
 
+-- Helper function to create profile dropdown (moved from Component.lua)
+local function createProfilesDropdown(label, onChange)
+    local AceGUI = LibStub("AceGUI-3.0")
+    local dropdown = AceGUI:Create("Dropdown")
+    dropdown:SetLabel(label)
+    dropdown:SetWidth(200)
+    local profiles = addon.Config:GetProfileNames()
+    dropdown:SetList(profiles)
+
+    if onChange then
+        dropdown:SetCallback("OnValueChanged", function(widget, _event, index) 
+            onChange(profiles[index], widget) 
+        end)
+    end
+
+    function dropdown:RefreshProfiles()
+        profiles = addon.Config:GetProfileNames()
+        dropdown:SetList(profiles)
+    end
+
+    return dropdown
+end
+
 -- Profile Management Component - handles profile switching, creation, deletion, reset
 local ProfileManagement = {}
 setmetatable(ProfileManagement, {__index = BaseComponent})
@@ -137,15 +160,15 @@ function ProfileManagement:buildProfileActions(container)
     container:AddChild(resetBtn)
     
     -- Delete profile dropdown
-    container:AddChild(addon.UI.Component:VerticalSpacer(5))
-    local deleteDropdown = addon.UI.Component:ProfilesDropdown("Delete profile", function(profile, widget)
+    container:AddChild(addon.UI.Helpers:VerticalSpacer(5))
+    local deleteDropdown = createProfilesDropdown("Delete profile", function(profile, widget)
         if #self.dataProvider:getProfileNames() <= 1 then
             print("|cffff0000CC Rotation Helper|r: You cannot delete your last profile")
             widget:SetValue(0)
             return
         end
         
-        addon.UI.Component:ConfirmationDialog(
+        addon.UI.Helpers:ConfirmationDialog(
             "DELETE_PROFILE_CONFIRMATION",
             "Do you want to delete profile: "..profile.."?", 
             "Delete",
@@ -211,7 +234,7 @@ function ProfileSync:buildUI()
     end)
     internalGroup:AddChild(syncCurrentBtn)
     
-    internalGroup:AddChild(addon.UI.Component:HorizontalSpacer(40))
+    internalGroup:AddChild(addon.UI.Helpers:HorizontalSpacer(40))
     
     -- Profile selection dropdown for sharing specific profiles
     self:buildSpecificProfileSharer(internalGroup)

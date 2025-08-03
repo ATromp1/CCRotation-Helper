@@ -47,6 +47,9 @@ UI\Components\DisplaySettings.lua
 UI\Components\TextSettings.lua
 UI\Components\IconSettings.lua
 UI\Components\GlowSettings.lua
+UI\Components\IconPool.lua
+UI\Components\GlowManager.lua
+UI\Components\IconRenderer.lua
 UI\Tabs\SpellsTab.lua
 UI\Tabs\PlayersTab.lua
 UI\Tabs\NPCsTab.lua
@@ -56,7 +59,7 @@ UI\Tabs\TextTab.lua
 UI\Tabs\IconsTab.lua
 UI\MainFrame.lua
 UI\ConfigFrame.lua
-UI\Component.lua
+UI\UIHelpers.lua
 
 # Main addon file
 CCRotationHelper.lua
