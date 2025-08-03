@@ -57,6 +57,7 @@ local defaults = {
         customNPCs = {},
         customSpells = {},
         inactiveSpells = {}, -- Spells that are disabled but not deleted
+        inactiveNPCs = {}, -- NPCs that are disabled but not deleted
     },
     global = {
         -- Core addon settings

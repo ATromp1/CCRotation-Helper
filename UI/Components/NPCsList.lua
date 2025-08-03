@@ -188,6 +188,11 @@ function DungeonNPCListComponent:createDungeonContent(dungeonGroup, dungeonName,
     dungeonGroup:AddChild(headerGroup)
     
     -- Headers
+    local enabledHeader = self.AceGUI:Create("Label")
+    enabledHeader:SetText("Enabled")
+    enabledHeader:SetWidth(60)
+    headerGroup:AddChild(enabledHeader)
+    
     local nameHeader = self.AceGUI:Create("Label")
     nameHeader:SetText("NPC Name")
     nameHeader:SetWidth(180)
@@ -233,6 +238,20 @@ function DungeonNPCListComponent:createNPCRow(dungeonGroup, npcID, npcData, dung
     rowGroup:SetFullWidth(true)
     rowGroup:SetLayout("Flow")
     dungeonGroup:AddChild(rowGroup)
+    
+    -- Enabled checkbox
+    local enabledCheck = self.AceGUI:Create("CheckBox")
+    enabledCheck:SetWidth(60)
+    enabledCheck:SetValue(npcData.enabled)
+    enabledCheck:SetCallback("OnValueChanged", function(widget, event, value)
+        if self.dataProvider then
+            self.dataProvider:setNPCEnabled(npcID, value)
+            npcData.enabled = value
+            -- Trigger callback to parent
+            self:triggerCallback('onNPCChanged', npcID)
+        end
+    end)
+    rowGroup:AddChild(enabledCheck)
     
     -- Editable mob name (without dungeon prefix)
     local mobNameEdit = self.AceGUI:Create("EditBox")

@@ -268,7 +268,9 @@ function CCRotation:RecalculateQueue()
     local hasUnknownNPCs = false
     
     for npcID in pairs(self.activeNPCs) do
-        local effectiveness = addon.Config:GetNPCEffectiveness(npcID)
+        local effectiveness = addon.DataProviders and addon.DataProviders.NPCs and 
+            addon.DataProviders.NPCs:getNPCEffectiveness(npcID) or 
+            addon.Config:GetNPCEffectiveness(npcID)
         if effectiveness then
             hasKnownNPCs = true
         else
@@ -291,7 +293,9 @@ function CCRotation:RecalculateQueue()
                 -- Only keep if ANY known NPC accepts this CC type
                 local isEffective = false
                 for npcID in pairs(self.activeNPCs) do
-                    local effectiveness = addon.Config:GetNPCEffectiveness(npcID)
+                    local effectiveness = addon.DataProviders and addon.DataProviders.NPCs and 
+                        addon.DataProviders.NPCs:getNPCEffectiveness(npcID) or 
+                        addon.Config:GetNPCEffectiveness(npcID)
                     if effectiveness and effectiveness[ccType] then
                         isEffective = true
                         break
@@ -484,6 +488,38 @@ end
 -- Get the current queue for display
 function CCRotation:GetQueue()
     return self.cooldownQueue
+end
+
+-- Check if there are any active enabled NPCs
+function CCRotation:HasActiveEnabledNPCs()
+    if not self.activeNPCs then
+        return false
+    end
+    
+    for npcID in pairs(self.activeNPCs) do
+        local effectiveness
+        local usingDataProvider = false
+        
+        -- Try data provider first
+        if addon.DataProviders and addon.DataProviders.NPCs and addon.DataProviders.NPCs.getNPCEffectiveness then
+            effectiveness = addon.DataProviders.NPCs:getNPCEffectiveness(npcID)
+            usingDataProvider = true
+        else
+            -- Fallback to config but manually check disabled state
+            if addon.Config.db.inactiveNPCs[npcID] then
+                effectiveness = nil
+            else
+                effectiveness = addon.Config:GetNPCEffectiveness(npcID)
+            end
+        end
+        
+        
+        if effectiveness then
+            return true
+        end
+    end
+    
+    return false
 end
 
 -- Check if the queue has actually changed since last update

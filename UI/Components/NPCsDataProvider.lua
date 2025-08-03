@@ -31,7 +31,8 @@ function NPCsDataProvider:getNPCsByDungeon(filterToDungeon)
                 name = data.name,
                 mobName = mobName,
                 cc = data.cc,
-                source = "database"
+                source = "database",
+                enabled = not addon.Config.db.inactiveNPCs[npcID]
             }
         end
     end
@@ -57,7 +58,8 @@ function NPCsDataProvider:getNPCsByDungeon(filterToDungeon)
                 mobName = mobName,
                 cc = data.cc,
                 source = "custom",
-                dungeon = data.dungeon
+                dungeon = data.dungeon,
+                enabled = not addon.Config.db.inactiveNPCs[npcID]
             }
         end
     end
@@ -214,6 +216,33 @@ function NPCsDataProvider:addCustomNPC(npcID, npcName, selectedDungeon, ccEffect
     addon.Config:FireEvent("PROFILE_DATA_CHANGED", "customNPCs", npcID)
     
     return fullName
+end
+
+-- Enable/disable NPC
+function NPCsDataProvider:setNPCEnabled(npcID, enabled)
+    if enabled then
+        addon.Config.db.inactiveNPCs[npcID] = nil
+    else
+        addon.Config.db.inactiveNPCs[npcID] = true
+    end
+    
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "inactiveNPCs", npcID)
+end
+
+-- Check if NPC is enabled
+function NPCsDataProvider:isNPCEnabled(npcID)
+    return not addon.Config.db.inactiveNPCs[npcID]
+end
+
+-- Get NPC effectiveness (filtered by enabled state)
+function NPCsDataProvider:getNPCEffectiveness(npcID)
+    -- Return nil for disabled NPCs (exclude from rotation)
+    if addon.Config.db.inactiveNPCs[npcID] then
+        return nil
+    end
+    
+    -- Delegate to Config for the actual effectiveness logic
+    return addon.Config:GetNPCEffectiveness(npcID)
 end
 
 -- Register in addon namespace

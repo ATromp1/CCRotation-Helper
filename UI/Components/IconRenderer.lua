@@ -169,8 +169,10 @@ function IconRenderer:updateIconDisplay(icon, iconIndex, cooldownData, needsUpda
         icon.cooldownEndTime = nil
     end
     
-    -- Always update effectiveness state
-    icon.displayTexture:SetDesaturated(not cooldownData.isEffective)
+    -- Always update effectiveness state - desaturate if not effective OR no enabled NPCs
+    local hasActiveEnabledNPCs = addon.CCRotation and addon.CCRotation:HasActiveEnabledNPCs() or false
+    local shouldDesaturate = not cooldownData.isEffective or not hasActiveEnabledNPCs
+    icon.displayTexture:SetDesaturated(shouldDesaturate)
     
     -- Set spell name (only on first icon, using global setting)
     if iconIndex == 1 and config:Get("showSpellName") then
@@ -260,7 +262,7 @@ function IconRenderer:updateUnavailableIconDisplay(icon, cooldownData, needsUpda
     self:updateIconCooldown(icon, cooldownData, now, config, true)
 
     -- Add status indicators
-    self:updateStatusIndicators(icon, cooldownData)
+    self:updateStatusIndicators(icon, cooldownData, now)
     
     -- Position and size icon
     icon:SetSize(unavailableIconSize, unavailableIconSize)
@@ -368,9 +370,10 @@ function IconRenderer:updateStatusIndicators(icon, cooldownData, now)
         icon.rangeIndicator:Hide()
     end
     
-    -- Desaturate icon if any status indicator is shown OR if not effective
+    -- Desaturate icon if any status indicator is shown OR if not effective OR no enabled NPCs
     local isOnCooldown = (cooldownData.charges or 0) == 0 or (cooldownData.expirationTime and cooldownData.expirationTime > now)
-    local shouldDesaturate = hasStatusIndicator or (not cooldownData.isEffective) or isOnCooldown
+    local hasActiveEnabledNPCs = addon.CCRotation and addon.CCRotation:HasActiveEnabledNPCs() or false
+    local shouldDesaturate = hasStatusIndicator or (not cooldownData.isEffective) or isOnCooldown or (not hasActiveEnabledNPCs)
     icon.displayTexture:SetDesaturated(shouldDesaturate)
 end
 
