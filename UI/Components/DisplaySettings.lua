@@ -58,6 +58,21 @@ function DisplaySettings:buildUI()
     )
     soloControl:buildUI()
     
+    -- Only enable in dungeons
+    local dungeonsOnlyControl = addon.Components.CheckboxControl:new(
+        internalGroup,
+        "Only enable in dungeons",
+        "onlyInDungeons",
+        {
+            onValueChanged = function(configKey, value)
+                self.dataProvider:rebuildQueue()
+                self.dataProvider:updateVisibility()
+                self.dataProvider:refreshDisplay()
+            end
+        }
+    )
+    dungeonsOnlyControl:buildUI()
+    
     -- Show spell names
     local spellNameControl = addon.Components.CheckboxControl:new(
         internalGroup,

@@ -62,6 +62,7 @@ local defaults = {
         -- Core addon settings
         enabled = true,
         showInSolo = false,
+        onlyInDungeons = false,
         
         -- Party sync persistent data
         partySyncLastActiveProfile = nil,

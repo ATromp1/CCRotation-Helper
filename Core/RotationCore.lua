@@ -542,5 +542,13 @@ function CCRotation:ShouldBeActive()
         return false
     end
     
+    -- Check if "Only enable in dungeons" is enabled
+    if config:Get("onlyInDungeons") then
+        local inInstance, instanceType = IsInInstance()
+        if not inInstance or (instanceType ~= "party" and instanceType ~= "raid") then
+            return false
+        end
+    end
+    
     return true
 end
