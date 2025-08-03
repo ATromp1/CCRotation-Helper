@@ -172,7 +172,7 @@ function addon.Config:Initialize()
     self.database.RegisterCallback(self, "OnProfileChanged", "OnProfileChanged")
     self.database.RegisterCallback(self, "OnProfileCopied", "OnProfileChanged")
     self.database.RegisterCallback(self, "OnProfileReset", "OnProfileChanged")
-    
+
     -- Set up AceDBOptions for profile management
     self.profileOptions = AceDBOptions:GetOptionsTable(self.database)
     
@@ -328,11 +328,13 @@ end
 
 function addon.Config:AddPriorityPlayer(playerName)
     self.db.priorityPlayers[playerName] = true
+    self:FireEvent("PROFILE_DATA_CHANGED", "priorityPlayers", playerName)
     self:BroadcastProfileChangeIfLeader()
 end
 
 function addon.Config:RemovePriorityPlayer(playerName)
     self.db.priorityPlayers[playerName] = nil
+    self:FireEvent("PROFILE_DATA_CHANGED", "priorityPlayers", playerName)
     self:BroadcastProfileChangeIfLeader()
 end
 

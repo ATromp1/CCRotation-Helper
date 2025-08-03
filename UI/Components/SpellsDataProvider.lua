@@ -59,7 +59,7 @@ function SpellsDataProvider:addCustomSpell(spellID, spellName, ccType, priority)
     }
     
     -- Update rotation system
-    self:updateRotationSystem()
+    self:onConfigChanged()
 end
 
 -- Update spell data
@@ -76,7 +76,7 @@ function SpellsDataProvider:updateSpell(spellID, spellData, field, value)
         }
     end
     
-    self:updateRotationSystem()
+    self:onConfigChanged()
 end
 
 -- Disable spell
@@ -91,7 +91,7 @@ function SpellsDataProvider:disableSpell(spellID, spellData)
     -- Renumber remaining active spells
     self:renumberSpellPriorities()
     
-    self:updateRotationSystem()
+    self:onConfigChanged()
 end
 
 -- Enable spell
@@ -101,7 +101,7 @@ function SpellsDataProvider:enableSpell(spellID)
     -- Renumber all active spells
     self:renumberSpellPriorities()
     
-    self:updateRotationSystem()
+    self:onConfigChanged()
 end
 
 -- Delete custom spell
@@ -109,7 +109,7 @@ function SpellsDataProvider:deleteCustomSpell(spellID)
     addon.Config.db.inactiveSpells[spellID] = nil
     addon.Config.db.customSpells[spellID] = nil
     
-    self:updateRotationSystem()
+    self:onConfigChanged()
 end
 
 -- Renumber spell priorities to eliminate gaps
@@ -180,7 +180,15 @@ function SpellsDataProvider:moveSpellPriority(spellID, spellData, direction, sor
     end
     
     -- Immediately update tracked cooldowns cache and rebuild queue
+    self:onConfigChanged()
+end
+
+function SpellsDataProvider:onConfigChanged()
+    -- Update rotation system
     self:updateRotationSystem()
+    
+    -- Fire event for config changes (ProfileSync will handle sync automatically)
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "spells")
 end
 
 -- Update rotation system after data changes
