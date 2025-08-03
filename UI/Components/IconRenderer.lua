@@ -356,7 +356,7 @@ function IconRenderer:updateStatusIndicators(icon, cooldownData, now)
     end
     
     -- Desaturate icon if any status indicator is shown OR if not effective
-    local isOnCooldown = (cooldownData.charges or 0) == 0 or cooldownData.expirationTime > now
+    local isOnCooldown = (cooldownData.charges or 0) == 0 or (cooldownData.expirationTime and cooldownData.expirationTime > now)
     local shouldDesaturate = hasStatusIndicator or (not cooldownData.isEffective) or isOnCooldown
     icon.displayTexture:SetDesaturated(shouldDesaturate)
 end
