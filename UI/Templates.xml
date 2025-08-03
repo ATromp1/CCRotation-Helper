@@ -9,30 +9,6 @@
 			<Anchor point="CENTER"/>
 		</Anchors>
 		<Frames>
-			<!-- Anchor frame for positioning -->
-			<Frame name="$parentAnchor" parentKey="anchor" enableMouse="true" clampedToScreen="true">
-				<Size>
-					<AbsDimension x="15" y="15"/>
-				</Size>
-				<Anchors>
-					<Anchor point="CENTER"/>
-				</Anchors>
-				<Layers>
-					<Layer level="BACKGROUND">
-						<Texture name="$parentBG" setAllPoints="true" parentKey="background">
-							<Color r="0.756" g="0" b="0.012" a="0.7"/>
-						</Texture>
-					</Layer>
-					<Layer level="ARTWORK">
-						<FontString name="$parentText" parentKey="text" inherits="GameFontNormal">
-							<Color r="1" g="1" b="1" a="1"/>
-							<Anchors>
-								<Anchor point="CENTER"/>
-							</Anchors>
-						</FontString>
-					</Layer>
-				</Layers>
-			</Frame>
 			<!-- Container for all icons -->
 			<Frame name="$parentIcons" parentKey="container" clampedToScreen="true">
 				<Size>

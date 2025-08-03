@@ -62,9 +62,6 @@ function UI:createMainFrame()
         self:createBasicFrame()
     end
 
-    -- Always create debug anchor
-    self:createDebugAnchor()
-    
     -- Setup main frame properties
     self:setupMainFrame()
 end
@@ -77,35 +74,6 @@ function UI:createBasicFrame()
     -- Create basic container
     self.mainFrame.container = CreateFrame("Frame", nil, self.mainFrame)
     self.mainFrame.container:SetAllPoints()
-end
-
--- Create debug anchor
-function UI:createDebugAnchor()
-    if not self.mainFrame.anchor then
-        addon.Config:DebugPrint("Creating debug anchor")
-        self.mainFrame.anchor = CreateFrame("Frame", "CCRotationDebugAnchor", UIParent)
-        self.mainFrame.anchor:SetSize(20, 20)
-        self.mainFrame.anchor:SetFrameStrata("TOOLTIP")
-        self.mainFrame.anchor:SetFrameLevel(1000)
-        
-        -- Create border texture
-        local border = self.mainFrame.anchor:CreateTexture(nil, "OVERLAY")
-        border:SetAllPoints()
-        border:SetColorTexture(1, 0, 0, 1.0)
-        
-        -- Create inner transparent area
-        local inner = self.mainFrame.anchor:CreateTexture(nil, "BACKGROUND")
-        inner:SetPoint("TOPLEFT", 2, -2)
-        inner:SetPoint("BOTTOMRIGHT", -2, 2)
-        inner:SetColorTexture(0, 0, 0, 0.3)
-        
-        -- Store references
-        self.mainFrame.anchor.border = border
-        self.mainFrame.anchor.inner = inner
-        
-        self.mainFrame.anchor:Hide()
-        addon.Config:DebugPrint("Debug anchor created successfully")
-    end
 end
 
 -- Setup main frame properties
@@ -313,14 +281,7 @@ function UI:Show()
     
     self.mainFrame:Show()
     self:startCooldownTextUpdates()
-    
-    -- Position and show debug anchor if in debug mode
-    if addon.Config and addon.Config:Get("debugMode") and self.mainFrame.anchor then
-        self.mainFrame.anchor:ClearAllPoints()
-        self.mainFrame.anchor:SetPoint("CENTER", self.mainFrame, "CENTER")
-        self.mainFrame.anchor:Show()
-    end
-    
+
     addon.Config:DebugPrint("UI shown manually")
 end
 
@@ -328,9 +289,6 @@ end
 function UI:Hide()
     if self.mainFrame then
         self.mainFrame:Hide()
-        if self.mainFrame.anchor then
-            self.mainFrame.anchor:Hide()
-        end
     end
     self:stopCooldownTextUpdates()
     addon.Config:DebugPrint("UI hidden manually")
