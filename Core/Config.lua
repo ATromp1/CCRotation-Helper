@@ -86,6 +86,7 @@ local defaults = {
         showSpellName = true,
         showPlayerName = true,
         showCooldownText = true,
+        desaturateOnCooldown = false,
         showTooltips = true,
         highlightNext = false,
         glowOnlyInCombat = false, -- Only show glow when in combat
