@@ -9,6 +9,26 @@ local LSM = LibStub("LibSharedMedia-3.0")
 
 addon.Config = {}
 
+-- Event system for decoupled communication
+addon.Config.eventListeners = {}
+
+-- Register event listener
+function addon.Config:RegisterEventListener(event, callback)
+    if not self.eventListeners[event] then
+        self.eventListeners[event] = {}
+    end
+    table.insert(self.eventListeners[event], callback)
+end
+
+-- Fire event to all listeners
+function addon.Config:FireEvent(event, ...)
+    if self.eventListeners[event] then
+        for _, callback in ipairs(self.eventListeners[event]) do
+            callback(...)
+        end
+    end
+end
+
 -- Font utility function using LibSharedMedia
 function addon.Config:SetFontProperties(fontString, fontName, fontSize, flags)
     if LSM then
@@ -183,11 +203,9 @@ function addon.Config:OnProfileChanged()
         print("|cffff0000CC Rotation Helper:|r Warning: CCRotation not initialized")
     end
     
-    -- Notify UI to refresh
-    if addon.UI then
-        addon.UI:UpdateFromConfig()
-        self:DebugPrint("UI refreshed")
-    end
+    -- Fire event for UI to refresh (UI will listen for this event)
+    self:FireEvent("PROFILE_CHANGED")
+    self:DebugPrint("Profile change event fired")
     
     -- If we're the party leader and in party sync mode, broadcast the profile change
     if addon.ProfileSync and UnitIsGroupLeader("player") and IsInGroup() and addon.ProfileSync:IsInPartySync() then

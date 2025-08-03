@@ -26,6 +26,20 @@ function UI:Initialize()
     -- Initialize component systems
     self.iconPool:initialize()
     
+    -- Register for queue update events from RotationCore
+    if addon.CCRotation then
+        addon.CCRotation:RegisterEventListener("QUEUE_UPDATED", function(queue, unavailableQueue)
+            self:UpdateDisplay(queue, unavailableQueue)
+        end)
+    end
+    
+    -- Register for profile change events from Config
+    if addon.Config then
+        addon.Config:RegisterEventListener("PROFILE_CHANGED", function()
+            self:UpdateFromConfig()
+        end)
+    end
+    
     -- Start cooldown text update timer
     self:startCooldownTextUpdates()
     

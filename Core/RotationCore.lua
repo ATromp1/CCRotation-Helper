@@ -7,6 +7,26 @@ local CCRotation = addon.CCRotation
 -- LibOpenRaid reference
 local lib = LibStub("LibOpenRaid-1.0", true)
 
+-- Event system for decoupled communication
+CCRotation.eventListeners = {}
+
+-- Register event listener
+function CCRotation:RegisterEventListener(event, callback)
+    if not self.eventListeners[event] then
+        self.eventListeners[event] = {}
+    end
+    table.insert(self.eventListeners[event], callback)
+end
+
+-- Fire event to all listeners
+function CCRotation:FireEvent(event, ...)
+    if self.eventListeners[event] then
+        for _, callback in ipairs(self.eventListeners[event]) do
+            callback(...)
+        end
+    end
+end
+
 -- Initialize core variables
 function CCRotation:Initialize()
     -- Build NPC effectiveness map from database
@@ -294,9 +314,9 @@ function CCRotation:RecalculateQueue()
     -- Sort and separate queues
     self:SortAndSeparateQueues()
     
-    -- Only notify UI if queue actually changed
-    if addon.UI and self:HasQueueChanged() then
-        addon.UI:UpdateDisplay(self.cooldownQueue, self.unavailableQueue)
+    -- Fire event if queue actually changed (UI will listen for this event)
+    if self:HasQueueChanged() then
+        self:FireEvent("QUEUE_UPDATED", self.cooldownQueue, self.unavailableQueue)
     end
 end
 
