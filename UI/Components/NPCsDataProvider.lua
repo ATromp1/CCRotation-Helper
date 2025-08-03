@@ -120,6 +120,8 @@ function NPCsDataProvider:updateNPCName(npcID, npcData, newMobName, dungeonName,
             dungeon = dungeonName
         }
     end
+
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "customNPCs", npcID)
 end
 
 -- Update NPC dungeon
@@ -142,6 +144,7 @@ function NPCsDataProvider:updateNPCDungeon(npcID, npcData, newDungeon)
     
     addon.Config.db.customNPCs[npcID].name = newFullName
     addon.Config.db.customNPCs[npcID].dungeon = newDungeon
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "customNPCs", npcID)
 end
 
 -- Update NPC CC effectiveness
@@ -168,16 +171,20 @@ function NPCsDataProvider:updateNPCCC(npcID, npcData, ccIndex, value, dungeonNam
     
     -- Update local data for consistency
     npcData.cc = newCC
+
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "customNPCs", npcID)
 end
 
 -- Reset NPC to database defaults
 function NPCsDataProvider:resetNPC(npcID)
     addon.Config.db.customNPCs[npcID] = nil
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "customNPCs", npcID)
 end
 
 -- Delete custom NPC
 function NPCsDataProvider:deleteCustomNPC(npcID)
     addon.Config.db.customNPCs[npcID] = nil
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "customNPCs", npcID)
 end
 
 -- Add custom NPC
@@ -203,6 +210,8 @@ function NPCsDataProvider:addCustomNPC(npcID, npcName, selectedDungeon, ccEffect
         cc = {ccEffectiveness[1], ccEffectiveness[2], ccEffectiveness[3], ccEffectiveness[4], ccEffectiveness[5]},
         dungeon = selectedDungeon
     }
+
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "customNPCs", npcID)
     
     return fullName
 end

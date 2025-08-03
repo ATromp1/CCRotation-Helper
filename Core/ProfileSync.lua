@@ -18,7 +18,9 @@ local partySyncState = {
     isActive = false,
     leaderName = nil,
     lastActiveProfile = nil,  -- Profile that was active before sync started
-    syncProfileName = "Party Sync"
+    syncProfileName = "Party Sync",
+    isDirty = false, -- Has the current profile had changes since last sync?
+    lastSync = nil
 }
 
 -- Message types
@@ -39,7 +41,12 @@ function addon.ProfileSync:Initialize()
     addon:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupRosterUpdate")
     addon:RegisterEvent("GROUP_JOINED", "OnGroupJoined")
     addon:RegisterEvent("GROUP_LEFT", "OnGroupLeft")
-    
+
+    -- Register for config change events to trigger debounced sync
+    addon.Config:RegisterEventListener("PROFILE_DATA_CHANGED", function()
+        self:DebouncedSync()
+    end)
+
     -- Ensure the permanent Party Sync profile exists
     self:EnsurePartySyncProfileExists()
     
@@ -49,6 +56,12 @@ function addon.ProfileSync:Initialize()
     -- Send ping to detect other addon users when joining a group
     C_Timer.After(2, function()
         self:PingAddonUsers()
+
+        C_Timer.After(2, function()
+            if self:CheckPartySyncConditions() then
+                self:StartPartySync()
+            end
+        end)
     end)
     
     print("|cff00ff00CC Rotation Helper|r: Profile sync initialized")
@@ -352,6 +365,8 @@ end
 
 -- Check if a specific player has the addon
 function addon.ProfileSync:PlayerHasAddon(playerName)
+    if UnitName(playerName) == UnitName("player") then return true end
+
     local info = addonUsers[playerName]
     if not info then return false end
     
@@ -475,7 +490,7 @@ function addon.ProfileSync:CheckPartySyncConditions()
     if not IsInGroup() then return false end
     
     local leader = self:GetGroupLeader()
-    if not leader or leader == UnitName("player") then return false end
+    if not leader then return false end
     
     -- Only sync if leader has the addon
     return self:PlayerHasAddon(leader)
@@ -568,6 +583,8 @@ function addon.ProfileSync:BroadcastProfileAsLeader()
     
     local serialized = AceSerializer:Serialize(MSG_PROFILE_UPDATE, broadcastData)
     local distribution = IsInRaid() and "RAID" or "PARTY"
+    partySyncState.lastSync = GetTime()
+    partySyncState.isDirty = false 
     addon:SendCommMessage(COMM_PREFIX, serialized, distribution)
     
     addon.Config:DebugPrint("Broadcasting profile update to party")
@@ -659,6 +676,8 @@ function addon.ProfileSync:CleanupPartySync()
     partySyncState.isActive = false
     partySyncState.leaderName = nil
     partySyncState.lastActiveProfile = nil
+    partySyncState.isDirty = false
+    partySyncState.lastSync = nil
 end
 
 -- Check if currently in party sync mode
@@ -672,7 +691,9 @@ function addon.ProfileSync:GetPartySyncInfo()
         isActive = partySyncState.isActive,
         leaderName = partySyncState.leaderName,
         lastActiveProfile = partySyncState.lastActiveProfile,
-        syncProfile = partySyncState.syncProfileName
+        syncProfile = partySyncState.syncProfileName,
+        isDirty = partySyncState.isDirty,
+        lastSync = partySyncState.lastSync
     }
 end
 
@@ -684,6 +705,27 @@ end
 -- Get the name of the permanent party sync profile
 function addon.ProfileSync:GetPartySyncProfileName()
     return partySyncState.syncProfileName
+end
+
+-- Sync to party, debounced in order to not spam syncs if multiple sync requests
+-- are made right after eachother
+function addon.ProfileSync:DebouncedSync(delay)
+    if not partySyncState.isActive then return end
+    delay = delay == nil and 10 or delay
+    partySyncState.isDirty = true
+
+    if partySyncState.lastSync == nil or GetTime() - partySyncState.lastSync > (delay * 2) then
+        partySyncState.isDirty = false
+        addon.Config:BroadcastProfileChangeIfLeader()
+    else
+        C_Timer.After(delay, function()
+            -- If we don't need to resync, or it's not active anymore, then return early
+            if not partySyncState.isDirty or not partySyncState.isActive then return end
+
+            partySyncState.isDirty = false
+            addon.Config:BroadcastProfileChangeIfLeader()
+        end)
+    end
 end
 
 -- Check if we need to restore profile after login (in case we logged out during party sync)
