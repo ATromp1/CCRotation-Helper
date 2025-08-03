@@ -89,9 +89,7 @@ function SpellsDataProvider:disableSpell(spellID, spellData)
     }
     
     -- Renumber remaining active spells
-    if addon.UI.RenumberSpellPriorities then
-        addon.UI:RenumberSpellPriorities()
-    end
+    self:renumberSpellPriorities()
     
     self:updateRotationSystem()
 end
@@ -101,9 +99,7 @@ function SpellsDataProvider:enableSpell(spellID)
     addon.Config.db.inactiveSpells[spellID] = nil
     
     -- Renumber all active spells
-    if addon.UI.RenumberSpellPriorities then
-        addon.UI:RenumberSpellPriorities()
-    end
+    self:renumberSpellPriorities()
     
     self:updateRotationSystem()
 end
@@ -116,17 +112,83 @@ function SpellsDataProvider:deleteCustomSpell(spellID)
     self:updateRotationSystem()
 end
 
--- Move spell priority
-function SpellsDataProvider:moveSpellPriority(spellID, spellData, direction, sortedSpells, currentIndex)
-    if addon.UI.MoveSpellPriority then
-        addon.UI:MoveSpellPriority(spellID, spellData, direction, sortedSpells, currentIndex)
+-- Renumber spell priorities to eliminate gaps
+function SpellsDataProvider:renumberSpellPriorities()
+    -- Get all active spells
+    local allSpells = self:getActiveSpells()
+    
+    -- Sort spells by current priority
+    local sortedSpells = {}
+    for spellID, data in pairs(allSpells) do
+        table.insert(sortedSpells, {spellID = spellID, data = data})
     end
+    table.sort(sortedSpells, function(a, b) return a.data.priority < b.data.priority end)
+    
+    -- Renumber priorities starting from 1
+    for i, spell in ipairs(sortedSpells) do
+        local newPriority = i
+        
+        if spell.data.source == "custom" then
+            -- Update custom spell priority
+            addon.Config.db.customSpells[spell.spellID].priority = newPriority
+        else
+            -- Create custom entry to override database spell
+            addon.Config.db.customSpells[spell.spellID] = {
+                name = spell.data.name,
+                ccType = spell.data.ccType,
+                priority = newPriority
+            }
+        end
+    end
+end
+
+-- Move spell priority up or down
+function SpellsDataProvider:moveSpellPriority(spellID, spellData, direction, sortedSpells, currentIndex)
+    local targetIndex = direction == "up" and currentIndex - 1 or currentIndex + 1
+    
+    if targetIndex < 1 or targetIndex > #sortedSpells then
+        return -- Can't move beyond bounds
+    end
+    
+    local targetSpell = sortedSpells[targetIndex]
+    local currentPriority = spellData.priority
+    local targetPriority = targetSpell.data.priority
+    
+    -- Swap priorities
+    if spellData.source == "custom" then
+        -- Update custom spell priority
+        addon.Config.db.customSpells[spellID].priority = targetPriority
+    else
+        -- Create custom entry to override database spell
+        addon.Config.db.customSpells[spellID] = {
+            name = spellData.name,
+            ccType = spellData.ccType,
+            priority = targetPriority
+        }
+    end
+    
+    if targetSpell.data.source == "custom" then
+        -- Update target custom spell priority
+        addon.Config.db.customSpells[targetSpell.spellID].priority = currentPriority
+    else
+        -- Create custom entry to override target database spell
+        addon.Config.db.customSpells[targetSpell.spellID] = {
+            name = targetSpell.data.name,
+            ccType = targetSpell.data.ccType,
+            priority = currentPriority
+        }
+    end
+    
+    -- Immediately update tracked cooldowns cache and rebuild queue
+    self:updateRotationSystem()
 end
 
 -- Update rotation system after data changes
 function SpellsDataProvider:updateRotationSystem()
     if addon.CCRotation then
+        -- Update the tracked cooldowns cache with new priorities
         addon.CCRotation.trackedCooldowns = addon.Config:GetTrackedSpells()
+        -- Force immediate synchronous rebuild instead of debounced rebuild
         if addon.CCRotation.DoRebuildQueue then
             addon.CCRotation:DoRebuildQueue()
         elseif addon.CCRotation.RebuildQueue then

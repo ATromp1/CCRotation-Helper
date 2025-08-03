@@ -179,8 +179,8 @@ function DisabledSpellsList:buildUI()
             else
                 -- Fallback to direct access
                 addon.Config.db.inactiveSpells[spellID] = nil
-                if addon.UI.RenumberSpellPriorities then
-                    addon.UI:RenumberSpellPriorities()
+                if addon.DataProviders and addon.DataProviders.Spells then
+                    addon.DataProviders.Spells:renumberSpellPriorities()
                 end
             end
             
@@ -452,8 +452,8 @@ function TrackedSpellsList:buildUI()
                     priority = spell.data.priority,
                     source = spell.data.source
                 }
-                if addon.UI.RenumberSpellPriorities then
-                    addon.UI:RenumberSpellPriorities()
+                if addon.DataProviders and addon.DataProviders.Spells then
+                    addon.DataProviders.Spells:renumberSpellPriorities()
                 end
             end
             
