@@ -35,15 +35,71 @@ function ProfileManagement:new(container, callbacks)
     local instance = BaseComponent:new(container, callbacks, addon.DataProviders.Profiles)
     setmetatable(instance, {__index = self})
     self:validateImplementation("ProfileManagement")
+    
+    -- Initialize event listeners for group changes
+    instance:Initialize()
+    
     return instance
+end
+
+function ProfileManagement:Initialize()
+    -- Register for group status change events to refresh profile availability
+    -- Using BaseComponent method for standardized registration
+    self:RegisterEventListener("GROUP_STATUS_CHANGED", function(changeType)
+        print("|cff00ff00CC Rotation Helper|r: ProfileManagement received GROUP_STATUS_CHANGED:", changeType)
+        
+        -- Handle profile switching when becoming leader
+        if changeType == "became_leader" then
+            self:handleBecameLeader()
+        else
+            self:refreshUI()
+        end
+    end)
+end
+
+function ProfileManagement:handleBecameLeader()
+    -- Handle profile switching when becoming party leader
+    if addon.ProfileSync and addon.ProfileSync.GetRecommendedLeaderProfile then
+        local recommendedProfile = addon.ProfileSync:GetRecommendedLeaderProfile()
+        local currentProfile = addon.Config:GetCurrentProfileName()
+        
+        if recommendedProfile ~= currentProfile then
+            print("|cff00ff00CC Rotation Helper|r: ProfileManagement switching to recommended profile: " .. recommendedProfile)
+            local success, msg = self.dataProvider:switchProfile(recommendedProfile)
+            if success then
+                print("|cff00ff00CC Rotation Helper|r: " .. msg)
+            else
+                print("|cffff0000CC Rotation Helper|r: " .. msg)
+            end
+        else
+            print("|cff00ff00CC Rotation Helper|r: ProfileManagement staying on current profile: " .. currentProfile)
+        end
+    end
+    
+    -- Refresh UI after profile operations
+    self:refreshUI()
+end
+
+function ProfileManagement:refreshUI()
+    -- Clear current internal container and rebuild UI with updated party sync status
+    if self.internalGroup then
+        self.internalGroup:ReleaseChildren()
+        self:buildInternalUI()
+    end
 end
 
 function ProfileManagement:buildUI()
     -- Create internal container for this component's content
-    local internalGroup = self.AceGUI:Create("SimpleGroup")
-    internalGroup:SetFullWidth(true)
-    internalGroup:SetLayout("Flow")
-    self.container:AddChild(internalGroup)
+    self.internalGroup = self.AceGUI:Create("SimpleGroup")
+    self.internalGroup:SetFullWidth(true)
+    self.internalGroup:SetLayout("Flow")
+    self.container:AddChild(self.internalGroup)
+    
+    -- Build the actual UI content
+    self:buildInternalUI()
+end
+
+function ProfileManagement:buildInternalUI()
     
     local currentProfile = self.dataProvider:getCurrentProfileInfo()
     local partySyncStatus = self.dataProvider:getPartySyncStatus()
@@ -52,7 +108,7 @@ function ProfileManagement:buildUI()
     local currentLabel = self.AceGUI:Create("Label")
     currentLabel:SetText("Current Profile: " .. currentProfile.name)
     currentLabel:SetFullWidth(true)
-    internalGroup:AddChild(currentLabel)
+    self.internalGroup:AddChild(currentLabel)
     
     -- Party sync status display
     local syncStatusLabel = self.AceGUI:Create("Label")
@@ -68,16 +124,16 @@ function ProfileManagement:buildUI()
         syncStatusLabel:SetColor(0.7, 0.7, 0.7)
     end
     syncStatusLabel:SetFullWidth(true)
-    internalGroup:AddChild(syncStatusLabel)
+    self.internalGroup:AddChild(syncStatusLabel)
     
     -- Profile dropdown for switching
-    self:buildProfileSwitcher(currentProfile, internalGroup)
+    self:buildProfileSwitcher(currentProfile, self.internalGroup)
     
     -- Create new profile section
-    self:buildProfileCreator(internalGroup)
+    self:buildProfileCreator(self.internalGroup)
     
     -- Reset and delete buttons
-    self:buildProfileActions(internalGroup)
+    self:buildProfileActions(self.internalGroup)
 end
 
 function ProfileManagement:buildProfileSwitcher(currentProfile, container)
@@ -199,21 +255,47 @@ function ProfileSync:new(container, callbacks)
     local instance = BaseComponent:new(container, callbacks, addon.DataProviders.Profiles)
     setmetatable(instance, {__index = self})
     self:validateImplementation("ProfileSync")
+    
+    -- Initialize event listeners for group changes
+    instance:Initialize()
+    
     return instance
+end
+
+function ProfileSync:Initialize()
+    -- Register for group status change events to refresh sync status display
+    -- Using BaseComponent method for standardized registration
+    self:RegisterEventListener("GROUP_STATUS_CHANGED", function(changeType)
+        self:refreshUI()
+    end)
+end
+
+function ProfileSync:refreshUI()
+    -- Clear current internal container and rebuild UI with updated sync status
+    if self.syncInternalGroup then
+        self.syncInternalGroup:ReleaseChildren()
+        self:buildSyncInternalUI()
+    end
 end
 
 function ProfileSync:buildUI()
     -- Create internal container for this component's content
-    local internalGroup = self.AceGUI:Create("SimpleGroup")
-    internalGroup:SetFullWidth(true)
-    internalGroup:SetLayout("Flow")
-    self.container:AddChild(internalGroup)
+    self.syncInternalGroup = self.AceGUI:Create("SimpleGroup")
+    self.syncInternalGroup:SetFullWidth(true)
+    self.syncInternalGroup:SetLayout("Flow")
+    self.container:AddChild(self.syncInternalGroup)
+    
+    -- Build the actual UI content
+    self:buildSyncInternalUI()
+end
+
+function ProfileSync:buildSyncInternalUI()
     
     -- Info text
     local infoLabel = self.AceGUI:Create("Label")
     infoLabel:SetText("Share profiles with party/raid members who also have CC Rotation Helper installed.")
     infoLabel:SetFullWidth(true)
-    internalGroup:AddChild(infoLabel)
+    self.syncInternalGroup:AddChild(infoLabel)
     
     -- Share current profile button
     local syncCurrentBtn = self.AceGUI:Create("Button")
@@ -232,12 +314,12 @@ function ProfileSync:buildUI()
             print("|cffff0000CC Rotation Helper|r: " .. msg)
         end
     end)
-    internalGroup:AddChild(syncCurrentBtn)
+    self.syncInternalGroup:AddChild(syncCurrentBtn)
     
-    internalGroup:AddChild(addon.UI.Helpers:HorizontalSpacer(40))
+    self.syncInternalGroup:AddChild(addon.UI.Helpers:HorizontalSpacer(40))
     
     -- Profile selection dropdown for sharing specific profiles
-    self:buildSpecificProfileSharer(internalGroup)
+    self:buildSpecificProfileSharer(self.syncInternalGroup)
 end
 
 function ProfileSync:buildSpecificProfileSharer(container)
@@ -289,15 +371,41 @@ function ProfileRequest:new(container, callbacks)
     local instance = BaseComponent:new(container, callbacks, addon.DataProviders.Profiles)
     setmetatable(instance, {__index = self})
     self:validateImplementation("ProfileRequest")
+    
+    -- Initialize event listeners for group changes
+    instance:Initialize()
+    
     return instance
+end
+
+function ProfileRequest:Initialize()
+    -- Register for group status change events to refresh addon user list
+    -- Using BaseComponent method for standardized registration
+    self:RegisterEventListener("GROUP_STATUS_CHANGED", function(changeType)
+        self:refreshUI()
+    end)
+end
+
+function ProfileRequest:refreshUI()
+    -- Clear current internal container and rebuild UI with updated addon users
+    if self.requestInternalGroup then
+        self.requestInternalGroup:ReleaseChildren()
+        self:buildRequestInternalUI()
+    end
 end
 
 function ProfileRequest:buildUI()
     -- Create internal container for this component's content
-    local internalGroup = self.AceGUI:Create("SimpleGroup")
-    internalGroup:SetFullWidth(true)
-    internalGroup:SetLayout("Flow")
-    self.container:AddChild(internalGroup)
+    self.requestInternalGroup = self.AceGUI:Create("SimpleGroup")
+    self.requestInternalGroup:SetFullWidth(true)
+    self.requestInternalGroup:SetLayout("Flow")
+    self.container:AddChild(self.requestInternalGroup)
+    
+    -- Build the actual UI content
+    self:buildRequestInternalUI()
+end
+
+function ProfileRequest:buildRequestInternalUI()
     
     local members = self.dataProvider:getAddonUsers()
     
@@ -316,13 +424,13 @@ function ProfileRequest:buildUI()
         memberList[i] = name
     end
     partyDropdown:SetList(memberList)
-    internalGroup:AddChild(partyDropdown)
+    self.requestInternalGroup:AddChild(partyDropdown)
     
     -- Profile name input
     local profileInput = self.AceGUI:Create("EditBox")
     profileInput:SetLabel("Profile Name")
     profileInput:SetWidth(150)
-    internalGroup:AddChild(profileInput)
+    self.requestInternalGroup:AddChild(profileInput)
     
     -- Request button
     local requestBtn = self.AceGUI:Create("Button")
@@ -355,7 +463,7 @@ function ProfileRequest:buildUI()
             print("|cffff0000CC Rotation Helper|r: " .. msg)
         end
     end)
-    internalGroup:AddChild(requestBtn)
+    self.requestInternalGroup:AddChild(requestBtn)
     
     -- Refresh addon users button
     local refreshBtn = self.AceGUI:Create("Button")
@@ -391,7 +499,7 @@ function ProfileRequest:buildUI()
             print("|cffff0000CC Rotation Helper|r: Profile sync not available")
         end
     end)
-    internalGroup:AddChild(refreshBtn)
+    self.requestInternalGroup:AddChild(refreshBtn)
 end
 
 -- Register components in addon namespace

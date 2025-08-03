@@ -10,8 +10,45 @@ addon.ProfileSync = {}
 local COMM_PREFIX = "CCRH_PROFILE"
 local SYNC_VERSION = 1
 
+-- Timer management utility to reduce nested timer complexity
+local TimerUtil = {
+    -- Create a debounced timer that cancels previous calls
+    createDebounced = function(delay, callback)
+        local timer = nil
+        return function(...)
+            if timer then
+                timer:Cancel()
+            end
+            local args = {...}
+            timer = C_Timer.NewTimer(delay, function()
+                callback(unpack(args))
+            end)
+        end
+    end,
+    
+    -- Create a sequential timer chain
+    createChain = function(delays, callbacks)
+        local function executeChain(index)
+            if index <= #delays then
+                C_Timer.After(delays[index], function()
+                    if callbacks[index] then
+                        callbacks[index]()
+                    end
+                    executeChain(index + 1)
+                end)
+            end
+        end
+        return function()
+            executeChain(1)
+        end
+    end
+}
+
 -- Track which party members have the addon
 local addonUsers = {}
+
+-- Track group composition to detect actual joins/leaves
+local lastGroupComposition = {}
 
 -- Party sync state
 local partySyncState = {
@@ -23,6 +60,11 @@ local partySyncState = {
     lastSync = nil
 }
 
+-- Always track the user's last chosen profile (independent of party sync)
+local userProfileTracking = {
+    lastUserChosenProfile = nil  -- The last profile the user manually selected
+}
+
 -- Message types
 local MSG_PROFILE_REQUEST = "REQUEST"
 local MSG_PROFILE_SHARE = "SHARE"
@@ -31,6 +73,46 @@ local MSG_ADDON_PING = "PING"
 local MSG_ADDON_PONG = "PONG"
 local MSG_LEADER_PROFILE_BROADCAST = "LEADER_BROADCAST"
 local MSG_PROFILE_UPDATE = "PROFILE_UPDATE"
+
+-- Track user's profile choice (called whenever user manually switches profiles)
+function addon.ProfileSync:TrackUserProfileChoice(profileName)
+    if profileName and profileName ~= partySyncState.syncProfileName then
+        userProfileTracking.lastUserChosenProfile = profileName
+        addon.Config.global.lastUserChosenProfile = profileName
+        addon.Config:DebugPrint("Tracked user profile choice:", profileName)
+    end
+end
+
+-- Get user's last chosen profile (with fallbacks)
+function addon.ProfileSync:GetUserLastChosenProfile()
+    print("|cff00ff00CC Rotation Helper|r: GetUserLastChosenProfile - in-memory: " .. tostring(userProfileTracking.lastUserChosenProfile))
+    print("|cff00ff00CC Rotation Helper|r: GetUserLastChosenProfile - saved var: " .. tostring(addon.Config.global.lastUserChosenProfile))
+    
+    -- First try the in-memory tracking
+    if userProfileTracking.lastUserChosenProfile then
+        print("|cff00ff00CC Rotation Helper|r: GetUserLastChosenProfile - using in-memory: " .. userProfileTracking.lastUserChosenProfile)
+        return userProfileTracking.lastUserChosenProfile
+    end
+    
+    -- Then try the saved variable
+    if addon.Config.global.lastUserChosenProfile then
+        userProfileTracking.lastUserChosenProfile = addon.Config.global.lastUserChosenProfile
+        print("|cff00ff00CC Rotation Helper|r: GetUserLastChosenProfile - using saved var: " .. addon.Config.global.lastUserChosenProfile)
+        return addon.Config.global.lastUserChosenProfile
+    end
+    
+    -- Fallback to current profile if it's not the Party Sync profile
+    local currentProfile = addon.Config:GetCurrentProfileName()
+    if currentProfile ~= partySyncState.syncProfileName then
+        self:TrackUserProfileChoice(currentProfile)
+        print("|cff00ff00CC Rotation Helper|r: GetUserLastChosenProfile - using current (fallback): " .. currentProfile)
+        return currentProfile
+    end
+    
+    -- Last resort fallback
+    print("|cff00ff00CC Rotation Helper|r: GetUserLastChosenProfile - using Default (last resort)")
+    return "Default"
+end
 
 -- Initialize ProfileSync module
 function addon.ProfileSync:Initialize()
@@ -50,12 +132,26 @@ function addon.ProfileSync:Initialize()
     -- Ensure the permanent Party Sync profile exists
     self:EnsurePartySyncProfileExists()
     
+    -- Initialize user profile tracking from saved variables
+    if addon.Config.global.lastUserChosenProfile then
+        userProfileTracking.lastUserChosenProfile = addon.Config.global.lastUserChosenProfile
+    end
+    
     -- Check if we need to restore profile after login
     self:CheckProfileRestoreOnLogin()
     
-    -- Send ping to detect other addon users when joining a group
+    -- Initialize group composition tracking and only ping if in group
     C_Timer.After(2, function()
-        self:PingAddonUsers()
+        -- Initialize group composition tracking
+        lastGroupComposition = self:GetGroupComposition()
+        
+        -- Only ping if we're actually in a group with others
+        if IsInGroup() then
+            addon.Config:DebugPrint("Initializing - in group, pinging for addon users")
+            self:PingAddonUsers()
+        else
+            addon.Config:DebugPrint("Initializing - not in group, skipping ping")
+        end
 
         C_Timer.After(2, function()
             if self:CheckPartySyncConditions() then
@@ -102,7 +198,7 @@ end
 -- Request a profile from a party member
 function addon.ProfileSync:RequestProfile(targetPlayer, profileName)
     if not IsInGroup() then
-        return false, "Not in a party or raid"
+        return false, "Not in a party"
     end
     
     if not targetPlayer or targetPlayer == "" then
@@ -129,7 +225,7 @@ end
 -- Share a profile with party members
 function addon.ProfileSync:ShareProfile(profileName, target)
     if not IsInGroup() and not target then
-        return false, "Not in a party/raid and no target specified"
+        return false, "Not in a party and no target specified"
     end
     
     if not profileName or profileName == "" then
@@ -170,11 +266,11 @@ function addon.ProfileSync:ShareProfile(profileName, target)
     }
     
     local serialized = AceSerializer:Serialize(MSG_PROFILE_SHARE, shareData)
-    local distribution = target and "WHISPER" or (IsInRaid() and "RAID" or "PARTY")
+    local distribution = target and "WHISPER" or "PARTY"
     
     addon:SendCommMessage(COMM_PREFIX, serialized, distribution, target)
     
-    local targetStr = target or (IsInRaid() and "raid" or "party")
+    local targetStr = target or "party"
     print("|cff00ff00CC Rotation Helper|r: Shared profile '" .. profileName .. "' with " .. targetStr)
     return true, "Profile shared successfully"
 end
@@ -182,7 +278,7 @@ end
 -- Request profile list from a party member
 function addon.ProfileSync:RequestProfileList(targetPlayer)
     if not IsInGroup() then
-        return false, "Not in a party or raid"
+        return false, "Not in a party"
     end
     
     if not targetPlayer or targetPlayer == "" then
@@ -273,19 +369,69 @@ function addon.ProfileSync:HandleProfileList(sender, data)
     print("|cff00ff00CC Rotation Helper|r: Current: " .. currentProfile)
 end
 
--- Get party members who might have the addon
+-- Get current group composition for change detection (5-man party only)
+function addon.ProfileSync:GetGroupComposition()
+    local composition = {}
+    
+    if IsInGroup() then
+        -- Add player to composition
+        composition[UnitName("player")] = true
+        -- Add party members (max 4 others for 5-man)
+        for i = 1, GetNumSubgroupMembers() do
+            local unit = "party" .. i
+            local name = UnitName(unit)
+            if name then
+                composition[name] = true
+            end
+        end
+    else
+        -- Solo - add just player
+        composition[UnitName("player")] = true
+    end
+    
+    return composition
+end
+
+-- Check for specific group composition changes and return details
+function addon.ProfileSync:GetGroupCompositionChanges()
+    local currentComposition = self:GetGroupComposition()
+    local changes = {
+        hasChanges = false,
+        playersJoined = {},
+        playersLeft = {}
+    }
+    
+    -- Check for players who joined
+    for name, _ in pairs(currentComposition) do
+        if not lastGroupComposition[name] then
+            addon.Config:DebugPrint("Group composition changed: " .. name .. " joined")
+            table.insert(changes.playersJoined, name)
+            changes.hasChanges = true
+        end
+    end
+    
+    -- Check for players who left
+    for name, _ in pairs(lastGroupComposition) do
+        if not currentComposition[name] then
+            addon.Config:DebugPrint("Group composition changed: " .. name .. " left")
+            table.insert(changes.playersLeft, name)
+            changes.hasChanges = true
+        end
+    end
+    
+    -- Update the composition tracking
+    if changes.hasChanges then
+        lastGroupComposition = currentComposition
+    end
+    
+    return changes
+end
+
+-- Get party members who might have the addon (5-man party only)
 function addon.ProfileSync:GetPartyMembers()
     local members = {}
     
-    if IsInRaid() then
-        for i = 1, GetNumGroupMembers() do
-            local unit = "raid" .. i
-            local name = UnitName(unit)
-            if name and name ~= UnitName("player") then
-                table.insert(members, name)
-            end
-        end
-    elseif IsInGroup() then
+    if IsInGroup() then
         for i = 1, GetNumSubgroupMembers() do
             local unit = "party" .. i
             local name = UnitName(unit)
@@ -298,11 +444,11 @@ function addon.ProfileSync:GetPartyMembers()
     return members
 end
 
--- Ping party/raid members to detect who has the addon
+-- Ping all party members to detect who has the addon (5-man party only)
 function addon.ProfileSync:PingAddonUsers()
     if not IsInGroup() then return end
     
-    addon.Config:DebugPrint("Pinging party members to detect addon users")
+    addon.Config:DebugPrint("Pinging all party members to detect addon users")
     
     local pingData = {
         version = SYNC_VERSION,
@@ -310,8 +456,41 @@ function addon.ProfileSync:PingAddonUsers()
     }
     
     local serialized = AceSerializer:Serialize(MSG_ADDON_PING, pingData)
-    local distribution = IsInRaid() and "RAID" or "PARTY"
-    addon:SendCommMessage(COMM_PREFIX, serialized, distribution)
+    addon:SendCommMessage(COMM_PREFIX, serialized, "PARTY")
+end
+
+-- Ping specific players who just joined to detect if they have the addon
+function addon.ProfileSync:PingSpecificPlayers(playerNames)
+    if not IsInGroup() or not playerNames or #playerNames == 0 then return end
+    
+    addon.Config:DebugPrint("Pinging specific players:", table.concat(playerNames, ", "))
+    
+    local pingData = {
+        version = SYNC_VERSION,
+        sender = UnitName("player")
+    }
+    
+    local serialized = AceSerializer:Serialize(MSG_ADDON_PING, pingData)
+    
+    -- Send targeted whispers to each new player
+    for _, playerName in ipairs(playerNames) do
+        if playerName ~= UnitName("player") then  -- Don't ping ourselves
+            addon:SendCommMessage(COMM_PREFIX, serialized, "WHISPER", playerName)
+            addon.Config:DebugPrint("Sent addon detection ping to:", playerName)
+        end
+    end
+end
+
+-- Remove players who left from our addon user tracking
+function addon.ProfileSync:RemovePlayersFromTracking(playerNames)
+    if not playerNames or #playerNames == 0 then return end
+    
+    for _, playerName in ipairs(playerNames) do
+        if addonUsers[playerName] then
+            addon.Config:DebugPrint("Removing", playerName, "from addon user tracking")
+            addonUsers[playerName] = nil
+        end
+    end
 end
 
 -- Handle ping from another player
@@ -390,39 +569,93 @@ end
 function addon:OnGroupRosterUpdate()
     if not addon.ProfileSync then return end
     
-    addon.Config:DebugPrint("Group roster updated - checking party sync conditions")
+    -- Prevent rapid-fire roster updates during leadership transitions
+    if addon.ProfileSync._rosterUpdateInProgress then
+        addon.Config:DebugPrint("Group roster update already in progress, skipping")
+        return
+    end
+    addon.ProfileSync._rosterUpdateInProgress = true
     
-    -- Ping after a short delay to allow the roster to stabilize
-    C_Timer.After(1, function()
-        addon.ProfileSync:PingAddonUsers()
+    addon.Config:DebugPrint("Group roster updated - checking composition changes")
+    
+    -- Get detailed information about composition changes
+    local changes = addon.ProfileSync:GetGroupCompositionChanges()
+    
+    if changes.hasChanges then
+        addon.Config:DebugPrint("Group composition changed - processing joins/leaves")
         
-        -- Check for party sync after addon detection
-        C_Timer.After(3, function()
-            local leader = addon.ProfileSync:GetGroupLeader()
-            
-            -- Handle leadership changes
-            if partySyncState.isActive and leader and leader ~= partySyncState.leaderName then
-                -- If we became the leader, transition to leader mode
-                if leader == UnitName("player") then
-                    addon.ProfileSync:TransitionToLeader()
-                else
-                    -- New leader, restart sync with them if they have addon
-                    if addon.ProfileSync:PlayerHasAddon(leader) then
-                        partySyncState.leaderName = leader
-                        addon.ProfileSync:RequestLeaderProfile(leader)
-                    else
-                        -- New leader doesn't have addon, cleanup
-                        addon.ProfileSync:CleanupPartySync()
-                    end
-                end
-            elseif addon.ProfileSync:CheckPartySyncConditions() then
-                addon.ProfileSync:StartPartySync()
-            elseif partySyncState.isActive and not leader then
-                -- Leader left completely, cleanup
-                addon.ProfileSync:CleanupPartySync()
-            end
+        -- Handle players who left (just remove from tracking)
+        if #changes.playersLeft > 0 then
+            addon.ProfileSync:RemovePlayersFromTracking(changes.playersLeft)
+        end
+        
+        -- Handle players who joined (ping them specifically)
+        if #changes.playersJoined > 0 then
+            -- Ping only the new players after a short delay
+            C_Timer.After(2, function()
+                addon.ProfileSync:PingSpecificPlayers(changes.playersJoined)
+                
+                -- Check for party sync after addon detection
+                C_Timer.After(5, function()
+                    addon.ProfileSync:CheckForLeadershipChanges()
+                end)
+            end)
+        else
+            -- No new players, just check leadership
+            C_Timer.After(2, function()
+                addon.ProfileSync:CheckForLeadershipChanges()
+            end)
+        end
+    else
+        addon.Config:DebugPrint("Group roster updated but composition unchanged - checking leadership only")
+        -- Just check for leadership changes without pinging
+        C_Timer.After(2, function()
+            addon.ProfileSync:CheckForLeadershipChanges()
         end)
+    end
+    
+    -- Fire event for UI components that need to refresh on group changes
+    addon.Config:FireEvent("GROUP_STATUS_CHANGED", "roster_update")
+    
+    -- Clear the update flag after a delay to allow everything to settle
+    C_Timer.After(10, function()
+        addon.ProfileSync._rosterUpdateInProgress = false
     end)
+end
+
+-- Separated leadership change detection logic
+function addon.ProfileSync:CheckForLeadershipChanges()
+    local leader = self:GetGroupLeader()
+    local currentPlayer = UnitName("player")
+    
+    addon.Config:DebugPrint("Leadership check - Current leader:", leader, "Previous leader:", partySyncState.leaderName, "Player:", currentPlayer)
+    
+    -- Handle leadership changes
+    if partySyncState.isActive and leader and leader ~= partySyncState.leaderName then
+        -- If we became the leader, transition to leader mode
+        if leader == UnitName("player") then
+            self:TransitionToLeader()
+            -- Event will be fired after transition completes in TransitionToLeader()
+        else
+            -- New leader, restart sync with them if they have addon
+            if self:PlayerHasAddon(leader) then
+                partySyncState.leaderName = leader
+                self:RequestLeaderProfile(leader)
+            else
+                -- New leader doesn't have addon, cleanup
+                self:CleanupPartySync()
+            end
+            -- Fire event for UI components to refresh after leadership change
+            addon.Config:FireEvent("GROUP_STATUS_CHANGED", "leadership_change")
+        end
+    elseif self:CheckPartySyncConditions() then
+        self:StartPartySync()
+    elseif partySyncState.isActive and not leader then
+        -- Leader left completely, cleanup
+        self:CleanupPartySync()
+        -- Fire event for UI components to refresh after leader departure
+        addon.Config:FireEvent("GROUP_STATUS_CHANGED", "leader_left")
+    end
 end
 
 function addon:OnGroupJoined()
@@ -432,6 +665,9 @@ function addon:OnGroupJoined()
     
     -- Clear existing addon user data since we're in a new group
     addonUsers = {}
+    
+    -- Update group composition tracking
+    lastGroupComposition = addon.ProfileSync:GetGroupComposition()
     
     -- Ping after a short delay
     C_Timer.After(2, function()
@@ -444,6 +680,9 @@ function addon:OnGroupJoined()
             end
         end)
     end)
+    
+    -- Fire event for UI components that need to refresh on group changes
+    addon.Config:FireEvent("GROUP_STATUS_CHANGED", "group_joined")
 end
 
 function addon:OnGroupLeft()
@@ -454,24 +693,23 @@ function addon:OnGroupLeft()
     -- Clear addon user data since we're no longer in a group
     addonUsers = {}
     
+    -- Clear group composition tracking
+    lastGroupComposition = {}
+    
     -- Clean up party sync
     addon.ProfileSync:CleanupPartySync()
+    
+    -- Fire event for UI components that need to refresh on group changes
+    addon.Config:FireEvent("GROUP_STATUS_CHANGED", "group_left")
 end
 
 -- ==============================
 -- PARTY LEADER SYNCHRONIZATION
 -- ==============================
 
--- Get the current party/raid leader
+-- Get the current party leader (5-man party only)
 function addon.ProfileSync:GetGroupLeader()
-    if IsInRaid() then
-        for i = 1, GetNumGroupMembers() do
-            local unit = "raid" .. i
-            if UnitIsGroupLeader(unit) then
-                return UnitName(unit)
-            end
-        end
-    elseif IsInGroup() then
+    if IsInGroup() then
         if UnitIsGroupLeader("player") then
             return UnitName("player")
         end
@@ -582,10 +820,9 @@ function addon.ProfileSync:BroadcastProfileAsLeader()
     }
     
     local serialized = AceSerializer:Serialize(MSG_PROFILE_UPDATE, broadcastData)
-    local distribution = IsInRaid() and "RAID" or "PARTY"
     partySyncState.lastSync = GetTime()
     partySyncState.isDirty = false 
-    addon:SendCommMessage(COMM_PREFIX, serialized, distribution)
+    addon:SendCommMessage(COMM_PREFIX, serialized, "PARTY")
     
     addon.Config:DebugPrint("Broadcasting profile update to party")
 end
@@ -615,6 +852,9 @@ function addon.ProfileSync:HandleProfileUpdate(sender, data)
     
     -- Create or update the party sync profile
     self:CreatePartySyncProfile(data.profileData)
+    
+    -- Fire event to refresh UI components with new sync data
+    addon.Config:FireEvent("PROFILE_SYNC_RECEIVED", data.profileData)
     
     print("|cff00ff00CC Rotation Helper|r: Updated party sync profile from " .. sender)
 end
@@ -707,11 +947,30 @@ function addon.ProfileSync:GetPartySyncProfileName()
     return partySyncState.syncProfileName
 end
 
+-- Get the profile that should be active when becoming leader (for UI components to use)
+function addon.ProfileSync:GetRecommendedLeaderProfile()
+    local currentProfile = addon.Config:GetCurrentProfileName()
+    
+    print("|cff00ff00CC Rotation Helper|r: GetRecommendedLeaderProfile - current: " .. tostring(currentProfile))
+    print("|cff00ff00CC Rotation Helper|r: GetRecommendedLeaderProfile - sync profile: " .. tostring(partySyncState.syncProfileName))
+    
+    -- If we're on Party Sync profile, recommend switching to user's last chosen profile
+    if currentProfile == partySyncState.syncProfileName then
+        local recommended = self:GetUserLastChosenProfile()
+        print("|cff00ff00CC Rotation Helper|r: GetRecommendedLeaderProfile - recommending: " .. tostring(recommended))
+        return recommended
+    end
+    
+    -- Otherwise, stay on current profile
+    print("|cff00ff00CC Rotation Helper|r: GetRecommendedLeaderProfile - staying on current")
+    return currentProfile
+end
+
 -- Sync to party, debounced in order to not spam syncs if multiple sync requests
 -- are made right after eachother
 function addon.ProfileSync:DebouncedSync(delay)
     if not partySyncState.isActive then return end
-    delay = delay == nil and 10 or delay
+    delay = delay == nil and 3 or delay
     partySyncState.isDirty = true
 
     if partySyncState.lastSync == nil or GetTime() - partySyncState.lastSync > (delay * 2) then
@@ -774,21 +1033,39 @@ end
 function addon.ProfileSync:TransitionToLeader()
     if not partySyncState.isActive then return end
     
+    -- Prevent recursive calls during leadership transition
+    if self._transitionInProgress then
+        addon.Config:DebugPrint("Leadership transition already in progress, skipping")
+        return
+    end
+    self._transitionInProgress = true
+    
+    -- Safety timeout to clear flag in case something goes wrong
+    C_Timer.After(10, function()
+        self._transitionInProgress = false
+    end)
+    
     local currentProfile = addon.Config:GetCurrentProfileName()
     
     -- Update leader name
     partySyncState.leaderName = UnitName("player")
     
-    -- If we're currently on the Party Sync profile and have a saved profile, switch back
-    if currentProfile == partySyncState.syncProfileName and partySyncState.lastActiveProfile then
-        addon.Config.database:SetProfile(partySyncState.lastActiveProfile)
-        print("|cff00ff00CC Rotation Helper|r: Became party leader - switched to profile: " .. partySyncState.lastActiveProfile)
-    else
-        print("|cff00ff00CC Rotation Helper|r: Became party leader - staying on current profile: " .. currentProfile)
-    end
+    -- Debug output to see what's happening
+    print("|cff00ff00CC Rotation Helper|r: Leadership transition - current profile: " .. tostring(currentProfile))
+    
+    -- Don't switch profiles directly - let the UI components handle that
+    print("|cff00ff00CC Rotation Helper|r: Became party leader - profile management will be handled by UI components")
+    
+    -- Fire event for UI components to refresh after a tiny delay to ensure profile switch is processed
+    C_Timer.After(0.1, function()
+        print("|cff00ff00CC Rotation Helper|r: Firing GROUP_STATUS_CHANGED event: became_leader")
+        addon.Config:FireEvent("GROUP_STATUS_CHANGED", "became_leader")
+    end)
     
     -- Broadcast our current profile to party members
     C_Timer.After(1, function()
         self:BroadcastProfileAsLeader()
+        -- Clear transition flag after broadcast
+        self._transitionInProgress = false
     end)
 end

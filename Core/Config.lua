@@ -464,6 +464,12 @@ function addon.Config:SwitchProfile(profileName)
     -- Use AceDB's profile switching (this will trigger OnProfileChanged callback)
     -- AceDB will create the profile if it doesn't exist
     self.database:SetProfile(profileName)
+    
+    -- Track this as a user choice for future restoration
+    if addon.ProfileSync and addon.ProfileSync.TrackUserProfileChoice then
+        addon.ProfileSync:TrackUserProfileChoice(profileName)
+    end
+    
     return true, "Switched to profile: " .. profileName
 end
 

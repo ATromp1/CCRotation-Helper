@@ -233,7 +233,29 @@ function TrackedSpellsList:new(container, callbacks, dataProvider)
     local instance = BaseComponent:new(container, callbacks, dataProvider)
     setmetatable(instance, {__index = self})
     instance:validateImplementation("TrackedSpellsList")
+    
+    -- Initialize event listeners for sync updates
+    instance:Initialize()
+    
     return instance
+end
+
+function TrackedSpellsList:Initialize()
+    -- Register for profile sync events to refresh UI when sync data arrives
+    -- Using BaseComponent method for cleaner registration
+    self:RegisterEventListener("PROFILE_SYNC_RECEIVED", function(profileData)
+        if profileData.customSpells or profileData.inactiveSpells then
+            self:refreshUI()
+        end
+    end)
+end
+
+function TrackedSpellsList:refreshUI()
+    -- Clear current container and rebuild UI with updated data
+    if self.container then
+        self.container:ReleaseChildren()
+        self:buildUI()
+    end
 end
 
 function TrackedSpellsList:buildUI()

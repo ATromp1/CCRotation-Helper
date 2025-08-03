@@ -27,7 +27,8 @@ function BaseComponent:new(container, callbacks, dataProvider)
     local instance = {
         container = container,
         callbacks = callbacks or {},
-        dataProvider = dataProvider
+        dataProvider = dataProvider,
+        eventListeners = {}  -- Track registered event listeners for cleanup
     }
     setmetatable(instance, {__index = self})
     return instance
@@ -70,6 +71,34 @@ end
 
 function BaseComponent:buildUI()
     error("buildUI() must be implemented by component subclass")
+end
+
+-- Standardized event registration with automatic cleanup tracking
+function BaseComponent:RegisterEventListener(eventName, callback)
+    if not self.eventListeners[eventName] then
+        self.eventListeners[eventName] = {}
+    end
+    
+    -- Wrap callback to maintain 'self' reference
+    local wrappedCallback = function(...)
+        callback(self, ...)
+    end
+    
+    addon.Config:RegisterEventListener(eventName, wrappedCallback)
+    table.insert(self.eventListeners[eventName], wrappedCallback)
+end
+
+-- Cleanup method to unregister events
+function BaseComponent:Cleanup()
+    if self.eventListeners then
+        for eventName, callbacks in pairs(self.eventListeners) do
+            for _, callback in ipairs(callbacks) do
+                -- Note: We'd need to add UnregisterEventListener to Config
+                -- addon.Config:UnregisterEventListener(eventName, callback)
+            end
+        end
+        self.eventListeners = {}
+    end
 end
 
 function BaseComponent:triggerCallback(callbackName, ...)

@@ -93,7 +93,27 @@ function DungeonNPCListComponent:new(container, callbacks, dataProvider, scrollF
     instance.filterToDungeon = nil
     instance.scrollFrame = scrollFrame
     
+    -- Initialize event listeners for sync updates
+    instance:Initialize()
+    
     return instance
+end
+
+function DungeonNPCListComponent:Initialize()
+    -- Register for profile sync events to refresh UI when sync data arrives
+    addon.Config:RegisterEventListener("PROFILE_SYNC_RECEIVED", function(profileData)
+        if profileData.customNPCs then
+            self:refreshUI()
+        end
+    end)
+end
+
+function DungeonNPCListComponent:refreshUI()
+    -- Clear current container and rebuild UI with updated data
+    if self.container then
+        self.container:ReleaseChildren()
+        self:buildUI()
+    end
 end
 
 function DungeonNPCListComponent:setFilter(filterToDungeon)

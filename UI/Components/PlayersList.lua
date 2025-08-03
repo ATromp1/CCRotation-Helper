@@ -18,7 +18,21 @@ function PriorityPlayersList:new(container, callbacks, dataProvider)
     local instance = BaseComponent:new(container, callbacks, dataProvider)
     setmetatable(instance, {__index = self})
     instance:validateImplementation("PriorityPlayersList")
+    
+    -- Initialize event listeners for sync updates
+    instance:Initialize()
+    
     return instance
+end
+
+function PriorityPlayersList:Initialize()
+    -- Register for profile sync events to refresh UI when sync data arrives
+    -- Using BaseComponent method for standardized registration
+    self:RegisterEventListener("PROFILE_SYNC_RECEIVED", function(profileData)
+        if profileData.priorityPlayers then
+            self:refreshDisplay()
+        end
+    end)
 end
 
 function PriorityPlayersList:buildUI()
