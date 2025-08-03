@@ -202,8 +202,10 @@ function DisabledSpellsList:buildUI()
         inactiveSpellLine:SetWidth(350)
         inactiveRowGroup:AddChild(inactiveSpellLine)
         
-        -- Delete button (permanent removal) - only for custom spells
-        if spellData.source == "custom" then
+        -- Delete button (permanent removal) - only for truly custom spells
+        -- A spell is truly custom if it doesn't exist in the default database
+        local isCustomSpell = (addon.Database.defaultSpells[spellID] == nil)
+        if isCustomSpell then
             local deleteButton = self.AceGUI:Create("Button")
             deleteButton:SetText("Delete")
             deleteButton:SetWidth(80)
@@ -349,14 +351,7 @@ function TrackedSpellsList:buildUI()
         else
             upButton:SetCallback("OnClick", function()
                 -- Use data provider for spell operations
-                if self.dataProvider then
-                    self.dataProvider:moveSpellPriority(spell.spellID, spell.data, "up", sortedSpells, i)
-                else
-                    -- Fallback to direct access
-                    if addon.UI.MoveSpellPriority then
-                        addon.UI:MoveSpellPriority(spell.spellID, spell.data, "up", sortedSpells, i)
-                    end
-                end
+                self.dataProvider:moveSpellPriority(spell.spellID, spell.data, "up", sortedSpells, i)
                 
                 -- Trigger callbacks
                 self:triggerCallback('onSpellMoved', spell.spellID, "up")
@@ -373,14 +368,7 @@ function TrackedSpellsList:buildUI()
         else
             downButton:SetCallback("OnClick", function()
                 -- Use data provider for spell operations
-                if self.dataProvider then
-                    self.dataProvider:moveSpellPriority(spell.spellID, spell.data, "down", sortedSpells, i)
-                else
-                    -- Fallback to direct access
-                    if addon.UI.MoveSpellPriority then
-                        addon.UI:MoveSpellPriority(spell.spellID, spell.data, "down", sortedSpells, i)
-                    end
-                end
+                self.dataProvider:moveSpellPriority(spell.spellID, spell.data, "down", sortedSpells, i)
                 
                 -- Trigger callbacks
                 self:triggerCallback('onSpellMoved', spell.spellID, "down")

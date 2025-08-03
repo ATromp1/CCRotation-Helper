@@ -14,6 +14,26 @@ function IconRenderer:new(iconPool, glowManager)
     return instance
 end
 
+-- Helper method to clean up excess main icons
+function IconRenderer:cleanupExcessMainIcons(startIndex, activeIcons)
+    for i = startIndex, #activeIcons do
+        if activeIcons[i] then
+            self.iconPool:releaseMainIcon(activeIcons[i])
+            activeIcons[i] = nil
+        end
+    end
+end
+
+-- Helper method to clean up excess unavailable icons
+function IconRenderer:cleanupExcessUnavailableIcons(startIndex, activeUnavailableIcons)
+    for i = startIndex, #activeUnavailableIcons do
+        if activeUnavailableIcons[i] then
+            self.iconPool:releaseUnavailableIcon(activeUnavailableIcons[i])
+            activeUnavailableIcons[i] = nil
+        end
+    end
+end
+
 -- Update existing icons without recreating them
 function IconRenderer:updateMainIcons(queue, now, mainFrame)
     local config = addon.Config
@@ -21,12 +41,8 @@ function IconRenderer:updateMainIcons(queue, now, mainFrame)
     local spacing = config:Get("spacing")
     local activeIcons = self.iconPool:getActiveMainIcons()
     
-    -- Hide icons that are no longer needed
-    for i = math.min(#queue, maxIcons) + 1, #activeIcons do
-        if activeIcons[i] then
-            activeIcons[i]:Hide()
-        end
-    end
+    -- Release icons that are no longer needed
+    self:cleanupExcessMainIcons(math.min(#queue, maxIcons) + 1, activeIcons)
     
     -- Update or create icons for current queue
     for i = 1, math.min(#queue, maxIcons) do
@@ -68,12 +84,8 @@ function IconRenderer:updateUnavailableIcons(unavailableQueue, now, mainFrame)
     local activeUnavailableIcons = self.iconPool:getActiveUnavailableIcons()
     
     if not config:Get("showUnavailableQueue") or not unavailableQueue or #unavailableQueue == 0 then
-        -- Hide all unavailable icons if not showing queue
-        for i = 1, #activeUnavailableIcons do
-            if activeUnavailableIcons[i] then
-                activeUnavailableIcons[i]:Hide()
-            end
-        end
+        -- Release all unavailable icons if not showing queue
+        self:cleanupExcessUnavailableIcons(1, activeUnavailableIcons)
         return
     end
     
@@ -97,12 +109,8 @@ function IconRenderer:updateUnavailableIcons(unavailableQueue, now, mainFrame)
             end
         end
         
-        -- Hide icons that are no longer needed
-        for i = validIconCount + 1, #activeUnavailableIcons do
-            if activeUnavailableIcons[i] then
-                activeUnavailableIcons[i]:Hide()
-            end
-        end
+        -- Release icons that are no longer needed
+        self:cleanupExcessUnavailableIcons(validIconCount + 1, activeUnavailableIcons)
         
         local iconIndex = 0
         for i = 1, #unavailableQueue do
@@ -154,6 +162,11 @@ function IconRenderer:updateIconDisplay(icon, iconIndex, cooldownData, needsUpda
     if needsUpdate then
         icon.displayTexture:SetTexture(icon.spellInfo.iconID)
         icon.displayTexture:Show()
+        
+        -- Clear any lingering cooldown animation when spell changes
+        icon.cooldown:Clear()
+        icon.cooldown:Hide()
+        icon.cooldownEndTime = nil
     end
     
     -- Always update effectiveness state

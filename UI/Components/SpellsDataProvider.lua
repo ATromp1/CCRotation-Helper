@@ -96,10 +96,39 @@ end
 
 -- Enable spell
 function SpellsDataProvider:enableSpell(spellID)
+    local disabledSpellData = addon.Config.db.inactiveSpells[spellID]
     addon.Config.db.inactiveSpells[spellID] = nil
     
-    -- Renumber all active spells
-    self:renumberSpellPriorities()
+    -- Find the highest current priority among active spells
+    local highestPriority = 0
+    local allActiveSpells = self:getActiveSpells()
+    for _, spellData in pairs(allActiveSpells) do
+        if spellData.priority > highestPriority then
+            highestPriority = spellData.priority
+        end
+    end
+    
+    -- Assign the enabled spell a priority higher than the current highest
+    local newPriority = highestPriority + 1
+    
+    -- If it's a database spell being re-enabled, create/update custom entry to set priority
+    if disabledSpellData and addon.Database.defaultSpells[spellID] then
+        -- Database spell - create custom override for priority
+        addon.Config.db.customSpells[spellID] = addon.Config.db.customSpells[spellID] or {}
+        addon.Config.db.customSpells[spellID].priority = newPriority
+        -- Preserve any existing custom name/ccType if they exist
+        if not addon.Config.db.customSpells[spellID].name then
+            addon.Config.db.customSpells[spellID].name = disabledSpellData.name
+        end
+        if not addon.Config.db.customSpells[spellID].ccType then
+            addon.Config.db.customSpells[spellID].ccType = disabledSpellData.ccType
+        end
+    elseif disabledSpellData then
+        -- Custom spell - update priority in customSpells
+        if addon.Config.db.customSpells[spellID] then
+            addon.Config.db.customSpells[spellID].priority = newPriority
+        end
+    end
     
     self:onConfigChanged()
 end
@@ -150,33 +179,30 @@ function SpellsDataProvider:moveSpellPriority(spellID, spellData, direction, sor
         return -- Can't move beyond bounds
     end
     
-    local targetSpell = sortedSpells[targetIndex]
-    local currentPriority = spellData.priority
-    local targetPriority = targetSpell.data.priority
-    
-    -- Swap priorities
-    if spellData.source == "custom" then
-        -- Update custom spell priority
-        addon.Config.db.customSpells[spellID].priority = targetPriority
-    else
-        -- Create custom entry to override database spell
-        addon.Config.db.customSpells[spellID] = {
-            name = spellData.name,
-            ccType = spellData.ccType,
-            priority = targetPriority
-        }
+    -- Create a new priority ordering by reordering the entire list
+    local newOrder = {}
+    for i, spell in ipairs(sortedSpells) do
+        newOrder[i] = spell
     end
     
-    if targetSpell.data.source == "custom" then
-        -- Update target custom spell priority
-        addon.Config.db.customSpells[targetSpell.spellID].priority = currentPriority
-    else
-        -- Create custom entry to override target database spell
-        addon.Config.db.customSpells[targetSpell.spellID] = {
-            name = targetSpell.data.name,
-            ccType = targetSpell.data.ccType,
-            priority = currentPriority
-        }
+    -- Swap positions in the array
+    newOrder[currentIndex], newOrder[targetIndex] = newOrder[targetIndex], newOrder[currentIndex]
+    
+    -- Now assign sequential priorities based on the new order
+    for i, spell in ipairs(newOrder) do
+        local newPriority = i
+        
+        if spell.data.source == "custom" then
+            -- Update custom spell priority
+            addon.Config.db.customSpells[spell.spellID].priority = newPriority
+        else
+            -- Create custom entry to override database spell
+            addon.Config.db.customSpells[spell.spellID] = {
+                name = spell.data.name,
+                ccType = spell.data.ccType,
+                priority = newPriority
+            }
+        end
     end
     
     -- Immediately update tracked cooldowns cache and rebuild queue
@@ -196,11 +222,22 @@ function SpellsDataProvider:updateRotationSystem()
     if addon.CCRotation then
         -- Update the tracked cooldowns cache with new priorities
         addon.CCRotation.trackedCooldowns = addon.Config:GetTrackedSpells()
+
+        -- Clear existing queues and spell cooldowns to force a fresh rebuild
+        addon.CCRotation.cooldownQueue = {}
+        addon.CCRotation.unavailableQueue = {}
+        addon.CCRotation.spellCooldowns = {}
+        
         -- Force immediate synchronous rebuild instead of debounced rebuild
         if addon.CCRotation.DoRebuildQueue then
             addon.CCRotation:DoRebuildQueue()
         elseif addon.CCRotation.RebuildQueue then
             addon.CCRotation:RebuildQueue()
+        end
+        
+        -- Force immediate UI update with the newly rebuilt queues
+        if addon.UI and addon.UI.UpdateDisplay then
+            addon.UI:UpdateDisplay(addon.CCRotation.cooldownQueue, addon.CCRotation.unavailableQueue)
         end
     end
 end
