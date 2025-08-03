@@ -212,7 +212,7 @@ function IconRenderer:updateIconDisplay(icon, iconIndex, cooldownData, needsUpda
     end
     
     -- Add status indicators for dead/out-of-range
-    self:updateStatusIndicators(icon, cooldownData)
+    self:updateStatusIndicators(icon, cooldownData, now)
     
     -- Position and size icon using individual size
     local iconSize = config:Get("iconSize" .. iconIndex)
@@ -328,7 +328,7 @@ function IconRenderer:updateIconCooldown(icon, cooldownData, now, config, isUnav
 end
 
 -- Update status indicators for dead/out-of-range players
-function IconRenderer:updateStatusIndicators(icon, cooldownData)
+function IconRenderer:updateStatusIndicators(icon, cooldownData, now)
     if not icon or not cooldownData then return end
     
     -- Calculate indicator size (20% of icon size)
@@ -356,7 +356,8 @@ function IconRenderer:updateStatusIndicators(icon, cooldownData)
     end
     
     -- Desaturate icon if any status indicator is shown OR if not effective
-    local shouldDesaturate = hasStatusIndicator or (not cooldownData.isEffective)
+    local isOnCooldown = (cooldownData.charges or 0) == 0 or cooldownData.expirationTime > now
+    local shouldDesaturate = hasStatusIndicator or (not cooldownData.isEffective) or isOnCooldown
     icon.displayTexture:SetDesaturated(shouldDesaturate)
 end
 

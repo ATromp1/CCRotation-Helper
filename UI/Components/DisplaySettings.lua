@@ -96,6 +96,19 @@ function DisplaySettings:buildUI()
         }
     )
     cooldownTextControl:buildUI()
+
+    -- Desaturate icon if spell is on cooldown
+    local desaturateIconControl = addon.Components.CheckboxControl:new(
+        internalGroup,
+        "Desaturate icons if spell is on cooldown",
+        "desaturateOnCooldown",
+        {
+            onValueChanged = function(configKey, value)
+                self.dataProvider:refreshDisplay()
+            end
+        }
+    )
+    desaturateIconControl:buildUI()
     
     -- Show tooltips on hover
     local tooltipControl = addon.Components.CheckboxControl:new(
