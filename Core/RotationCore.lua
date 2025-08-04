@@ -122,6 +122,8 @@ end
 function CCRotation:OnEvent(event, ...)
     if event == "PLAYER_ENTERING_WORLD" or event == "CHALLENGE_MODE_START" then
         self:RebuildQueue()
+        -- Fire location change event for UI components
+        self:FireEvent("LOCATION_CHANGED")
     elseif event == "GROUP_ROSTER_UPDATE" then
         self:RefreshGUIDToUnit()
         self:RebuildQueue()
@@ -583,23 +585,41 @@ function CCRotation:HasQueueChanged()
         return true
     end
     
-    -- Check if any items changed
+    -- Check if any items changed (with improved comparison)
     local now = GetTime()
+    local hasSignificantChange = false
+    
     for i, cd in ipairs(self.cooldownQueue) do
         local last = self.lastQueue[i]
-        if not last or 
-           cd.GUID ~= last.GUID or 
-           cd.spellID ~= last.spellID or
-           math.abs(cd.expirationTime - last.expirationTime) > 0.1 then
-            self:SaveCurrentQueue()
-            return true
+        if not last then
+            hasSignificantChange = true
+            break
         end
         
-        -- Force update if ability is about to be ready (within 2 seconds)
-        local timeLeft = cd.expirationTime - now
-        if timeLeft <= 2 and timeLeft >= 0 then
-            return true
+        -- Check for GUID or spell changes (always significant)
+        if cd.GUID ~= last.GUID or cd.spellID ~= last.spellID then
+            hasSignificantChange = true
+            break
         end
+        
+        -- Check cooldown time changes (only if > 1 second difference)
+        if math.abs(cd.expirationTime - last.expirationTime) > 1.0 then
+            hasSignificantChange = true
+            break
+        end
+        
+        -- Check if ability state changed (ready -> not ready or vice versa)
+        local wasReady = (last.charges or 0) > 0 or last.expirationTime <= (last.checkTime or now)
+        local isReady = (cd.charges or 0) > 0 or cd.expirationTime <= now
+        if wasReady ~= isReady then
+            hasSignificantChange = true
+            break
+        end
+    end
+    
+    if hasSignificantChange then
+        self:SaveCurrentQueue()
+        return true
     end
     
     return false
@@ -607,12 +627,15 @@ end
 
 -- Save current queue state for comparison
 function CCRotation:SaveCurrentQueue()
+    local now = GetTime()
     self.lastQueue = {}
     for i, cd in ipairs(self.cooldownQueue) do
         self.lastQueue[i] = {
             GUID = cd.GUID,
             spellID = cd.spellID,
-            expirationTime = cd.expirationTime
+            expirationTime = cd.expirationTime,
+            charges = cd.charges,
+            checkTime = now
         }
     end
 end

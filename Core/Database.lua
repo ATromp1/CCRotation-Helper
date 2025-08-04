@@ -319,36 +319,29 @@ function addon.Database:GetCurrentDungeonInfo()
     
     -- Only consider party dungeons and raids
     if instanceType ~= "party" and instanceType ~= "raid" then
-        return nil, nil, instanceType
+        return nil, instanceType
     end
     
     if not name or name == "" then
-        return nil, nil, instanceType
+        return nil, instanceType
     end
     
-    -- Try to match against our known dungeons
-    for abbrev, fullName in pairs(self.dungeonNames) do
+    -- Check if this is a known dungeon (for future features)
+    local isKnownDungeon = false
+    for _, fullName in pairs(self.dungeonNames) do
         if name == fullName then
-            return abbrev, fullName, instanceType
+            isKnownDungeon = true
+            break
         end
     end
     
-    -- Check for partial matches (in case of different naming)
-    local nameLower = name:lower()
-    for abbrev, fullName in pairs(self.dungeonNames) do
-        local fullNameLower = fullName:lower()
-        if nameLower:find(fullNameLower, 1, true) or fullNameLower:find(nameLower, 1, true) then
-            return abbrev, fullName, instanceType
-        end
-    end
-    
-    -- Return the raw name if not in our database (unknown dungeon)
-    return nil, name, instanceType
+    -- Return dungeon name and instance type
+    return name, instanceType, isKnownDungeon
 end
 
 -- Get NPCs that belong to the current dungeon
 function addon.Database:GetCurrentDungeonNPCs()
-    local abbrev, dungeonName, instanceType = self:GetCurrentDungeonInfo()
+    local dungeonName, instanceType, isKnownDungeon = self:GetCurrentDungeonInfo()
     if not dungeonName then
         return {}
     end
@@ -392,6 +385,6 @@ end
 
 -- Check if we're currently in a dungeon that has NPCs in our database
 function addon.Database:IsInKnownDungeon()
-    local abbrev, dungeonName, instanceType = self:GetCurrentDungeonInfo()
-    return dungeonName ~= nil and abbrev ~= nil
+    local dungeonName, instanceType, isKnownDungeon = self:GetCurrentDungeonInfo()
+    return dungeonName ~= nil and isKnownDungeon
 end

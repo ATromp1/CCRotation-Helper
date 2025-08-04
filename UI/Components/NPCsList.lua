@@ -27,22 +27,44 @@ function CurrentLocationComponent:new(container, callbacks, dataProvider)
     -- Initialize state
     instance.showOnlyCurrentDungeon = false
     
+    -- Initialize event listeners
+    instance:Initialize()
+    
     return instance
+end
+
+function CurrentLocationComponent:Initialize()
+    -- Register for location change events to refresh UI when location changes
+    addon.CCRotation:RegisterEventListener("LOCATION_CHANGED", function()
+        self:refreshUI()
+    end)
+end
+
+function CurrentLocationComponent:refreshUI()
+    -- Clear current container and rebuild UI with updated location data
+    if self.container then
+        self.container:ReleaseChildren()
+        self:buildUI()
+    end
 end
 
 function CurrentLocationComponent:buildUI()
     -- Get current dungeon info from data provider
-    local currentAbbrev, currentDungeonName, instanceType = self.dataProvider and 
-        self.dataProvider:getCurrentDungeonInfo() or addon.Database:GetCurrentDungeonInfo()
+    local currentDungeonName, instanceType, isKnownDungeon
+    if self.dataProvider then
+        currentDungeonName, instanceType, isKnownDungeon = self.dataProvider:getCurrentDungeonInfo()
+    else
+        currentDungeonName, instanceType, isKnownDungeon = addon.Database:GetCurrentDungeonInfo()
+    end
     
     -- Current dungeon status label
     local dungeonStatusLabel = self.AceGUI:Create("Label")
     dungeonStatusLabel:SetWidth(400)
     if currentDungeonName then
-        if currentAbbrev then
-            dungeonStatusLabel:SetText("|cff00ff00Currently in: " .. currentDungeonName .. " (" .. instanceType .. ")|r")
+        if isKnownDungeon then
+            dungeonStatusLabel:SetText("|cff00ff00Currently in: " .. currentDungeonName .. " (" .. (instanceType or "unknown") .. ")|r")
         else
-            dungeonStatusLabel:SetText("|cffff8800Currently in: " .. currentDungeonName .. " (" .. instanceType .. ") - Unknown dungeon|r")
+            dungeonStatusLabel:SetText("|cffff8800Currently in: " .. currentDungeonName .. " (" .. (instanceType or "unknown") .. ") - Unknown dungeon|r")
         end
     else
         if instanceType == "none" then
@@ -54,7 +76,7 @@ function CurrentLocationComponent:buildUI()
     self.container:AddChild(dungeonStatusLabel)
     
     -- Current dungeon filter toggle (only show if in a known dungeon)
-    if currentAbbrev and currentDungeonName then
+    if isKnownDungeon and currentDungeonName then
         local filterCurrentButton = self.AceGUI:Create("Button")
         filterCurrentButton:SetText(self.showOnlyCurrentDungeon and "Show All Dungeons" or "Show Only Current Dungeon")
         filterCurrentButton:SetWidth(180)
@@ -463,7 +485,7 @@ end
 
 function AddNPCComponent:buildUI()
     -- Get current dungeon info for auto-selection
-    local currentAbbrev, currentDungeonName, instanceType = self.dataProvider and 
+    local currentDungeonName, instanceType, isKnownDungeon = self.dataProvider and 
         self.dataProvider:getCurrentDungeonInfo() or addon.Database:GetCurrentDungeonInfo()
     
     -- Lookup from target button
@@ -504,7 +526,7 @@ function AddNPCComponent:buildUI()
     newNPCDungeonDropdown:SetList(dungeonList)
     
     -- Auto-select current dungeon if we're in one
-    if currentAbbrev and currentDungeonName then
+    if isKnownDungeon and currentDungeonName then
         newNPCDungeonDropdown:SetValue(currentDungeonName)
     else
         newNPCDungeonDropdown:SetValue("Other")
@@ -576,11 +598,10 @@ function AddNPCComponent:setupTargetLookup(targetButton)
         
         -- If no dungeon detected from name, use current location
         if not dungeonName or dungeonName == "Other" then
-            local currentAbbrev, currentDungeonName, instanceType = self.dataProvider and 
+            local currentDungeonName, instanceType, isKnownDungeon = self.dataProvider and 
                 self.dataProvider:getCurrentDungeonInfo() or addon.Database:GetCurrentDungeonInfo()
-            if currentDungeonName and currentAbbrev then
+            if currentDungeonName and isKnownDungeon then
                 dungeonName = currentDungeonName
-                abbrev = currentAbbrev
                 mobName = targetInfo.name -- Use full name since no prefix detected
                 self.statusLabel:SetText("|cff00ffff Target loaded from current dungeon: " .. targetInfo.name .. " (ID: " .. targetInfo.id .. ")|r")
             end
@@ -723,9 +744,9 @@ function AddNPCComponent:clearForm()
     self.npcNameEdit:SetText("")
     
     -- Reset to current dungeon if we're in one, otherwise "Other"
-    local currentAbbrev, currentDungeonName, instanceType = self.dataProvider and 
+    local currentDungeonName, instanceType, isKnownDungeon = self.dataProvider and 
         self.dataProvider:getCurrentDungeonInfo() or addon.Database:GetCurrentDungeonInfo()
-    if currentAbbrev and currentDungeonName then
+    if isKnownDungeon and currentDungeonName then
         self.newNPCDungeonDropdown:SetValue(currentDungeonName)
     else
         self.newNPCDungeonDropdown:SetValue("Other")

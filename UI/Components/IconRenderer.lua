@@ -16,26 +16,30 @@ end
 
 -- Helper method to clean up excess main icons
 function IconRenderer:cleanupExcessMainIcons(startIndex, activeIcons)
-    for i = startIndex, #activeIcons do
+    -- Release excess icons in reverse order
+    for i = #activeIcons, startIndex, -1 do
         if activeIcons[i] then
             self.iconPool:releaseMainIcon(activeIcons[i])
-            activeIcons[i] = nil
+            table.remove(activeIcons, i)
         end
     end
 end
 
 -- Helper method to clean up excess unavailable icons
 function IconRenderer:cleanupExcessUnavailableIcons(startIndex, activeUnavailableIcons)
-    for i = startIndex, #activeUnavailableIcons do
+    -- Release excess icons in reverse order
+    for i = #activeUnavailableIcons, startIndex, -1 do
         if activeUnavailableIcons[i] then
             self.iconPool:releaseUnavailableIcon(activeUnavailableIcons[i])
-            activeUnavailableIcons[i] = nil
+            table.remove(activeUnavailableIcons, i)
         end
     end
 end
 
 -- Helper method to clean up stale icons that are no longer in their respective queue
 function IconRenderer:cleanupStaleIcons(activeIcons, queue, maxQueueSize, iconType)
+    local indicesToRemove = {}
+    
     for i = 1, #activeIcons do
         local icon = activeIcons[i]
         if icon and icon.queueData then
@@ -47,16 +51,21 @@ function IconRenderer:cleanupStaleIcons(activeIcons, queue, maxQueueSize, iconTy
                     break
                 end
             end
-            -- If this icon's data is no longer in the queue, release it
+            -- If this icon's data is no longer in the queue, mark for removal
             if not stillInQueue then
                 if iconType == "main" then
                     self.iconPool:releaseMainIcon(icon)
                 else
                     self.iconPool:releaseUnavailableIcon(icon)
                 end
-                activeIcons[i] = nil
+                table.insert(indicesToRemove, i)
             end
         end
+    end
+    
+    -- Remove indices in reverse order to maintain array integrity
+    for i = #indicesToRemove, 1, -1 do
+        table.remove(activeIcons, indicesToRemove[i])
     end
 end
 

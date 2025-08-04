@@ -330,15 +330,21 @@ function IconPool:releaseMainIcon(icon)
         icon.unit = nil
         icon.queueData = nil
         
-        table.insert(self.mainIconPool, icon)
-        
-        -- Remove from active icons
-        for i, activeIcon in ipairs(self.activeMainIcons) do
-            if activeIcon == icon then
-                table.remove(self.activeMainIcons, i)
+        -- Only add to pool if not already there
+        local alreadyInPool = false
+        for _, poolIcon in ipairs(self.mainIconPool) do
+            if poolIcon == icon then
+                alreadyInPool = true
                 break
             end
         end
+        
+        if not alreadyInPool then
+            table.insert(self.mainIconPool, icon)
+        end
+        
+        -- Remove from active icons - let caller handle this to avoid race conditions
+        -- This will be handled by cleanup functions in IconRenderer
     end
 end
 
@@ -356,15 +362,21 @@ function IconPool:releaseUnavailableIcon(icon)
         icon.unit = nil
         icon.queueData = nil
         
-        table.insert(self.unavailableIconPool, icon)
-        
-        -- Remove from active unavailable icons
-        for i, activeIcon in ipairs(self.activeUnavailableIcons) do
-            if activeIcon == icon then
-                table.remove(self.activeUnavailableIcons, i)
+        -- Only add to pool if not already there
+        local alreadyInPool = false
+        for _, poolIcon in ipairs(self.unavailableIconPool) do
+            if poolIcon == icon then
+                alreadyInPool = true
                 break
             end
         end
+        
+        if not alreadyInPool then
+            table.insert(self.unavailableIconPool, icon)
+        end
+        
+        -- Remove from active icons - let caller handle this to avoid race conditions
+        -- This will be handled by cleanup functions in IconRenderer
     end
 end
 
