@@ -230,23 +230,47 @@ function IconPool:setupUnavailableIconEvents(icon)
         end
     end)
     
-    -- Pass through drag events to main frame
+    -- Pass through drag events - handle both main frame and unavailable container
     icon:RegisterForDrag("LeftButton")
     icon:SetScript("OnDragStart", function(self)
         if IsShiftKeyDown() and not addon.Config:Get("anchorLocked") then
-            -- Pass drag to main frame: icon -> unavailableContainer -> mainFrame
-            local mainFrame = self:GetParent():GetParent()
-            if mainFrame then
-                mainFrame:StartMoving()
+            local config = addon.Config
+            local container = self:GetParent() -- unavailableContainer
+            local mainFrame = container:GetParent() -- mainFrame
+            
+            -- Check if we're in independent positioning mode
+            if config:Get("unavailableQueuePositioning") == "independent" then
+                -- Drag the unavailable container independently
+                container:StartMoving()
+                self.isDraggingUnavailable = true
+            else
+                -- Drag the main frame (default behavior)
+                if mainFrame then
+                    mainFrame:StartMoving()
+                end
             end
         end
     end)
     
     icon:SetScript("OnDragStop", function(self)
-        local mainFrame = self:GetParent():GetParent()
-        if mainFrame then
-            mainFrame:StopMovingOrSizing()
-            mainFrame:SetUserPlaced(true)
+        local config = addon.Config
+        local container = self:GetParent() -- unavailableContainer
+        local mainFrame = container:GetParent() -- mainFrame
+        
+        if self.isDraggingUnavailable then
+            -- Save independent position
+            container:StopMovingOrSizing()
+            local point, _, _, x, y = container:GetPoint()
+            config:Set("unavailableQueueX", x)
+            config:Set("unavailableQueueY", y)
+            config:Set("unavailableQueueAnchorPoint", point)
+            self.isDraggingUnavailable = nil
+        else
+            -- Stop main frame dragging
+            if mainFrame then
+                mainFrame:StopMovingOrSizing()
+                mainFrame:SetUserPlaced(true)
+            end
         end
     end)
 end

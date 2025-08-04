@@ -83,6 +83,13 @@ local defaults = {
         unavailableIconSize = 24,
         unavailableSpacing = 2,
         unavailableQueueOffset = 5,
+        
+        -- Unavailable queue positioning
+        unavailableQueuePositioning = "relative", -- "relative" or "independent"
+        unavailableQueueX = 0,
+        unavailableQueueY = -30,
+        unavailableQueueAnchorPoint = "TOP",
+        unavailableQueueRelativePoint = "BOTTOM",
 
         -- Display options
         showSpellName = true,

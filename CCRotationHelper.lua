@@ -199,6 +199,19 @@ SlashCmdList["CCROTATION"] = function(msg)
         else
             print("  ProfileSync not available")
         end
+    elseif command == "preview" then
+        -- Toggle config preview manually
+        if addon.UI then
+            if addon.UI.mainFrame and addon.UI.mainFrame.mainPreview and addon.UI.mainFrame.mainPreview:IsShown() then
+                addon.UI:hideConfigPreview()
+                print("|cff00ff00CC Rotation Helper|r: Config preview hidden")
+            else
+                addon.UI:showConfigPreview()
+                print("|cff00ff00CC Rotation Helper|r: Config preview shown")
+            end
+        else
+            print("|cff00ff00CC Rotation Helper|r: UI not initialized")
+        end
     else
         print("|cff00ff00CC Rotation Helper|r Commands:")
         print("  /ccr config - Open configuration")
@@ -212,6 +225,7 @@ SlashCmdList["CCROTATION"] = function(msg)
         print("  /ccr sync [profilename] - Share profile with party")
         print("  /ccr request PlayerName ProfileName - Request profile from player")
         print("  /ccr debug - Toggle debug mode")
+        print("  /ccr preview - Toggle config positioning preview")
         print("  /ccr resetdb - Reset corrupted database (WARNING: loses all settings)")
     end
 end

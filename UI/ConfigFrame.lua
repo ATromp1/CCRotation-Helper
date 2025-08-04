@@ -7,6 +7,12 @@ local AceGUI = LibStub("AceGUI-3.0")
 function addon.UI:CreateConfigFrame()
     if self.configFrame then 
         self.configFrame:Show()
+        -- Show preview when reopening existing config frame
+        C_Timer.After(0.1, function()
+            if addon.UI and addon.UI.showConfigPreview then
+                addon.UI:showConfigPreview()
+            end
+        end)
         return 
     end
     
@@ -76,7 +82,18 @@ function addon.UI:CreateConfigFrame()
     
     -- Handle frame closing
     frame:SetCallback("OnClose", function(widget)
+        -- Hide config preview when closing
+        if addon.UI and addon.UI.hideConfigPreview then
+            addon.UI:hideConfigPreview()
+        end
         widget:Hide()
+    end)
+    
+    -- Show config preview when frame is created (with delay to ensure UI is ready)
+    C_Timer.After(0.1, function()
+        if addon.UI and addon.UI.showConfigPreview then
+            addon.UI:showConfigPreview()
+        end
     end)
 end
 
@@ -86,6 +103,11 @@ function addon.UI:ShowConfigFrame()
     if not AceGUI then
         print("|cffff0000CC Rotation Helper:|r AceGUI-3.0 not found! Please install Ace3 libraries.")
         return
+    end
+    
+    -- Ensure main UI is initialized before showing config
+    if not self.mainFrame then
+        self:Initialize()
     end
     
     self:CreateConfigFrame()
