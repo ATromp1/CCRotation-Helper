@@ -197,7 +197,6 @@ end
 -- Called when profile changes (switch, copy, reset)
 function addon.Config:OnProfileChanged()
     local newProfile = self.database:GetCurrentProfile()
-    print("|cff00ff00CC Rotation Helper:|r Profile changed to:", newProfile)
     
     -- Update reference to current profile
     self.db = self.database.profile

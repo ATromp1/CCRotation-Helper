@@ -85,19 +85,15 @@ end
 
 -- Get user's last chosen profile (with fallbacks)
 function addon.ProfileSync:GetUserLastChosenProfile()
-    print("|cff00ff00CC Rotation Helper|r: GetUserLastChosenProfile - in-memory: " .. tostring(userProfileTracking.lastUserChosenProfile))
-    print("|cff00ff00CC Rotation Helper|r: GetUserLastChosenProfile - saved var: " .. tostring(addon.Config.global.lastUserChosenProfile))
     
     -- First try the in-memory tracking
     if userProfileTracking.lastUserChosenProfile then
-        print("|cff00ff00CC Rotation Helper|r: GetUserLastChosenProfile - using in-memory: " .. userProfileTracking.lastUserChosenProfile)
         return userProfileTracking.lastUserChosenProfile
     end
     
     -- Then try the saved variable
     if addon.Config.global.lastUserChosenProfile then
         userProfileTracking.lastUserChosenProfile = addon.Config.global.lastUserChosenProfile
-        print("|cff00ff00CC Rotation Helper|r: GetUserLastChosenProfile - using saved var: " .. addon.Config.global.lastUserChosenProfile)
         return addon.Config.global.lastUserChosenProfile
     end
     
@@ -105,12 +101,10 @@ function addon.ProfileSync:GetUserLastChosenProfile()
     local currentProfile = addon.Config:GetCurrentProfileName()
     if currentProfile ~= partySyncState.syncProfileName then
         self:TrackUserProfileChoice(currentProfile)
-        print("|cff00ff00CC Rotation Helper|r: GetUserLastChosenProfile - using current (fallback): " .. currentProfile)
         return currentProfile
     end
     
     -- Last resort fallback
-    print("|cff00ff00CC Rotation Helper|r: GetUserLastChosenProfile - using Default (last resort)")
     return "Default"
 end
 
@@ -160,7 +154,6 @@ function addon.ProfileSync:Initialize()
         end)
     end)
     
-    print("|cff00ff00CC Rotation Helper|r: Profile sync initialized")
 end
 
 -- Handle incoming comm messages
@@ -218,7 +211,6 @@ function addon.ProfileSync:RequestProfile(targetPlayer, profileName)
     local serialized = AceSerializer:Serialize(MSG_PROFILE_REQUEST, requestData)
     addon:SendCommMessage(COMM_PREFIX, serialized, "WHISPER", targetPlayer)
     
-    print("|cff00ff00CC Rotation Helper|r: Requested profile '" .. profileName .. "' from " .. targetPlayer)
     return true, "Profile request sent"
 end
 
@@ -271,7 +263,6 @@ function addon.ProfileSync:ShareProfile(profileName, target)
     addon:SendCommMessage(COMM_PREFIX, serialized, distribution, target)
     
     local targetStr = target or "party"
-    print("|cff00ff00CC Rotation Helper|r: Shared profile '" .. profileName .. "' with " .. targetStr)
     return true, "Profile shared successfully"
 end
 
@@ -293,23 +284,19 @@ function addon.ProfileSync:RequestProfileList(targetPlayer)
     local serialized = AceSerializer:Serialize(MSG_PROFILE_LIST, requestData)
     addon:SendCommMessage(COMM_PREFIX, serialized, "WHISPER", targetPlayer)
     
-    print("|cff00ff00CC Rotation Helper|r: Requested profile list from " .. targetPlayer)
     return true, "Profile list request sent"
 end
 
 -- Handle profile request from another player
 function addon.ProfileSync:HandleProfileRequest(sender, data)
     if not data or data.version ~= SYNC_VERSION then
-        print("|cffff0000CC Rotation Helper|r: Invalid profile request from " .. sender)
         return
     end
     
-    print("|cff00ff00CC Rotation Helper|r: " .. sender .. " requested profile '" .. data.profileName .. "'")
     
     -- Check if we have the profile
     local profiles = addon.Config.database:GetProfiles()
     if not profiles[data.profileName] then
-        print("|cffff0000CC Rotation Helper|r: Profile '" .. data.profileName .. "' not found")
         return
     end
     
@@ -320,7 +307,6 @@ end
 -- Handle incoming profile share
 function addon.ProfileSync:HandleProfileShare(sender, data)
     if not data or data.version ~= SYNC_VERSION then
-        print("|cffff0000CC Rotation Helper|r: Invalid profile share from " .. sender)
         return
     end
     
@@ -348,25 +334,17 @@ function addon.ProfileSync:HandleProfileShare(sender, data)
         addon.Config.database.profile[key] = value
     end
     
-    print("|cff00ff00CC Rotation Helper|r: Received profile '" .. finalProfileName .. "' from " .. sender)
-    print("|cff00ff00CC Rotation Helper|r: Use /ccr profile to switch to it")
 end
 
 -- Handle profile list request
 function addon.ProfileSync:HandleProfileList(sender, data)
     if not data or data.version ~= SYNC_VERSION then
-        print("|cffff0000CC Rotation Helper|r: Invalid profile list request from " .. sender)
         return
     end
     
-    print("|cff00ff00CC Rotation Helper|r: " .. sender .. " requested your profile list")
-    
-    -- Get our profile names
+    -- Get our profile names for potential future use
     local profileNames = addon.Config:GetProfileNames()
     local currentProfile = addon.Config:GetCurrentProfileName()
-    
-    print("|cff00ff00CC Rotation Helper|r: Your profiles: " .. table.concat(profileNames, ", "))
-    print("|cff00ff00CC Rotation Helper|r: Current: " .. currentProfile)
 end
 
 -- Get current group composition for change detection (5-man party only)
@@ -745,7 +723,6 @@ function addon.ProfileSync:StartPartySync()
             partySyncState.isActive = true
             partySyncState.leaderName = leader
             self:EnsurePartySyncProfileExists()
-            print("|cff00ff00CC Rotation Helper|r: Started party sync as leader")
             -- Broadcast our current profile to party members
             C_Timer.After(1, function()
                 self:BroadcastProfileAsLeader()
@@ -768,13 +745,11 @@ function addon.ProfileSync:StartPartySync()
         -- Ensure Party Sync profile exists
         self:EnsurePartySyncProfileExists()
         
-        print("|cff00ff00CC Rotation Helper|r: Starting party sync with leader " .. leader)
         
         -- Request leader's current profile
         self:RequestLeaderProfile(leader)
     elseif partySyncState.leaderName ~= leader then
         -- Leader changed, update sync
-        print("|cff00ff00CC Rotation Helper|r: Party leader changed to " .. leader)
         partySyncState.leaderName = leader
         self:RequestLeaderProfile(leader)
     end
@@ -856,7 +831,6 @@ function addon.ProfileSync:HandleProfileUpdate(sender, data)
     -- Fire event to refresh UI components with new sync data
     addon.Config:FireEvent("PROFILE_SYNC_RECEIVED", data.profileData)
     
-    print("|cff00ff00CC Rotation Helper|r: Updated party sync profile from " .. sender)
 end
 
 -- Ensure the Party Sync profile exists
@@ -904,7 +878,6 @@ function addon.ProfileSync:CleanupPartySync()
     -- Switch back to last active profile (only if we're not the leader and we have a saved profile)
     if partySyncState.lastActiveProfile and partySyncState.leaderName ~= UnitName("player") then
         addon.Config.database:SetProfile(partySyncState.lastActiveProfile)
-        print("|cff00ff00CC Rotation Helper|r: Restored profile: " .. partySyncState.lastActiveProfile)
     end
     
     -- Keep the Party Sync profile - it's permanent and always available
@@ -951,18 +924,14 @@ end
 function addon.ProfileSync:GetRecommendedLeaderProfile()
     local currentProfile = addon.Config:GetCurrentProfileName()
     
-    print("|cff00ff00CC Rotation Helper|r: GetRecommendedLeaderProfile - current: " .. tostring(currentProfile))
-    print("|cff00ff00CC Rotation Helper|r: GetRecommendedLeaderProfile - sync profile: " .. tostring(partySyncState.syncProfileName))
     
     -- If we're on Party Sync profile, recommend switching to user's last chosen profile
     if currentProfile == partySyncState.syncProfileName then
         local recommended = self:GetUserLastChosenProfile()
-        print("|cff00ff00CC Rotation Helper|r: GetRecommendedLeaderProfile - recommending: " .. tostring(recommended))
         return recommended
     end
     
     -- Otherwise, stay on current profile
-    print("|cff00ff00CC Rotation Helper|r: GetRecommendedLeaderProfile - staying on current")
     return currentProfile
 end
 
@@ -993,24 +962,16 @@ function addon.ProfileSync:CheckProfileRestoreOnLogin()
     local savedProfile = addon.Config.global.partySyncLastActiveProfile
     local inGroup = IsInGroup()
     
-    print("|cff00ff00CC Rotation Helper|r: Login check - Current profile: " .. currentProfile)
-    print("|cff00ff00CC Rotation Helper|r: Login check - Saved profile: " .. (savedProfile or "none"))
-    print("|cff00ff00CC Rotation Helper|r: Login check - In group: " .. tostring(inGroup))
-    print("|cff00ff00CC Rotation Helper|r: Login check - Sync profile name: " .. partySyncState.syncProfileName)
     
     -- If we're on the Party Sync profile but not in active party sync, switch away from it
     if currentProfile == partySyncState.syncProfileName and not partySyncState.isActive then
         if savedProfile then
             -- We have a saved profile to restore
-            print("|cff00ff00CC Rotation Helper|r: Restoring saved profile: " .. savedProfile)
             addon.Config.database:SetProfile(savedProfile)
             addon.Config.global.partySyncLastActiveProfile = nil
-            print("|cff00ff00CC Rotation Helper|r: Restored profile after login: " .. savedProfile)
         else
             -- No saved profile, switch to Default as fallback
-            print("|cff00ff00CC Rotation Helper|r: No saved profile found, switching to Default")
             addon.Config.database:SetProfile("Default")
-            print("|cff00ff00CC Rotation Helper|r: Switched to Default profile as fallback")
         end
         return
     end
@@ -1019,13 +980,10 @@ function addon.ProfileSync:CheckProfileRestoreOnLogin()
     if currentProfile == partySyncState.syncProfileName and inGroup and savedProfile then
         -- We're on Party Sync profile and in group - save the profile for later restoration
         partySyncState.lastActiveProfile = savedProfile
-        print("|cff00ff00CC Rotation Helper|r: Restored party sync state from saved data")
     elseif not inGroup and savedProfile then
         -- We're not in group but have saved profile data - clear it since it's no longer relevant
         addon.Config.global.partySyncLastActiveProfile = nil
-        print("|cff00ff00CC Rotation Helper|r: Cleared stale party sync profile data")
     else
-        print("|cff00ff00CC Rotation Helper|r: No profile restoration needed")
     end
 end
 
@@ -1051,14 +1009,11 @@ function addon.ProfileSync:TransitionToLeader()
     partySyncState.leaderName = UnitName("player")
     
     -- Debug output to see what's happening
-    print("|cff00ff00CC Rotation Helper|r: Leadership transition - current profile: " .. tostring(currentProfile))
     
     -- Don't switch profiles directly - let the UI components handle that
-    print("|cff00ff00CC Rotation Helper|r: Became party leader - profile management will be handled by UI components")
     
     -- Fire event for UI components to refresh after a tiny delay to ensure profile switch is processed
     C_Timer.After(0.1, function()
-        print("|cff00ff00CC Rotation Helper|r: Firing GROUP_STATUS_CHANGED event: became_leader")
         addon.Config:FireEvent("GROUP_STATUS_CHANGED", "became_leader")
     end)
     

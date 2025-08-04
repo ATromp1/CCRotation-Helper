@@ -46,7 +46,6 @@ function ProfileManagement:Initialize()
     -- Register for group status change events to refresh profile availability
     -- Using BaseComponent method for standardized registration
     self:RegisterEventListener("GROUP_STATUS_CHANGED", function(changeType)
-        print("|cff00ff00CC Rotation Helper|r: ProfileManagement received GROUP_STATUS_CHANGED:", changeType)
         
         -- Handle profile switching when becoming leader
         if changeType == "became_leader" then
@@ -64,15 +63,9 @@ function ProfileManagement:handleBecameLeader()
         local currentProfile = addon.Config:GetCurrentProfileName()
         
         if recommendedProfile ~= currentProfile then
-            print("|cff00ff00CC Rotation Helper|r: ProfileManagement switching to recommended profile: " .. recommendedProfile)
             local success, msg = self.dataProvider:switchProfile(recommendedProfile)
-            if success then
-                print("|cff00ff00CC Rotation Helper|r: " .. msg)
-            else
-                print("|cffff0000CC Rotation Helper|r: " .. msg)
-            end
+            -- Profile switch result handled by dataProvider
         else
-            print("|cff00ff00CC Rotation Helper|r: ProfileManagement staying on current profile: " .. currentProfile)
         end
     end
     
@@ -163,10 +156,7 @@ function ProfileManagement:buildProfileSwitcher(currentProfile, container)
         if profileName then
             local success, msg = self.dataProvider:switchProfile(profileName)
             if success then
-                print("|cff00ff00CC Rotation Helper|r: " .. msg)
                 self:triggerCallback("onProfileSwitched", profileName)
-            else
-                print("|cffff0000CC Rotation Helper|r: " .. msg)
             end
         end
     end)
@@ -189,10 +179,7 @@ function ProfileManagement:buildProfileCreator(container)
             local success, msg = self.dataProvider:createProfile(name)
             if success then
                 newProfileInput:SetText("")
-                print("|cff00ff00CC Rotation Helper|r: " .. msg)
                 self:triggerCallback("onProfileCreated", name)
-            else
-                print("|cffff0000CC Rotation Helper|r: " .. msg)
             end
         end
     end)
@@ -207,10 +194,7 @@ function ProfileManagement:buildProfileActions(container)
     resetBtn:SetCallback("OnClick", function()
         local success, msg = self.dataProvider:resetCurrentProfile()
         if success then
-            print("|cff00ff00CC Rotation Helper|r: " .. msg)
             self:triggerCallback("onProfileReset")
-        else
-            print("|cffff0000CC Rotation Helper|r: " .. msg)
         end
     end)
     container:AddChild(resetBtn)
@@ -219,7 +203,6 @@ function ProfileManagement:buildProfileActions(container)
     container:AddChild(addon.UI.Helpers:VerticalSpacer(5))
     local deleteDropdown = createProfilesDropdown("Delete profile", function(profile, widget)
         if #self.dataProvider:getProfileNames() <= 1 then
-            print("|cffff0000CC Rotation Helper|r: You cannot delete your last profile")
             widget:SetValue(0)
             return
         end
@@ -231,10 +214,7 @@ function ProfileManagement:buildProfileActions(container)
             function()
                 local success, msg = self.dataProvider:deleteProfile(profile)
                 if success then
-                    print("|cff00ff00CC Rotation Helper|r: " .. msg)
                     self:triggerCallback("onProfileDeleted", profile)
-                else
-                    print("|cffff0000CC Rotation Helper|r: " .. msg)
                 end
                 widget:SetValue(0)
             end,
@@ -303,16 +283,10 @@ function ProfileSync:buildSyncInternalUI()
     syncCurrentBtn:SetWidth(200)
     syncCurrentBtn:SetCallback("OnClick", function()
         if not self.dataProvider:isProfileSyncAvailable() then
-            print("|cffff0000CC Rotation Helper|r: Profile sync not available")
             return
         end
         
-        local success, msg = self.dataProvider:shareCurrentProfile()
-        if success then
-            print("|cff00ff00CC Rotation Helper|r: " .. msg)
-        else
-            print("|cffff0000CC Rotation Helper|r: " .. msg)
-        end
+        self.dataProvider:shareCurrentProfile()
     end)
     self.syncInternalGroup:AddChild(syncCurrentBtn)
     
@@ -337,7 +311,6 @@ function ProfileSync:buildSpecificProfileSharer(container)
     shareProfileDropdown:SetList(shareProfileList)
     shareProfileDropdown:SetCallback("OnValueChanged", function(_, _, value)
         if not self.dataProvider:isProfileSyncAvailable() then
-            print("|cffff0000CC Rotation Helper|r: Profile sync not available")
             return
         end
         profileToShare = shareProfiles[value] or nil
@@ -349,16 +322,10 @@ function ProfileSync:buildSpecificProfileSharer(container)
     shareProfileButton:SetWidth(150)
     shareProfileButton:SetCallback("OnClick", function()
         if profileToShare == nil then
-            print("|cffff0000CC Rotation Helper|r: No profile selected")
             return
         end
         
-        local success, msg = self.dataProvider:shareProfile(profileToShare)
-        if success then
-            print("|cff00ff00CC Rotation Helper|r: " .. msg)
-        else
-            print("|cffff0000CC Rotation Helper|r: " .. msg)
-        end
+        self.dataProvider:shareProfile(profileToShare)
     end)
     container:AddChild(shareProfileButton)
 end
@@ -438,7 +405,6 @@ function ProfileRequest:buildRequestInternalUI()
     requestBtn:SetWidth(120)
     requestBtn:SetCallback("OnClick", function()
         if not self.dataProvider:isProfileSyncAvailable() then
-            print("|cffff0000CC Rotation Helper|r: Profile sync not available")
             return
         end
         
@@ -447,21 +413,14 @@ function ProfileRequest:buildRequestInternalUI()
         local profileName = profileInput:GetText()
         
         if not selectedMember or selectedMember == "" or selectedMember == "(No addon users found)" then
-            print("|cffff0000CC Rotation Helper|r: Please select a valid party member with the addon")
             return
         end
         
         if not profileName or profileName == "" then
-            print("|cffff0000CC Rotation Helper|r: Please enter a profile name")
             return
         end
         
-        local success, msg = self.dataProvider:requestProfile(selectedMember, profileName)
-        if success then
-            print("|cff00ff00CC Rotation Helper|r: " .. msg)
-        else
-            print("|cffff0000CC Rotation Helper|r: " .. msg)
-        end
+        self.dataProvider:requestProfile(selectedMember, profileName)
     end)
     self.requestInternalGroup:AddChild(requestBtn)
     
@@ -471,8 +430,6 @@ function ProfileRequest:buildRequestInternalUI()
     refreshBtn:SetWidth(150)
     refreshBtn:SetCallback("OnClick", function()
         if self.dataProvider:refreshAddonUsers() then
-            print("|cff00ff00CC Rotation Helper|r: Pinging party members for addon detection...")
-            
             -- Refresh dropdown after a short delay to allow responses
             C_Timer.After(2, function()
                 local newMembers = self.dataProvider:getAddonUsers()
@@ -491,12 +448,7 @@ function ProfileRequest:buildRequestInternalUI()
                 
                 -- Update the members variable for the callback
                 members = newMembers
-                
-                local count = #newMembers == 1 and newMembers[1] == "(No addon users found)" and "0" or tostring(#newMembers)
-                print("|cff00ff00CC Rotation Helper|r: Found " .. count .. " party members with the addon")
             end)
-        else
-            print("|cffff0000CC Rotation Helper|r: Profile sync not available")
         end
     end)
     self.requestInternalGroup:AddChild(refreshBtn)
