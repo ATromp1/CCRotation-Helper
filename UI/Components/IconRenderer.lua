@@ -318,9 +318,26 @@ function IconRenderer:positionMainIcon(icon, iconIndex, activeIcons, config)
     local spacing = config:Get("spacing")
     
     if iconIndex == 1 then
+        -- Main icon stays fixed at the same position
+        icon:ClearAllPoints()
         icon:SetPoint("BOTTOMLEFT", addon.UI.mainFrame.container, "BOTTOMLEFT", 0, 0)
     else
-        icon:SetPoint("BOTTOMLEFT", activeIcons[iconIndex-1], "BOTTOMRIGHT", spacing, 0)
+        -- Position subsequent icons relative to the main icon (icon 1)
+        local mainIcon = activeIcons[1]
+        if mainIcon then
+            -- Calculate cumulative offset from main icon
+            local totalOffset = 0
+            for i = 1, iconIndex - 1 do
+                local iconSize = config:Get("iconSize" .. i)
+                totalOffset = totalOffset + iconSize
+                if i > 1 then
+                    totalOffset = totalOffset + spacing
+                end
+            end
+            
+            icon:ClearAllPoints()
+            icon:SetPoint("BOTTOMLEFT", mainIcon, "BOTTOMLEFT", totalOffset + spacing, 0)
+        end
     end
 end
 

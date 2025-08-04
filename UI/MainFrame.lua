@@ -212,27 +212,27 @@ function UI:updateFrameSize()
     local visibleIcons = #activeIcons
     local visibleUnavailableIcons = #activeUnavailableIcons
     
-    local totalWidth = 0
-    local totalHeight = 0
+    -- Calculate maximum possible width to prevent frame shifting
+    local maxIcons = config:Get("maxIcons")
+    local maxTotalWidth = 0
+    local maxHeight = 0
     
-    -- Calculate main queue dimensions
-    if visibleIcons > 0 then
-        local maxHeight = 0
-        
-        -- Calculate total width and max height using individual icon sizes
-        for i = 1, visibleIcons do
-            local iconSize = config:Get("iconSize" .. i)
-            totalWidth = totalWidth + iconSize
-            if i > 1 then
-                totalWidth = totalWidth + spacing
-            end
-            if iconSize > maxHeight then
-                maxHeight = iconSize
-            end
+    -- Calculate maximum width based on all possible icons
+    for i = 1, maxIcons do
+        local iconSize = config:Get("iconSize" .. i)
+        maxTotalWidth = maxTotalWidth + iconSize
+        if i > 1 then
+            maxTotalWidth = maxTotalWidth + spacing
         end
-        
-        totalHeight = maxHeight
+        if iconSize > maxHeight then
+            maxHeight = iconSize
+        end
     end
+    
+    -- Use the maximum dimensions to keep frame size consistent
+    -- This prevents the frame from shifting when icons are added/removed
+    local frameWidth = math.max(maxTotalWidth, 200) -- Minimum width of 200
+    local frameHeight = math.max(maxHeight, 64) -- Minimum height of 64
     
     -- Position unavailable container below main container
     if visibleUnavailableIcons > 0 and config:Get("showUnavailableQueue") then
@@ -241,11 +241,7 @@ function UI:updateFrameSize()
         self.mainFrame.unavailableContainer:SetPoint("TOP", self.mainFrame.container, "BOTTOM", 0, -offset)
     end
     
-    -- Set minimum size
-    if totalWidth == 0 then totalWidth = 1 end
-    if totalHeight == 0 then totalHeight = 1 end
-    
-    self.mainFrame:SetSize(totalWidth, totalHeight)
+    self.mainFrame:SetSize(frameWidth, frameHeight)
 end
 
 -- Update visibility based on config and group status
