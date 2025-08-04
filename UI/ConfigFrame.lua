@@ -29,7 +29,8 @@ function addon.UI:CreateConfigFrame()
         {text="Spells", value="spells"},
         {text="Npcs", value="npcs"},
         {text="Players", value="players"},
-        {text="Profiles", value="profiles"}
+        {text="Profiles", value="profiles"},
+        {text="About", value="about"}
     })
     -- Helper function to load and create tab modules
     local function loadTab(tabName, container)
@@ -40,7 +41,8 @@ function addon.UI:CreateConfigFrame()
             icons = addon.IconsTabModule,
             spells = addon.SpellsTabModule,
             npcs = addon.NPCsTabModule,
-            players = addon.PlayersTabModule
+            players = addon.PlayersTabModule,
+            about = addon.AboutTabModule
         }
         
         local moduleProperty = tabName:gsub("^%l", string.upper) .. "Tab"  -- e.g., "profiles" -> "ProfilesTab"
