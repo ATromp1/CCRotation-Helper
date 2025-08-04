@@ -38,14 +38,26 @@ jobs:
           echo "=== Git diff ==="
           git diff CCRotationHelper.toc
       
-      - name: Commit and push version update
+      - name: Create Pull Request for version update
+        id: create-pr
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Update version to ${{ steps.version.outputs.version }} [skip ci]"
+          title: "🔖 Update version to ${{ steps.version.outputs.version }}"
+          body: |
+            Automatically updating addon version to match release tag `${{ github.event.release.tag_name }}`.
+            
+            **Changes:**
+            - Updates `## Version:` line in `CCRotationHelper.toc` to `${{ steps.version.outputs.version }}`
+            
+            This PR was generated automatically after release publication and will be auto-merged.
+          branch: "version-update-${{ steps.version.outputs.version }}"
+          delete-branch: true
+          
+      - name: Auto-merge Pull Request
+        if: steps.create-pr.outputs.pull-request-number != ''
         run: |
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add CCRotationHelper.toc
-          if git commit -m "Update version to ${{ steps.version.outputs.version }} [skip ci]"; then
-            git push origin HEAD:${{ github.event.repository.default_branch }}
-            echo "Successfully updated version to ${{ steps.version.outputs.version }}"
-          else
-            echo "No changes to commit"
-          fi
+          gh pr merge ${{ steps.create-pr.outputs.pull-request-number }} --auto --squash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
