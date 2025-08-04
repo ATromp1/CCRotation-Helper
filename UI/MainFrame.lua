@@ -190,19 +190,27 @@ function UI:UpdateDisplay(queue, unavailableQueue)
         return
     end
     
+    -- Skip visibility changes during combat lockdown to prevent ADDON_ACTION_BLOCKED errors
+    local inCombat = InCombatLockdown()
+    if inCombat then
+        addon.Config:DebugPrint("UpdateDisplay called during combat - skipping visibility changes")
+    end
+    
     local now = GetTime()
     
-    -- Use component-based rendering
+    -- Use component-based rendering (this should be safe during combat)
     self.iconRenderer:updateMainIcons(queue, now, self.mainFrame)
     self.iconRenderer:updateUnavailableIcons(unavailableQueue or {}, now, self.mainFrame)
     
-    -- Update frame visibility
-    if not addon.CCRotation:ShouldBeActive() then
-        self.mainFrame:Hide()
-        return
+    -- Only update frame visibility if not in combat
+    if not inCombat then
+        if not addon.CCRotation:ShouldBeActive() then
+            self.mainFrame:Hide()
+            return
+        end
+        
+        self.mainFrame:Show()
     end
-    
-    self.mainFrame:Show()
     
     -- Update main frame size
     self:updateFrameSize()
@@ -455,6 +463,25 @@ function UI:UpdateVisibility()
         return
     end
     
+    -- Prevent UI operations during combat lockdown to avoid ADDON_ACTION_BLOCKED errors
+    if InCombatLockdown() then
+        addon.Config:DebugPrint("UpdateVisibility called during combat lockdown - deferring")
+        -- Defer the visibility update until after combat ends
+        if not self.pendingVisibilityUpdate then
+            self.pendingVisibilityUpdate = true
+            local eventFrame = CreateFrame("Frame")
+            eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+            eventFrame:SetScript("OnEvent", function(self, event)
+                if event == "PLAYER_REGEN_ENABLED" then
+                    addon.UI.pendingVisibilityUpdate = nil
+                    addon.UI:UpdateVisibility()
+                    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+                end
+            end)
+        end
+        return
+    end
+    
     local shouldBeActive = addon.CCRotation and addon.CCRotation:ShouldBeActive()
     local config = addon.Config
     
@@ -481,6 +508,12 @@ function UI:Show()
         return
     end
     
+    -- Prevent UI operations during combat lockdown
+    if InCombatLockdown() then
+        addon.Config:DebugPrint("Show() called during combat lockdown - ignoring")
+        return
+    end
+    
     self.mainFrame:Show()
     self:startCooldownTextUpdates()
 
@@ -489,6 +522,12 @@ end
 
 -- Hide the UI
 function UI:Hide()
+    -- Prevent UI operations during combat lockdown
+    if InCombatLockdown() then
+        addon.Config:DebugPrint("Hide() called during combat lockdown - ignoring")
+        return
+    end
+    
     if self.mainFrame then
         self.mainFrame:Hide()
     end
