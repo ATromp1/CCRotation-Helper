@@ -109,6 +109,20 @@ SlashCmdList["CCROTATION"] = function(msg)
         else
             print("|cff00ff00CC Rotation Helper|r: UI not initialized")
         end
+    elseif command == "debugnpc" or command == "npcdebug" then
+        -- Toggle NPC debug frame
+        if addon.UI then
+            addon.UI:ToggleNPCDebug()
+        else
+            print("|cff00ff00CC Rotation Helper|r: UI not initialized")
+        end
+    elseif command == "resetdebug" then
+        -- Reset NPC debug frame position  
+        if addon.UI then
+            addon.UI:ResetNPCDebugPosition()
+        else
+            print("|cff00ff00CC Rotation Helper|r: UI not initialized")
+        end
     elseif command == "profile" or command == "profiles" then
         -- Show current profile and available profiles
         local current = addon.Config:GetCurrentProfileName()
@@ -192,6 +206,8 @@ SlashCmdList["CCROTATION"] = function(msg)
         print("  /ccr reset - Reset position to default")
         print("  /ccr position - Show position debug info and toggle anchor")
         print("  /ccr icons - Show icon debug info and attempt recovery")
+        print("  /ccr debugnpc - Toggle NPC debug frame")
+        print("  /ccr resetdebug - Reset NPC debug frame position")
         print("  /ccr profile - Show current profile info")
         print("  /ccr sync [profilename] - Share profile with party")
         print("  /ccr request PlayerName ProfileName - Request profile from player")

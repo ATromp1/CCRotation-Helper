@@ -19,12 +19,14 @@ function UI:Initialize()
     self.iconPool = addon.Components.IconPool:new()
     self.glowManager = addon.Components.GlowManager:new()
     self.iconRenderer = addon.Components.IconRenderer:new(self.iconPool, self.glowManager)
+    self.npcDebugFrame = addon.Components.NPCDebugFrame:new()
     
     -- Create main frame
     self:createMainFrame()
     
     -- Initialize component systems
     self.iconPool:initialize()
+    self.npcDebugFrame:Initialize(self.mainFrame)
     
     -- Register for queue update events from RotationCore
     if addon.CCRotation then
@@ -308,6 +310,21 @@ function UI:Toggle()
     end
 end
 
+-- Toggle NPC debug frame
+function UI:ToggleNPCDebug()
+    if self.npcDebugFrame then
+        self.npcDebugFrame:Toggle()
+    end
+end
+
+-- Reset NPC debug frame position
+function UI:ResetNPCDebugPosition()
+    if self.npcDebugFrame then
+        self.npcDebugFrame:resetPosition()
+        print("|cff00ff00CC Rotation Helper|r: NPC debug frame position reset")
+    end
+end
+
 -- Debug function to show detailed icon state
 function UI:ShowIconDebug()
     print("|cff00ff00CC Rotation Helper Icon Debug:|r")
@@ -466,6 +483,12 @@ function UI:UpdateFromConfig()
         
         -- Re-initialize icon pools
         self.iconPool:initialize()
+        
+        -- Re-initialize debug frame
+        if self.npcDebugFrame then
+            self.npcDebugFrame:Cleanup()
+            self.npcDebugFrame:Initialize(self.mainFrame)
+        end
     end
     
     -- Update visibility based on new profile settings

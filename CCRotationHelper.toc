@@ -50,6 +50,7 @@ UI\Components\GlowSettings.lua
 UI\Components\IconPool.lua
 UI\Components\GlowManager.lua
 UI\Components\IconRenderer.lua
+UI\Components\NPCDebugFrame.lua
 UI\Tabs\SpellsTab.lua
 UI\Tabs\PlayersTab.lua
 UI\Tabs\NPCsTab.lua
