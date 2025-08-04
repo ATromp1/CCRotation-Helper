@@ -34,6 +34,32 @@ function IconRenderer:cleanupExcessUnavailableIcons(startIndex, activeUnavailabl
     end
 end
 
+-- Helper method to clean up stale icons that are no longer in their respective queue
+function IconRenderer:cleanupStaleIcons(activeIcons, queue, maxQueueSize, iconType)
+    for i = 1, #activeIcons do
+        local icon = activeIcons[i]
+        if icon and icon.queueData then
+            local stillInQueue = false
+            for j = 1, maxQueueSize do
+                local queueData = queue[j]
+                if queueData and queueData.GUID == icon.queueData.GUID and queueData.spellID == icon.queueData.spellID then
+                    stillInQueue = true
+                    break
+                end
+            end
+            -- If this icon's data is no longer in the queue, release it
+            if not stillInQueue then
+                if iconType == "main" then
+                    self.iconPool:releaseMainIcon(icon)
+                else
+                    self.iconPool:releaseUnavailableIcon(icon)
+                end
+                activeIcons[i] = nil
+            end
+        end
+    end
+end
+
 -- Update existing icons without recreating them
 function IconRenderer:updateMainIcons(queue, now, mainFrame)
     local config = addon.Config
@@ -41,7 +67,10 @@ function IconRenderer:updateMainIcons(queue, now, mainFrame)
     local spacing = config:Get("spacing")
     local activeIcons = self.iconPool:getActiveMainIcons()
     
-    -- Release icons that are no longer needed
+    -- Clean up any icons that are no longer in the queue
+    self:cleanupStaleIcons(activeIcons, queue, math.min(#queue, maxIcons), "main")
+    
+    -- Release icons that are no longer needed (beyond queue size)
     self:cleanupExcessMainIcons(math.min(#queue, maxIcons) + 1, activeIcons)
     
     -- Update or create icons for current queue
@@ -88,6 +117,9 @@ function IconRenderer:updateUnavailableIcons(unavailableQueue, now, mainFrame)
         self:cleanupExcessUnavailableIcons(1, activeUnavailableIcons)
         return
     end
+    
+    -- Clean up any icons that are no longer in the unavailable queue
+    self:cleanupStaleIcons(activeUnavailableIcons, unavailableQueue, #unavailableQueue, "unavailable")
     
     if #unavailableQueue > 0 then
         local maxUnavailableIcons = config:Get("maxUnavailableIcons")

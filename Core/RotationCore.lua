@@ -110,6 +110,8 @@ function CCRotation:RegisterEvents()
     frame:RegisterEvent("PLAYER_REGEN_DISABLED")
     frame:RegisterEvent("PLAYER_REGEN_ENABLED")
     frame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+    frame:RegisterEvent("PLAYER_ALIVE")
+    frame:RegisterEvent("PLAYER_UNGHOST")
     
     frame:SetScript("OnEvent", function(self, event, ...)
         CCRotation:OnEvent(event, ...)
@@ -130,6 +132,9 @@ function CCRotation:OnEvent(event, ...)
     elseif event == "NAME_PLATE_UNIT_ADDED" then
         local unit = ...
         self:OnNameplateAdded(unit)
+    elseif event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then
+        -- Player has been resurrected, immediately rebuild queue to move abilities back to available
+        self:RebuildQueue()
     end
 end
 
