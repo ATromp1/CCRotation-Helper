@@ -39,6 +39,11 @@ function CCRotationHelper:OnPlayerLogin()
     -- Initialize core rotation system
     addon.CCRotation:Initialize()
     
+    -- Initialize sound manager (after CCRotation is ready)
+    if addon.SoundManager then
+        addon.SoundManager:Initialize()
+    end
+    
     -- Initialize UI
     if addon.UI then
         addon.UI:Initialize()

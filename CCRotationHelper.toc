@@ -27,6 +27,7 @@ Libs\LibCustomGlow\LibCustomGlow-1.0.xml
 Core\Database.lua
 Core\Config.lua  
 Core\RotationCore.lua
+Core\SoundManager.lua
 Core\ProfileSync.lua
 
 # UI files  

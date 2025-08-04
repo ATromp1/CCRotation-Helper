@@ -145,6 +145,9 @@ local defaults = {
         -- Sound options
         enableSounds = false,
         nextSpellSound = "Interface\\AddOns\\CCRotation\\Sounds\\next.ogg",
+        enableTurnNotification = false, -- Play TTS when it's player's turn next
+        turnNotificationText = "Next", -- Text to speak when it's player's turn
+        turnNotificationVolume = 100, -- Volume for turn notification (0 to 100)
         
         -- Anchor settings
         anchorLocked = false,

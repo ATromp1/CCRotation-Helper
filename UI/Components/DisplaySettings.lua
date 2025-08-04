@@ -152,6 +152,43 @@ function DisplaySettings:buildUI()
     )
     highlightControl:buildUI()
     
+    -- Turn notification sound
+    local turnNotificationControl = addon.Components.CheckboxControl:new(
+        internalGroup,
+        "Play sound when it's your turn",
+        "enableTurnNotification",
+        {
+            onValueChanged = function(configKey, value)
+                -- No refresh needed for sound settings
+            end
+        }
+    )
+    turnNotificationControl:buildUI()
+    
+    -- Turn notification text
+    local turnNotificationTextEdit = self.AceGUI:Create("EditBox")
+    turnNotificationTextEdit:SetLabel("Turn notification text")
+    turnNotificationTextEdit:SetWidth(200)
+    turnNotificationTextEdit:SetText(addon.Config:Get("turnNotificationText") or "Next")
+    turnNotificationTextEdit:SetCallback("OnEnterPressed", function(widget, event, text)
+        addon.Config:Set("turnNotificationText", text)
+    end)
+    internalGroup:AddChild(turnNotificationTextEdit)
+    
+    -- Turn notification volume slider
+    local turnNotificationVolumeControl = addon.Components.SliderControl:new(
+        internalGroup,
+        "Turn notification volume",
+        "turnNotificationVolume",
+        0, 100, 5,
+        {
+            onValueChanged = function(configKey, value)
+                -- No refresh needed for sound settings
+            end
+        }
+    )
+    turnNotificationVolumeControl:buildUI()
+    
     -- Cooldown decimal threshold slider
     local decimalThresholdControl = addon.Components.SliderControl:new(
         internalGroup,

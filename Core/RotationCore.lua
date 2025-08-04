@@ -40,6 +40,7 @@ function CCRotation:Initialize()
     self.spellCooldowns = {}  -- Individual spell tracking
     self.GUIDToUnit = {}
     self.activeNPCs = {}
+    self.wasPlayerNext = false  -- Track player turn state for notifications
     
     -- Initialize GUID mapping
     self:RefreshGUIDToUnit()
@@ -406,6 +407,48 @@ function CCRotation:SortAndSeparateQueues()
     -- Update the main queue and store unavailable queue
     self.cooldownQueue = availableQueue
     self.unavailableQueue = unavailableQueue
+    
+    -- Check if player is next in queue and fire event for sound notification
+    self:CheckPlayerTurnStatus()
+end
+
+-- Check if player is next in queue and fire notification event
+function CCRotation:CheckPlayerTurnStatus()
+    local config = addon.Config
+    if not config:Get("enableTurnNotification") then
+        self.wasPlayerNext = false
+        return
+    end
+    
+    
+    -- Check if there are any active enabled NPCs
+    local hasActiveEnabledNPCs = self:HasActiveEnabledNPCs()
+    if not hasActiveEnabledNPCs then
+        self.wasPlayerNext = false
+        return
+    end
+    
+    local isPlayerNext = false
+    
+    -- Check if player is first in available queue
+    if #self.cooldownQueue > 0 then
+        local firstInQueue = self.cooldownQueue[1]
+        local unit = self.GUIDToUnit[firstInQueue.GUID]
+        
+        if unit and UnitIsUnit(unit, "player") and firstInQueue.isEffective then
+            -- Check combat restrictions if enabled
+            if not config:Get("glowOnlyInCombat") or InCombatLockdown() then
+                isPlayerNext = true
+            end
+        end
+    end
+    
+    -- Only fire event if player just became next (wasn't next before)
+    if isPlayerNext and not self.wasPlayerNext then
+        self:FireEvent("PLAYER_TURN_NEXT", self.cooldownQueue[1])
+    end
+    
+    self.wasPlayerNext = isPlayerNext
 end
 
 -- Combat start handler
