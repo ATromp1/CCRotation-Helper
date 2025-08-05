@@ -247,7 +247,10 @@ function TrackedSpellsList:Initialize()
     -- Using BaseComponent method for cleaner registration
     self:RegisterEventListener("PROFILE_SYNC_RECEIVED", function(profileData)
         if profileData.customSpells or profileData.inactiveSpells then
-            self:refreshUI()
+            -- Only refresh UI if the spells tab is currently active
+            if addon.UI and addon.UI:IsConfigTabActive("spells") then
+                self:refreshUI()
+            end
         end
     end)
 end

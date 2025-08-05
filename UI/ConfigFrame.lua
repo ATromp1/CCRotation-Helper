@@ -66,16 +66,29 @@ function addon.UI:CreateConfigFrame()
         addon.UI[moduleProperty].create(container)
     end
 
+    -- Track the currently active tab
+    local activeTab = "profiles" -- Default tab
+    
     tabGroup:SetCallback("OnGroupSelected", function(container, event, group)
+        activeTab = group -- Update active tab tracking
+        
         function container:RefreshCurrentTab()
             tabGroup:SelectTab(group)
         end
 
         container:ReleaseChildren()
         loadTab(group, container)
+        
+        -- Store active tab reference for components to check
+        if addon.UI then
+            addon.UI.activeConfigTab = activeTab
+        end
     end)
     tabGroup:SelectTab("profiles")
     frame:AddChild(tabGroup)
+    
+    -- Initialize active tab tracking
+    addon.UI.activeConfigTab = "profiles"
     
     -- Store reference
     self.configFrame = frame
@@ -97,6 +110,17 @@ function addon.UI:CreateConfigFrame()
     end)
 end
 
+
+-- Check if a specific config tab is currently active
+function addon.UI:IsConfigTabActive(tabName)
+    -- Return false if config frame doesn't exist or isn't shown
+    if not self.configFrame or not self.configFrame:IsShown() then
+        return false
+    end
+    
+    -- Check if the specified tab is currently active
+    return self.activeConfigTab == tabName
+end
 
 -- Show configuration frame
 function addon.UI:ShowConfigFrame()

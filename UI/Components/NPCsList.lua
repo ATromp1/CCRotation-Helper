@@ -125,7 +125,10 @@ function DungeonNPCListComponent:Initialize()
     -- Register for profile sync events to refresh UI when sync data arrives
     addon.Config:RegisterEventListener("PROFILE_SYNC_RECEIVED", function(profileData)
         if profileData.customNPCs then
-            self:refreshUI()
+            -- Only refresh UI if the npcs tab is currently active
+            if addon.UI and addon.UI:IsConfigTabActive("npcs") then
+                self:refreshUI()
+            end
         end
     end)
 end

@@ -30,7 +30,10 @@ function PriorityPlayersList:Initialize()
     -- Using BaseComponent method for standardized registration
     self:RegisterEventListener("PROFILE_SYNC_RECEIVED", function(profileData)
         if profileData.priorityPlayers then
-            self:refreshDisplay()
+            -- Only refresh UI if the players tab is currently active
+            if addon.UI and addon.UI:IsConfigTabActive("players") then
+                self:refreshDisplay()
+            end
         end
     end)
 end

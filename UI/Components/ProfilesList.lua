@@ -50,8 +50,11 @@ function ProfileManagement:Initialize()
         -- Handle profile switching when becoming leader
         if changeType == "became_leader" then
             self:handleBecameLeader()
-        else
-            self:refreshUI()
+        else  
+            -- Only refresh UI if the profiles tab is currently active
+            if addon.UI and addon.UI:IsConfigTabActive("profiles") then
+                self:refreshUI()
+            end
         end
     end)
 end
@@ -69,8 +72,10 @@ function ProfileManagement:handleBecameLeader()
         end
     end
     
-    -- Refresh UI after profile operations
-    self:refreshUI()
+    -- Only refresh UI if the profiles tab is currently active
+    if addon.UI and addon.UI:IsConfigTabActive("profiles") then
+        self:refreshUI()
+    end
 end
 
 function ProfileManagement:refreshUI()
@@ -246,7 +251,10 @@ function ProfileSync:Initialize()
     -- Register for group status change events to refresh sync status display
     -- Using BaseComponent method for standardized registration
     self:RegisterEventListener("GROUP_STATUS_CHANGED", function(changeType)
-        self:refreshUI()
+        -- Only refresh UI if the profiles tab is currently active
+        if addon.UI and addon.UI:IsConfigTabActive("profiles") then
+            self:refreshUI()
+        end
     end)
 end
 
@@ -349,7 +357,10 @@ function ProfileRequest:Initialize()
     -- Register for group status change events to refresh addon user list
     -- Using BaseComponent method for standardized registration
     self:RegisterEventListener("GROUP_STATUS_CHANGED", function(changeType)
-        self:refreshUI()
+        -- Only refresh UI if the profiles tab is currently active
+        if addon.UI and addon.UI:IsConfigTabActive("profiles") then
+            self:refreshUI()
+        end
     end)
 end
 
