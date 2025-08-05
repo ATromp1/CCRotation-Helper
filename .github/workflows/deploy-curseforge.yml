@@ -1,0 +1,18 @@
+name: Deploy to CurseForge
+
+on:
+  workflow_run:
+    workflows: ["Update Version on Release"]
+    types: [completed]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    steps:
+      - name: Deploy to CurseForge
+        run: |
+          curl -X POST "https://www.curseforge.com/api/projects/1317279/package?token=${{ secrets.CF_API_TOKEN }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
