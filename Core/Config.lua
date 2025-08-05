@@ -58,15 +58,8 @@ local defaults = {
         customSpells = {},
         inactiveSpells = {}, -- Spells that are disabled but not deleted
         inactiveNPCs = {}, -- NPCs that are disabled but not deleted
-    },
-    global = {
-        -- Core addon settings
-        enabled = true,
-        showInSolo = false,
-        onlyInDungeons = false,
         
-        -- Party sync persistent data
-        partySyncLastActiveProfile = nil,
+        -- Display settings
         maxIcons = 2,
         iconSize = 64,
         iconSize1 = 64,
@@ -76,6 +69,32 @@ local defaults = {
         iconSize5 = 32,
         spacing = 3,
         growDirection = "RIGHT",
+        
+        -- Font settings
+        spellNameFont = "Friz Quadrata TT",
+        spellNameFontSize = 12,
+        spellNameMaxLength = 20,
+        playerNameFont = "Friz Quadrata TT", 
+        playerNameFontSize = 12,
+        playerNameMaxLength = 15,
+        cooldownFont = "Friz Quadrata TT",
+        cooldownFontSize = 16,
+        cooldownFontSizePercent = 25,
+        
+        -- Display options
+        showSpellName = true,
+        showPlayerName = true,
+        showCooldownText = true,
+        desaturateOnCooldown = true,
+        showTooltips = false,
+        highlightNext = true,
+        glowOnlyInCombat = false,
+        cooldownDecimalThreshold = 3,
+        
+        -- Colors (profile-specific)
+        nextSpellGlow = {0.91, 1.0, 0.37, 1.0},
+        cooldownTextColor = {0.91, 1.0, 0.37, 1.0},
+        spellNameColor = {1.0, 1.0, 1.0, 1.0},
         
         -- Unavailable queue settings
         showUnavailableQueue = true,
@@ -90,19 +109,9 @@ local defaults = {
         unavailableQueueY = -30,
         unavailableQueueAnchorPoint = "TOP",
         unavailableQueueRelativePoint = "BOTTOM",
-
-        -- Display options
-        showSpellName = true,
-        showPlayerName = true,
-        showCooldownText = true,
-        desaturateOnCooldown = false,
-        showTooltips = true,
-        highlightNext = false,
-        glowOnlyInCombat = false, -- Only show glow when in combat
-        cooldownDecimalThreshold = 3,
         
         -- Glow settings
-        glowType = "Pixel", -- Pixel, ACShine, Proc
+        glowType = "Proc", -- Pixel, ACShine, Proc
         glowColor = {1, 1, 1, 1}, -- RGBA color for glow
         glowFrequency = 0.25, -- Animation frequency/speed
         
@@ -133,22 +142,6 @@ local defaults = {
         showPlayerName4 = false,
         showPlayerName5 = false,
         
-        -- Fonts (LibSharedMedia names)
-        spellNameFont = "Friz Quadrata TT",
-        spellNameFontSize = 12,
-        spellNameMaxLength = 20,
-        playerNameFont = "Friz Quadrata TT", 
-        playerNameFontSize = 12,
-        playerNameMaxLength = 15,
-        cooldownFont = "Friz Quadrata TT",
-        cooldownFontSize = 16,
-        cooldownFontSizePercent = 25,
-        
-        -- Colors
-        nextSpellGlow = {0.91, 1.0, 0.37, 1.0},
-        cooldownTextColor = {0.91, 1.0, 0.37, 1.0},
-        spellNameColor = {1.0, 1.0, 1.0, 1.0},
-        
         -- Sound options
         enableSounds = false,
         nextSpellSound = "Interface\\AddOns\\CCRotation\\Sounds\\next.ogg",
@@ -159,17 +152,27 @@ local defaults = {
         -- Anchor settings
         anchorLocked = false,
         
+        -- Core addon settings
+        enabled = true,
+        showInSolo = false,
+        onlyInDungeons = false,
+        
+        -- Party sync data
+        partySyncLastActiveProfile = nil,
+        
         -- Minimap icon settings
         minimap = {
             minimapPos = 220,
             radius = 80,
         },
         
-        -- Icon zoom multiplier (texture zoom within container, like WeakAuras)
+        -- Icon zoom multiplier
         iconZoom = 1.0,
         
-        -- Debug mode
-        debugMode = false,
+
+    },
+    global = {
+        debugMode = false
     }
 }
 
@@ -181,6 +184,9 @@ function addon.Config:Initialize()
     self.db = self.database.profile
     self.global = self.database.global
     
+    -- Ensure character has its own profile
+    self:EnsureCharacterProfile()
+
     -- Set up profile change callback
     self.database.RegisterCallback(self, "OnProfileChanged", "OnProfileChanged")
     self.database.RegisterCallback(self, "OnProfileCopied", "OnProfileChanged")
@@ -193,6 +199,26 @@ function addon.Config:Initialize()
     AceConfig:RegisterOptionsTable("CCRotationHelper_Profiles", self.profileOptions)
 end
 
+-- Ensure current character has its own profile instead of using Default
+function addon.Config:EnsureCharacterProfile()
+    local characterName = UnitName("player") .. " - " .. GetRealmName()
+    
+    if self.database:GetCurrentProfile() == "Default" then
+        -- Create and switch to character-specific profile
+        self.database:SetProfile(characterName)
+        
+        -- Update references after profile change
+        self.db = self.database.profile
+        
+        self:DebugPrint("Created profile for " .. characterName)
+    end
+    
+    -- Set default sync profile to current character's profile if not already set
+    if not self.db.partySyncLastActiveProfile then
+        self.db.partySyncLastActiveProfile = self.database:GetCurrentProfile()
+        self:DebugPrint("Set default sync profile to " .. self.db.partySyncLastActiveProfile)
+    end
+end
 
 -- Called when profile changes (switch, copy, reset)
 function addon.Config:OnProfileChanged()
@@ -200,6 +226,7 @@ function addon.Config:OnProfileChanged()
     
     -- Update reference to current profile
     self.db = self.database.profile
+    
 
     -- Notify rotation system to update tracked spells
     if addon.CCRotation then
@@ -244,11 +271,12 @@ function addon.Config:MergeDefaults(target, source)
 end
 
 function addon.Config:Get(key)
-    -- Check profile settings first, then global settings
-    if self.db[key] ~= nil then
+    -- Use same logic as Set() to determine where to read from
+    if self:IsProfileSetting(key) then
         return self.db[key]
+    else
+        return self.global[key]
     end
-    return self.global[key]
 end
 
 function addon.Config:Set(key, value)
@@ -264,19 +292,9 @@ end
 
 -- Helper function to determine if a setting belongs to profile or global
 function addon.Config:IsProfileSetting(key)
-    local profileSettings = {
-        "priorityPlayers",
-        "customNPCs", 
-        "customSpells",
-        "inactiveSpells"
-    }
-    
-    for _, setting in ipairs(profileSettings) do
-        if key == setting then
-            return true
-        end
-    end
-    return false
+    -- All settings are now profile-specific
+    -- Each character has completely independent configuration
+    return true
 end
 
 function addon.Config:GetNPCEffectiveness(npcID)

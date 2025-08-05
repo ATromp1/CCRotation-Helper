@@ -329,6 +329,10 @@ function CCRotation:RecalculateQueue()
     -- Fire event if queue actually changed (UI will listen for this event)
     if self:HasQueueChanged() then
         self:FireEvent("QUEUE_UPDATED", self.cooldownQueue, self.unavailableQueue)
+        
+        -- Check if secondary queue should be shown (first ability on cooldown)
+        local shouldShowSecondary = self:ShouldShowSecondaryQueue()
+        self:FireEvent("SECONDARY_QUEUE_STATE_CHANGED", shouldShowSecondary)
     end
 end
 
@@ -638,6 +642,31 @@ function CCRotation:SaveCurrentQueue()
             checkTime = now
         }
     end
+end
+
+-- Check if secondary queue should be shown (first ability on cooldown)
+function CCRotation:ShouldShowSecondaryQueue()
+    if not self.cooldownQueue or #self.cooldownQueue == 0 then
+        return false
+    end
+    
+    local now = GetTime()
+    local firstAbility = self.cooldownQueue[1]
+    if firstAbility then
+        local charges = firstAbility.charges or 0
+        local isReady = charges > 0 or (firstAbility.expirationTime and firstAbility.expirationTime <= now)
+        
+        if addon.Config:Get("debugMode") then
+            local spellInfo = C_Spell.GetSpellInfo(firstAbility.spellID)
+            local spellName = spellInfo and spellInfo.name or "Unknown"
+            print("CCR Event Debug: First ability " .. spellName .. " is " .. (isReady and "ready" or "on cooldown") .. 
+                  " - secondary queue should be " .. (isReady and "hidden" or "shown"))
+        end
+        
+        return not isReady -- Show secondary if first ability is NOT ready
+    end
+    
+    return false
 end
 
 -- Check if addon should be active

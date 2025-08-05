@@ -49,7 +49,12 @@ function SliderControl:buildUI()
     local slider = self.AceGUI:Create("Slider")
     slider:SetLabel(self.label)
     slider:SetSliderValues(self.min, self.max, self.step)
-    slider:SetValue(self.dataProvider:get(self.configKey))
+    local currentValue = self.dataProvider:get(self.configKey)
+    -- Ensure we always pass a valid number to SetValue
+    if currentValue == nil then
+        currentValue = self.min -- Use minimum value as fallback
+    end
+    slider:SetValue(currentValue)
     slider:SetCallback("OnValueChanged", function(widget, event, value)
         self.dataProvider:set(self.configKey, value)
         self:triggerCallback("onValueChanged", self.configKey, value)

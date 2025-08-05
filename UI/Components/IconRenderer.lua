@@ -8,7 +8,8 @@ local IconRenderer = {}
 function IconRenderer:new(iconPool, glowManager)
     local instance = {
         iconPool = iconPool,
-        glowManager = glowManager
+        glowManager = glowManager,
+        shouldShowSecondary = false -- Hidden by default, controlled by events
     }
     setmetatable(instance, {__index = self})
     return instance
@@ -123,6 +124,12 @@ function IconRenderer:updateUnavailableIcons(unavailableQueue, now, mainFrame)
     
     if not config:Get("showUnavailableQueue") or not unavailableQueue or #unavailableQueue == 0 then
         -- Release all unavailable icons if not showing queue
+        self:cleanupExcessUnavailableIcons(1, activeUnavailableIcons)
+        return
+    end
+    
+    -- Check if secondary queue should be hidden (controlled by event)
+    if not self.shouldShowSecondary then
         self:cleanupExcessUnavailableIcons(1, activeUnavailableIcons)
         return
     end
@@ -330,6 +337,7 @@ function IconRenderer:positionMainIcon(icon, iconIndex, activeIcons, config)
         -- Main icon stays fixed at the same position
         icon:ClearAllPoints()
         icon:SetPoint("BOTTOMLEFT", addon.UI.mainFrame.container, "BOTTOMLEFT", 0, 0)
+        
     else
         -- Position subsequent icons relative to the main icon (icon 1)
         local mainIcon = activeIcons[1]

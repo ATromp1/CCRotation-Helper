@@ -36,7 +36,7 @@ function IconSettings:buildUI()
     local maxIconsSlider = AceGUI:Create("Slider")
     maxIconsSlider:SetLabel("Max Icons")
     maxIconsSlider:SetSliderValues(1, 5, 1)
-    maxIconsSlider:SetValue(self.dataProvider:get("maxIcons"))
+    maxIconsSlider:SetValue(self.dataProvider:get("maxIcons") or 2)
     maxIconsSlider:SetFullWidth(true)
     self.container:AddChild(maxIconsSlider)
     
@@ -45,11 +45,16 @@ function IconSettings:buildUI()
         local iconSlider = self.AceGUI:Create("Slider")
         iconSlider:SetLabel("Icon " .. i .. " Size")
         iconSlider:SetSliderValues(16, 128, 1)
-        iconSlider:SetValue(self.dataProvider:get("iconSize" .. i))
+        local iconSizeValue = self.dataProvider:get("iconSize" .. i) or 64
+        iconSlider:SetValue(iconSizeValue)
+        
+        -- Fix closure issue - capture i in local scope
+        local iconIndex = i
         iconSlider:SetCallback("OnValueChanged", function(widget, event, value)
-            self.dataProvider:set("iconSize" .. i, value)
+            self.dataProvider:set("iconSize" .. iconIndex, value)
             self.dataProvider:refreshDisplay()
         end)
+        
         iconSlider:SetFullWidth(true)
         self.container:AddChild(iconSlider)
         self.iconSizeWidgets[i] = iconSlider
