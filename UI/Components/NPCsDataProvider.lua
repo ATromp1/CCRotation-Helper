@@ -7,7 +7,9 @@ local NPCsDataProvider = {}
 
 -- Get current dungeon information
 function NPCsDataProvider:getCurrentDungeonInfo()
-    return addon.Database:GetCurrentDungeonInfo()
+    local dungeonName, instanceType = addon.Database:GetCurrentDungeonInfo()
+    local isKnownDungeon = addon.Database:IsInKnownDungeon()
+    return dungeonName, instanceType, isKnownDungeon
 end
 
 -- Get all NPCs grouped by dungeon
@@ -16,22 +18,21 @@ function NPCsDataProvider:getNPCsByDungeon(filterToDungeon)
     
     -- Process database NPCs
     for npcID, data in pairs(addon.Database.defaultNPCs) do
-        local abbrev, dungeonName, mobName = addon.Database:ExtractDungeonInfo(data.name)
+        local dungeonName = data.dungeon or "Other"
         
         -- Apply filter if active
         if not filterToDungeon or dungeonName == filterToDungeon then
             if not dungeonGroups[dungeonName] then
                 dungeonGroups[dungeonName] = {
-                    abbreviation = abbrev,
                     npcs = {}
                 }
             end
             
             dungeonGroups[dungeonName].npcs[npcID] = {
                 name = data.name,
-                mobName = mobName,
                 cc = data.cc,
                 source = "database",
+                dungeon = data.dungeon,
                 enabled = not addon.Config.db.inactiveNPCs[npcID]
             }
         end
@@ -39,23 +40,18 @@ function NPCsDataProvider:getNPCsByDungeon(filterToDungeon)
     
     -- Override with custom NPCs
     for npcID, data in pairs(addon.Config.db.customNPCs) do
-        local abbrev, dungeonName, mobName = addon.Database:ExtractDungeonInfo(data.name)
-        -- Also check explicit dungeon field for custom NPCs
-        local actualDungeon = data.dungeon or dungeonName
+        local dungeonName = data.dungeon or "Other"
         
         -- Apply filter if active
-        if not filterToDungeon or actualDungeon == filterToDungeon or dungeonName == filterToDungeon then
-            local groupName = actualDungeon or dungeonName
-            if not dungeonGroups[groupName] then
-                dungeonGroups[groupName] = {
-                    abbreviation = abbrev,
+        if not filterToDungeon or dungeonName == filterToDungeon then
+            if not dungeonGroups[dungeonName] then
+                dungeonGroups[dungeonName] = {
                     npcs = {}
                 }
             end
             
-            dungeonGroups[groupName].npcs[npcID] = {
+            dungeonGroups[dungeonName].npcs[npcID] = {
                 name = data.name,
-                mobName = mobName,
                 cc = data.cc,
                 source = "custom",
                 dungeon = data.dungeon,
@@ -77,9 +73,21 @@ end
 -- Get dungeon list for dropdowns
 function NPCsDataProvider:getDungeonList()
     local dungeonList = {["Other"] = "Other"}
-    for abbrev, fullName in pairs(addon.Database.dungeonNames) do
-        dungeonList[fullName] = fullName
+    
+    -- Get dungeon names from existing NPCs
+    for npcID, data in pairs(addon.Database.defaultNPCs) do
+        if data.dungeon then
+            dungeonList[data.dungeon] = data.dungeon
+        end
     end
+    
+    -- Add custom dungeon names
+    for npcID, data in pairs(addon.Config.db.customNPCs) do
+        if data.dungeon then
+            dungeonList[data.dungeon] = data.dungeon
+        end
+    end
+    
     return dungeonList
 end
 
@@ -98,26 +106,20 @@ function NPCsDataProvider:npcExists(npcID)
     return addon.Database:NPCExists(npcID)
 end
 
--- Extract dungeon info from name
+-- Extract dungeon info from name (legacy method - now returns basic info)
 function NPCsDataProvider:extractDungeonInfo(name)
-    return addon.Database:ExtractDungeonInfo(name)
+    return nil, "Other", name
 end
 
 -- Update NPC name
-function NPCsDataProvider:updateNPCName(npcID, npcData, newMobName, dungeonName, dungeonAbbrev)
-    local newFullName
-    if dungeonAbbrev then
-        newFullName = dungeonAbbrev .. " - " .. newMobName
-    else
-        newFullName = newMobName
-    end
-    
+function NPCsDataProvider:updateNPCName(npcID, npcData, newMobName, dungeonName)
     if npcData.source == "custom" then
-        addon.Config.db.customNPCs[npcID].name = newFullName
+        addon.Config.db.customNPCs[npcID].name = newMobName
+        addon.Config.db.customNPCs[npcID].dungeon = dungeonName
     else
         -- Create custom entry to override database NPC
         addon.Config.db.customNPCs[npcID] = {
-            name = newFullName,
+            name = newMobName,
             cc = npcData.cc,
             dungeon = dungeonName
         }
@@ -128,24 +130,16 @@ end
 
 -- Update NPC dungeon
 function NPCsDataProvider:updateNPCDungeon(npcID, npcData, newDungeon)
-    local oldName = npcData.mobName or npcData.name
-    local newAbbrev = nil
-    for abbrev, fullName in pairs(addon.Database.dungeonNames) do
-        if fullName == newDungeon then
-            newAbbrev = abbrev
-            break
-        end
-    end
-    
-    local newFullName
-    if newAbbrev then
-        newFullName = newAbbrev .. " - " .. oldName
+    if not addon.Config.db.customNPCs[npcID] then
+        -- Create custom entry to override database NPC
+        addon.Config.db.customNPCs[npcID] = {
+            name = npcData.name,
+            cc = npcData.cc,
+            dungeon = newDungeon
+        }
     else
-        newFullName = oldName
+        addon.Config.db.customNPCs[npcID].dungeon = newDungeon
     end
-    
-    addon.Config.db.customNPCs[npcID].name = newFullName
-    addon.Config.db.customNPCs[npcID].dungeon = newDungeon
     addon.Config:FireEvent("PROFILE_DATA_CHANGED", "customNPCs", npcID)
 end
 
@@ -191,31 +185,16 @@ end
 
 -- Add custom NPC
 function NPCsDataProvider:addCustomNPC(npcID, npcName, selectedDungeon, ccEffectiveness)
-    -- Construct full name based on dungeon
-    local fullName = npcName
-    if selectedDungeon ~= "Other" then
-        local abbrev = nil
-        for abbreviation, fullDungeonName in pairs(addon.Database.dungeonNames) do
-            if fullDungeonName == selectedDungeon then
-                abbrev = abbreviation
-                break
-            end
-        end
-        if abbrev then
-            fullName = abbrev .. " - " .. npcName
-        end
-    end
-    
     -- Add to custom NPCs
     addon.Config.db.customNPCs[npcID] = {
-        name = fullName,
+        name = npcName,
         cc = {ccEffectiveness[1], ccEffectiveness[2], ccEffectiveness[3], ccEffectiveness[4], ccEffectiveness[5]},
         dungeon = selectedDungeon
     }
 
     addon.Config:FireEvent("PROFILE_DATA_CHANGED", "customNPCs", npcID)
     
-    return fullName
+    return npcName
 end
 
 -- Enable/disable NPC

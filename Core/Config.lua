@@ -53,11 +53,12 @@ local defaults = {
             ["Fúro"] = true,
         },
         
-        -- Custom NPCs and spells (profile-specific)
+        -- Single source of truth for spells (per profile)
+        spells = {}, -- Working copy of spell data: { [spellID] = { name, ccType, priority, active, source } }
+        
+        -- NPCs
         customNPCs = {},
-        customSpells = {},
-        inactiveSpells = {}, -- Spells that are disabled but not deleted
-        inactiveNPCs = {}, -- NPCs that are disabled but not deleted
+        inactiveNPCs = {},
         
         -- Display settings
         maxIcons = 2,
@@ -186,6 +187,9 @@ function addon.Config:Initialize()
     
     -- Ensure character has its own profile
     self:EnsureCharacterProfile()
+    
+    -- Initialize spells table from database if empty
+    self:InitializeSpells()
 
     -- Set up profile change callback
     self.database.RegisterCallback(self, "OnProfileChanged", "OnProfileChanged")
@@ -235,11 +239,7 @@ function addon.Config:OnProfileChanged()
         if addon.CCRotation.RebuildQueue then
             addon.CCRotation:RebuildQueue()
             self:DebugPrint("Queue rebuilt successfully")
-        else
-            print("|cffff0000CC Rotation Helper:|r Warning: RebuildQueue function not found")
         end
-    else
-        print("|cffff0000CC Rotation Helper:|r Warning: CCRotation not initialized")
     end
     
     -- Fire event for UI to refresh (UI will listen for this event)
@@ -317,34 +317,60 @@ function addon.Config:GetNPCEffectiveness(npcID)
 end
 
 function addon.Config:GetSpellInfo(spellID)
-    -- Check custom spells first
-    if self.db.customSpells[spellID] then
-        return self.db.customSpells[spellID]
+    -- Check unified spells table first
+    if self.db.spells and self.db.spells[spellID] then
+        return self.db.spells[spellID]
     end
     
     -- Fall back to database
     return addon.Database.defaultSpells[spellID]
 end
 
+-- Initialize profile spells table from database if empty
+function addon.Config:InitializeSpells()
+    -- Ensure spells table exists
+    if not self.db.spells then
+        self.db.spells = {}
+    end
+    
+    -- Check if spells table is already populated
+    local spellCount = 0
+    for _ in pairs(self.db.spells) do
+        spellCount = spellCount + 1
+        break
+    end
+    
+    if spellCount == 0 then
+        -- Check if database exists
+        if not addon.Database or not addon.Database.defaultSpells then
+            return
+        end
+        
+        -- Copy all database spells to profile
+        for spellID, spell in pairs(addon.Database.defaultSpells) do
+            self.db.spells[spellID] = {
+                name = spell.name,
+                ccType = spell.ccType,
+                priority = spell.priority,
+                active = spell.active,
+                source = spell.source
+            }
+        end
+        
+        local count = 0
+        for _ in pairs(self.db.spells) do count = count + 1 end
+    end
+end
+
 function addon.Config:GetTrackedSpells()
     local spells = {}
     
-    -- Add database spells (if not inactive)
-    for spellID, data in pairs(addon.Database.defaultSpells) do
-        if not self.db.inactiveSpells[spellID] then
+    -- Get only active spells from profile
+    for spellID, spell in pairs(self.db.spells) do
+        if spell.active then
             spells[spellID] = {
-                priority = data.priority,
-                type = self:NormalizeCCType(data.ccType)
-            }
-        end
-    end
-    
-    -- Override with custom spells (if not inactive)
-    for spellID, data in pairs(self.db.customSpells) do
-        if not self.db.inactiveSpells[spellID] then
-            spells[spellID] = {
-                priority = data.priority,
-                type = self:NormalizeCCType(data.ccType)
+                priority = spell.priority,
+                type = self:NormalizeCCType(spell.ccType)
             }
         end
     end
@@ -508,30 +534,7 @@ function addon.Config:ResetProfile()
     return true, "Profile reset to defaults"
 end
 
--- Profile Sync Functions
-function addon.Config:SyncProfileToParty(profileName)
-    if not addon.ProfileSync then
-        return false, "Profile sync not initialized"
-    end
-    
-    return addon.ProfileSync:ShareProfile(profileName or self:GetCurrentProfileName())
-end
 
-function addon.Config:RequestProfileFromPlayer(playerName, profileName)
-    if not addon.ProfileSync then
-        return false, "Profile sync not initialized"
-    end
-    
-    return addon.ProfileSync:RequestProfile(playerName, profileName)
-end
-
-function addon.Config:RequestProfileListFromPlayer(playerName)
-    if not addon.ProfileSync then
-        return false, "Profile sync not initialized"
-    end
-    
-    return addon.ProfileSync:RequestProfileList(playerName)
-end
 
 function addon.Config:GetPartyMembers()
     if not addon.ProfileSync then
@@ -543,25 +546,55 @@ end
 
 -- Check if profile selection is currently locked (during party sync)
 function addon.Config:IsProfileSelectionLocked()
-    return addon.ProfileSync and addon.ProfileSync:IsProfileSelectionLocked() or false
+    -- Profile selection is locked when we're receiving synced data from a party leader
+    if addon.SimplePartySync then
+        -- Locked if we're in a group, not the leader, and have synced data
+        return addon.SimplePartySync:IsInGroup() and 
+               not addon.SimplePartySync:IsGroupLeader() and 
+               addon.SimplePartySync.syncedSpells ~= nil
+    end
+    return false
 end
 
 -- Get party sync information for UI display
 function addon.Config:GetPartySyncStatus()
-    if not addon.ProfileSync then
+    if not addon.SimplePartySync then
         return { isActive = false }
     end
     
-    return addon.ProfileSync:GetPartySyncInfo()
+    local isActive = addon.SimplePartySync:IsActive()
+    local leaderName = nil
+    
+    if isActive then
+        if addon.SimplePartySync:IsGroupLeader() then
+            leaderName = UnitName("player")
+        else
+            -- Find the group leader name
+            for i = 1, GetNumGroupMembers() do
+                local unit = IsInRaid() and "raid" .. i or "party" .. i
+                if UnitIsGroupLeader(unit) then
+                    leaderName = UnitName(unit)
+                    break
+                end
+            end
+            -- If still not found, check if player 1 is the leader (solo case)
+            if not leaderName and UnitIsGroupLeader("player") then
+                leaderName = UnitName("player")
+            end
+        end
+    end
+    
+    return {
+        isActive = isActive,
+        status = addon.SimplePartySync:GetStatus(),
+        leaderName = leaderName
+    }
 end
 
 -- Broadcast profile changes if we're the party leader in sync mode
 function addon.Config:BroadcastProfileChangeIfLeader()
-    if addon.ProfileSync and UnitIsGroupLeader("player") and IsInGroup() and addon.ProfileSync:IsInPartySync() then
-        -- Delay broadcast slightly to allow the change to be saved
-        C_Timer.After(0.2, function()
-            addon.ProfileSync:BroadcastProfileAsLeader()
-        end)
+    if addon.SimplePartySync and addon.SimplePartySync:IsGroupLeader() and addon.SimplePartySync:IsActive() then
+        addon.SimplePartySync:BroadcastProfile()
     end
 end
 

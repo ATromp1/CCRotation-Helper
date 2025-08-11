@@ -1,5 +1,5 @@
--- ProfilesList.lua - Profile management components
--- Contains ProfileManagement, ProfileSync, and ProfileRequest components
+-- ProfilesList.lua - Profile management components  
+-- Contains ProfileManagement and AddonUsersList components
 
 local addonName, addon = ...
 local BaseComponent = addon.BaseComponent
@@ -46,16 +46,22 @@ function ProfileManagement:Initialize()
     -- Register for group status change events to refresh profile availability
     -- Using BaseComponent method for standardized registration
     self:RegisterEventListener("GROUP_STATUS_CHANGED", function(changeType)
+        addon.Config:DebugPrint("ProfileManagement: GROUP_STATUS_CHANGED event -", changeType)
         
         -- Handle profile switching when becoming leader
         if changeType == "became_leader" then
+            addon.Config:DebugPrint("ProfileManagement: Handling became_leader event")
             self:handleBecameLeader()
         else  
-            -- Only refresh UI if the profiles tab is currently active
-            if addon.UI and addon.UI:IsConfigTabActive("profiles") then
-                self:refreshUI()
-            end
+            -- refreshUI will check if tab is active internally
+            self:refreshUI()
         end
+    end)
+    
+    -- Register for profile sync events to update locked status
+    self:RegisterEventListener("PROFILE_SYNC_RECEIVED", function(profileData)
+        addon.Config:DebugPrint("ProfileManagement: PROFILE_SYNC_RECEIVED - refreshing UI to show locked state")
+        self:refreshUI()
     end)
 end
 
@@ -72,13 +78,18 @@ function ProfileManagement:handleBecameLeader()
         end
     end
     
-    -- Only refresh UI if the profiles tab is currently active
-    if addon.UI and addon.UI:IsConfigTabActive("profiles") then
-        self:refreshUI()
-    end
+    -- refreshUI will check if tab is active internally
+    self:refreshUI()
 end
 
 function ProfileManagement:refreshUI()
+    -- Only refresh if the profiles tab is currently active
+    if not (addon.UI and addon.UI:IsConfigTabActive("profiles")) then
+        addon.Config:DebugPrint("ProfileManagement:refreshUI - Skipping refresh, not on profiles tab")
+        return
+    end
+    
+    addon.Config:DebugPrint("ProfileManagement:refreshUI - Refreshing UI")
     -- Clear current internal container and rebuild UI with updated party sync status
     if self.internalGroup then
         self.internalGroup:ReleaseChildren()
@@ -102,9 +113,15 @@ function ProfileManagement:buildInternalUI()
     local currentProfile = self.dataProvider:getCurrentProfileInfo()
     local partySyncStatus = self.dataProvider:getPartySyncStatus()
     
-    -- Current profile display
+    -- Current profile display (or party sync status)
     local currentLabel = self.AceGUI:Create("Label")
-    currentLabel:SetText("Current Profile: " .. currentProfile.name)
+    if currentProfile.isLocked then
+        currentLabel:SetText("Party Sync Active")
+        currentLabel:SetColor(0, 1, 0) -- Green color to indicate active sync
+    else
+        currentLabel:SetText("Current Profile: " .. currentProfile.name)
+        currentLabel:SetColor(1, 1, 1) -- Default white color
+    end
     currentLabel:SetFullWidth(true)
     self.internalGroup:AddChild(currentLabel)
     
@@ -232,14 +249,14 @@ function ProfileManagement:buildProfileActions(container)
     container:AddChild(deleteDropdown)
 end
 
--- Profile Sync Component - handles sharing profiles with party
-local ProfileSync = {}
-setmetatable(ProfileSync, {__index = BaseComponent})
+-- Addon Users List Component - shows group members and their addon status
+local AddonUsersList = {}
+setmetatable(AddonUsersList, {__index = BaseComponent})
 
-function ProfileSync:new(container, callbacks)
+function AddonUsersList:new(container, callbacks)
     local instance = BaseComponent:new(container, callbacks, addon.DataProviders.Profiles)
     setmetatable(instance, {__index = self})
-    self:validateImplementation("ProfileSync")
+    self:validateImplementation("AddonUsersList")
     
     -- Initialize event listeners for group changes
     instance:Initialize()
@@ -247,222 +264,148 @@ function ProfileSync:new(container, callbacks)
     return instance
 end
 
-function ProfileSync:Initialize()
-    -- Register for group status change events to refresh sync status display
-    -- Using BaseComponent method for standardized registration
+function AddonUsersList:Initialize()
+    -- Register for group status change events to refresh user list
     self:RegisterEventListener("GROUP_STATUS_CHANGED", function(changeType)
-        -- Only refresh UI if the profiles tab is currently active
-        if addon.UI and addon.UI:IsConfigTabActive("profiles") then
-            self:refreshUI()
-        end
+        -- refreshUI will check if tab is active internally
+        self:refreshUI()
     end)
 end
 
-function ProfileSync:refreshUI()
-    -- Clear current internal container and rebuild UI with updated sync status
-    if self.syncInternalGroup then
-        self.syncInternalGroup:ReleaseChildren()
-        self:buildSyncInternalUI()
+function AddonUsersList:refreshUI()
+    -- Only refresh if the profiles tab is currently active
+    if not (addon.UI and addon.UI:IsConfigTabActive("profiles")) then
+        addon.Config:DebugPrint("AddonUsersList:refreshUI - Skipping refresh, not on profiles tab")
+        return
+    end
+    
+    addon.Config:DebugPrint("AddonUsersList:refreshUI - Refreshing UI")
+    -- Clear current internal container and rebuild UI with updated user list
+    if self.usersInternalGroup then
+        self.usersInternalGroup:ReleaseChildren()
+        self:buildUsersInternalUI()
     end
 end
 
-function ProfileSync:buildUI()
+function AddonUsersList:buildUI()
     -- Create internal container for this component's content
-    self.syncInternalGroup = self.AceGUI:Create("SimpleGroup")
-    self.syncInternalGroup:SetFullWidth(true)
-    self.syncInternalGroup:SetLayout("Flow")
-    self.container:AddChild(self.syncInternalGroup)
+    self.usersInternalGroup = self.AceGUI:Create("SimpleGroup")
+    self.usersInternalGroup:SetFullWidth(true)
+    self.usersInternalGroup:SetLayout("Flow")
+    self.container:AddChild(self.usersInternalGroup)
     
     -- Build the actual UI content
-    self:buildSyncInternalUI()
+    self:buildUsersInternalUI()
 end
 
-function ProfileSync:buildSyncInternalUI()
-    
-    -- Info text
-    local infoLabel = self.AceGUI:Create("Label")
-    infoLabel:SetText("Share profiles with party/raid members who also have CC Rotation Helper installed.")
-    infoLabel:SetFullWidth(true)
-    self.syncInternalGroup:AddChild(infoLabel)
-    
-    -- Share current profile button
-    local syncCurrentBtn = self.AceGUI:Create("Button")
-    syncCurrentBtn:SetText("Share Current Profile")
-    syncCurrentBtn:SetWidth(200)
-    syncCurrentBtn:SetCallback("OnClick", function()
-        if not self.dataProvider:isProfileSyncAvailable() then
-            return
-        end
-        
-        self.dataProvider:shareCurrentProfile()
-    end)
-    self.syncInternalGroup:AddChild(syncCurrentBtn)
-    
-    self.syncInternalGroup:AddChild(addon.UI.Helpers:HorizontalSpacer(40))
-    
-    -- Profile selection dropdown for sharing specific profiles
-    self:buildSpecificProfileSharer(self.syncInternalGroup)
-end
-
-function ProfileSync:buildSpecificProfileSharer(container)
-    local profileToShare = nil
-    local shareProfiles = self.dataProvider:getProfileNames()
-    
-    local shareProfileDropdown = self.AceGUI:Create("Dropdown")
-    shareProfileDropdown:SetLabel("Share Specific Profile")
-    shareProfileDropdown:SetWidth(200)
-    
-    local shareProfileList = {}
-    for i, name in ipairs(shareProfiles) do
-        shareProfileList[i] = name
-    end
-    shareProfileDropdown:SetList(shareProfileList)
-    shareProfileDropdown:SetCallback("OnValueChanged", function(_, _, value)
-        if not self.dataProvider:isProfileSyncAvailable() then
-            return
-        end
-        profileToShare = shareProfiles[value] or nil
-    end)
-    container:AddChild(shareProfileDropdown)
-    
-    local shareProfileButton = self.AceGUI:Create("Button")
-    shareProfileButton:SetText("Share selected profile")
-    shareProfileButton:SetWidth(150)
-    shareProfileButton:SetCallback("OnClick", function()
-        if profileToShare == nil then
-            return
-        end
-        
-        self.dataProvider:shareProfile(profileToShare)
-    end)
-    container:AddChild(shareProfileButton)
-end
-
--- Profile Request Component - handles requesting profiles from party members
-local ProfileRequest = {}
-setmetatable(ProfileRequest, {__index = BaseComponent})
-
-function ProfileRequest:new(container, callbacks)
-    local instance = BaseComponent:new(container, callbacks, addon.DataProviders.Profiles)
-    setmetatable(instance, {__index = self})
-    self:validateImplementation("ProfileRequest")
-    
-    -- Initialize event listeners for group changes
-    instance:Initialize()
-    
-    return instance
-end
-
-function ProfileRequest:Initialize()
-    -- Register for group status change events to refresh addon user list
-    -- Using BaseComponent method for standardized registration
-    self:RegisterEventListener("GROUP_STATUS_CHANGED", function(changeType)
-        -- Only refresh UI if the profiles tab is currently active
-        if addon.UI and addon.UI:IsConfigTabActive("profiles") then
-            self:refreshUI()
-        end
-    end)
-end
-
-function ProfileRequest:refreshUI()
-    -- Clear current internal container and rebuild UI with updated addon users
-    if self.requestInternalGroup then
-        self.requestInternalGroup:ReleaseChildren()
-        self:buildRequestInternalUI()
-    end
-end
-
-function ProfileRequest:buildUI()
-    -- Create internal container for this component's content
-    self.requestInternalGroup = self.AceGUI:Create("SimpleGroup")
-    self.requestInternalGroup:SetFullWidth(true)
-    self.requestInternalGroup:SetLayout("Flow")
-    self.container:AddChild(self.requestInternalGroup)
-    
-    -- Build the actual UI content
-    self:buildRequestInternalUI()
-end
-
-function ProfileRequest:buildRequestInternalUI()
-    
-    local members = self.dataProvider:getAddonUsers()
-    
-    -- Add placeholder if no addon users found
-    if #members == 0 then
-        members = {"(No addon users found)"}
+function AddonUsersList:buildUsersInternalUI()
+    -- Check if we're in a group
+    if not IsInGroup() then
+        local soloLabel = self.AceGUI:Create("Label")
+        soloLabel:SetText("|cff888888Not in a group - addon detection only works in groups|r")
+        soloLabel:SetFullWidth(true)
+        self.usersInternalGroup:AddChild(soloLabel)
+        return
     end
     
-    -- Party member dropdown
-    local partyDropdown = self.AceGUI:Create("Dropdown")
-    partyDropdown:SetLabel("Party Member (with addon)")
-    partyDropdown:SetWidth(150)
+    -- Get detailed addon user information
+    local addonUsersInfo = addon.ProfileSync and addon.ProfileSync:GetAddonUsersWithDetails() or {}
     
-    local memberList = {}
-    for i, name in ipairs(members) do
-        memberList[i] = name
+    if #addonUsersInfo == 0 then
+        local noUsersLabel = self.AceGUI:Create("Label")
+        noUsersLabel:SetText("|cff888888No addon users detected - try scanning|r")
+        noUsersLabel:SetFullWidth(true)
+        self.usersInternalGroup:AddChild(noUsersLabel)
+        return
     end
-    partyDropdown:SetList(memberList)
-    self.requestInternalGroup:AddChild(partyDropdown)
     
-    -- Profile name input
-    local profileInput = self.AceGUI:Create("EditBox")
-    profileInput:SetLabel("Profile Name")
-    profileInput:SetWidth(150)
-    self.requestInternalGroup:AddChild(profileInput)
+    -- Display each user
+    for _, userInfo in ipairs(addonUsersInfo) do
+        local userRowGroup = self.AceGUI:Create("SimpleGroup")
+        userRowGroup:SetFullWidth(true)
+        userRowGroup:SetLayout("Flow")
+        self.usersInternalGroup:AddChild(userRowGroup)
+        
+        -- Player name
+        local nameLabel = self.AceGUI:Create("Label")
+        local nameText = userInfo.name
+        if userInfo.isYou then
+            nameText = nameText .. " (You)"
+        end
+        nameLabel:SetText(nameText)
+        nameLabel:SetWidth(150)
+        userRowGroup:AddChild(nameLabel)
+        
+        -- Addon status and version
+        local statusLabel = self.AceGUI:Create("Label")
+        if userInfo.hasAddon then
+            local versionText = userInfo.addonVersion or "Unknown"
+            statusLabel:SetText("|cff00ff00Has Addon|r - v" .. versionText)
+        else
+            statusLabel:SetText("|cffff4444No Addon|r")
+        end
+        statusLabel:SetWidth(150)
+        userRowGroup:AddChild(statusLabel)
+        
+        -- Last seen (for non-current users)
+        if not userInfo.isYou and userInfo.hasAddon and userInfo.lastSeen then
+            local timeSince = time() - userInfo.lastSeen
+            local timeText
+            if timeSince < 60 then
+                timeText = "Just now"
+            elseif timeSince < 3600 then
+                timeText = math.floor(timeSince / 60) .. "m ago"
+            else
+                timeText = math.floor(timeSince / 3600) .. "h ago"
+            end
+            
+            local timeLabel = self.AceGUI:Create("Label")
+            timeLabel:SetText("|cff888888" .. timeText .. "|r")
+            timeLabel:SetWidth(100)
+            userRowGroup:AddChild(timeLabel)
+        end
+    end
     
-    -- Request button
-    local requestBtn = self.AceGUI:Create("Button")
-    requestBtn:SetText("Request Profile")
-    requestBtn:SetWidth(120)
-    requestBtn:SetCallback("OnClick", function()
-        if not self.dataProvider:isProfileSyncAvailable() then
-            return
+    -- Show sync status
+    local partySyncInfo = addon.ProfileSync and addon.ProfileSync:GetPartySyncInfo() or {isActive = false}
+    local syncStatusLabel = self.AceGUI:Create("Label")
+    if partySyncInfo.isActive then
+        syncStatusLabel:SetText("|cff00ff00Party Sync: Active|r")
+    else
+        local addonUserCount = 0
+        for _, userInfo in ipairs(addonUsersInfo) do
+            if userInfo.hasAddon then
+                addonUserCount = addonUserCount + 1
+            end
         end
         
-        local selectedIndex = partyDropdown:GetValue()
-        local selectedMember = members[selectedIndex]
-        local profileName = profileInput:GetText()
-        
-        if not selectedMember or selectedMember == "" or selectedMember == "(No addon users found)" then
-            return
+        if addonUserCount >= 2 then
+            syncStatusLabel:SetText("|cffffff00Party Sync: Ready (waiting for conditions)|r")
+        else
+            syncStatusLabel:SetText("|cffff4444Party Sync: Inactive (need 2+ addon users)|r")
         end
-        
-        if not profileName or profileName == "" then
-            return
-        end
-        
-        self.dataProvider:requestProfile(selectedMember, profileName)
-    end)
-    self.requestInternalGroup:AddChild(requestBtn)
+    end
+    syncStatusLabel:SetFullWidth(true)
+    self.usersInternalGroup:AddChild(syncStatusLabel)
     
-    -- Refresh addon users button
-    local refreshBtn = self.AceGUI:Create("Button")
-    refreshBtn:SetText("Scan for Addon Users")
-    refreshBtn:SetWidth(150)
-    refreshBtn:SetCallback("OnClick", function()
-        if self.dataProvider:refreshAddonUsers() then
-            -- Refresh dropdown after a short delay to allow responses
-            C_Timer.After(2, function()
-                local newMembers = self.dataProvider:getAddonUsers()
-                
-                -- Add placeholder if no addon users found
-                if #newMembers == 0 then
-                    newMembers = {"(No addon users found)"}
-                end
-                
-                local newMemberList = {}
-                for i, name in ipairs(newMembers) do
-                    newMemberList[i] = name
-                end
-                partyDropdown:SetList(newMemberList)
-                partyDropdown:SetValue(nil)
-                
-                -- Update the members variable for the callback
-                members = newMembers
-            end)
-        end
-    end)
-    self.requestInternalGroup:AddChild(refreshBtn)
+    -- Manual refresh button
+    if IsInGroup() then
+        local refreshButton = self.AceGUI:Create("Button")
+        refreshButton:SetText("Scan for Addon Users")
+        refreshButton:SetWidth(150)
+        refreshButton:SetCallback("OnClick", function()
+            if addon.ProfileSync and addon.ProfileSync.RefreshAddonUsers then
+                addon.ProfileSync:RefreshAddonUsers()
+                -- Refresh UI after a short delay to allow responses
+                C_Timer.After(3, function()
+                    if self.usersInternalGroup then
+                        self:refreshUI()
+                    end
+                end)
+            end
+        end)
+        self.usersInternalGroup:AddChild(refreshButton)
+    end
 end
 
 -- Register components in addon namespace
@@ -470,5 +413,4 @@ if not addon.Components then
     addon.Components = {}
 end
 addon.Components.ProfileManagement = ProfileManagement
-addon.Components.ProfileSync = ProfileSync
-addon.Components.ProfileRequest = ProfileRequest
+addon.Components.AddonUsersList = AddonUsersList

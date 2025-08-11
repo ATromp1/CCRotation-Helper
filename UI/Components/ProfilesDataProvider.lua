@@ -43,20 +43,6 @@ function ProfilesDataProvider:resetCurrentProfile()
     return addon.Config:ResetProfile()
 end
 
--- Share current profile with party
-function ProfilesDataProvider:shareCurrentProfile()
-    return addon.Config:SyncProfileToParty()
-end
-
--- Share specific profile with party
-function ProfilesDataProvider:shareProfile(profileName)
-    return addon.Config:SyncProfileToParty(profileName)
-end
-
--- Request profile from party member
-function ProfilesDataProvider:requestProfile(playerName, profileName)
-    return addon.Config:RequestProfileFromPlayer(playerName, profileName)
-end
 
 -- Get addon users in party
 function ProfilesDataProvider:getAddonUsers()

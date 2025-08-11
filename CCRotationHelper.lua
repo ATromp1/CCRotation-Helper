@@ -26,12 +26,16 @@ function CCRotationHelper:OnAddonLoaded(loadedAddonName)
     -- Initialize configuration
     addon.Config:Initialize()
     
-    -- Initialize profile sync
+    -- Initialize simple party sync system
+    if addon.SimplePartySync then
+        addon.SimplePartySync:Initialize()
+    end
+    
+    -- Initialize legacy profile sync (will be refactored)
     if addon.ProfileSync then
         addon.ProfileSync:Initialize()
     end
     
-    print("|cff00ff00CC Rotation Helper|r: Addon loaded successfully!")
 end
 
 -- Player login handler  
@@ -54,7 +58,6 @@ function CCRotationHelper:OnPlayerLogin()
         addon.MinimapIcon:Initialize()
     end
     
-    print("|cff00ff00CC Rotation Helper|r: Ready for M+ dungeons!")
 end
 
 -- Main event handler
@@ -116,6 +119,19 @@ SlashCmdList["CCROTATION"] = function(msg)
         else
             print("|cff00ff00CC Rotation Helper|r: UI not initialized")
         end
+    elseif command == "partysync" then
+        -- Toggle party sync debug frame
+        if addon.DebugFrame then
+            addon.DebugFrame:ShowFrame("ProfileSync", "Party Sync Debug")
+            -- Test the debug system
+            addon.DebugFrame:Print("ProfileSync", "DEBUG", "=== DEBUG FRAME TEST ===")
+            addon.DebugFrame:Print("ProfileSync", "DEBUG", "If you see this, the debug system is working")
+            addon.DebugFrame:Print("ProfileSync", "INIT", "Test INIT category")
+            addon.DebugFrame:Print("ProfileSync", "GROUP", "Test GROUP category")
+            addon.DebugFrame:Print("ProfileSync", "COMM", "Test COMM category")
+        else
+            print("|cff00ff00CC Rotation Helper|r: DebugFrame not initialized")
+        end
     elseif command == "resetdebug" then
         -- Reset NPC debug frame position  
         if addon.UI then
@@ -129,33 +145,8 @@ SlashCmdList["CCROTATION"] = function(msg)
         local profiles = addon.Config:GetProfileNames()
         print("|cff00ff00CC Rotation Helper|r: Current profile: " .. current)
         print("Available profiles: " .. table.concat(profiles, ", "))
-    elseif string.match(command, "^sync") then
-        -- Profile sync commands
-        local args = {string.match(command, "^sync%s+(.+)")}
-        if #args == 0 then
-            -- Sync current profile to party
-            local success, msg = addon.Config:SyncProfileToParty()
-            print("|cff00ff00CC Rotation Helper|r: " .. msg)
-        else
-            local subcommand = args[1]
-            if subcommand and string.match(subcommand, "^%w+$") then
-                -- Sync specific profile to party
-                local success, msg = addon.Config:SyncProfileToParty(subcommand)
-                print("|cff00ff00CC Rotation Helper|r: " .. msg)
-            end
-        end
-    elseif string.match(command, "^request") then
-        -- Profile request commands: /ccr request PlayerName ProfileName
-        local player, profileName = string.match(command, "^request%s+(%S+)%s+(.+)")
-        if player and profileName then
-            local success, msg = addon.Config:RequestProfileFromPlayer(player, profileName)
-            print("|cff00ff00CC Rotation Helper|r: " .. msg)
-        else
-            print("|cff00ff00CC Rotation Helper|r: Usage: /ccr request PlayerName ProfileName")
-        end
     elseif command == "resetdb" then
         -- Manual database reset for corrupted profiles
-        print("|cff00ff00CC Rotation Helper|r: Resetting database...")
         _G["CCRotationDB"] = nil
         addon.Config.database = nil
         addon.Config:Initialize()
@@ -167,37 +158,42 @@ SlashCmdList["CCROTATION"] = function(msg)
         local newState = addon.Config:Get("debugMode") and "enabled" or "disabled"
         print("|cff00ff00CC Rotation Helper|r: Debug mode " .. newState)
     elseif command == "party" then
-        -- Debug party information
-        print("|cff00ff00CC Rotation Helper|r: Party Debug Info:")
-        print("  IsInGroup():", IsInGroup())
-        print("  IsInRaid():", IsInRaid())
-        print("  GetNumSubgroupMembers():", GetNumSubgroupMembers())
-        print("  GetNumGroupMembers():", GetNumGroupMembers())
-        
-        if addon.ProfileSync then
-            local members = addon.ProfileSync:GetPartyMembers()
-            print("  Party members found:", #members)
-            for i, name in ipairs(members) do
-                print("    " .. i .. ": " .. name)
-            end
-        else
-            print("  ProfileSync not available")
-        end
-    elseif command == "users" then
-        -- Show addon users
-        print("|cff00ff00CC Rotation Helper|r: Addon Users:")
-        if addon.ProfileSync then
-            local users = addon.ProfileSync:GetAddonUsers()
-            if #users == 0 then
-                addon.Config:DebugPrint("No addon users detected")
-                addon.Config:DebugPrint("Use 'Scan for Addon Users' button in config or join/rejoin party")
+        -- Debug party information in party sync frame
+        local function DebugPrint(...)
+            if addon.DebugFrame and addon.DebugFrame.Print then
+                addon.DebugFrame:Print("ProfileSync", "DEBUG", ...)
             else
-                for i, name in ipairs(users) do
-                    print("  " .. i .. ": " .. name .. " ✓")
-                end
+                print(...)
             end
+        end
+        
+        DebugPrint("=== Simple Party Sync Debug Info ===")
+        DebugPrint("IsInGroup():", IsInGroup())
+        DebugPrint("IsInRaid():", IsInRaid())
+        DebugPrint("GetNumSubgroupMembers():", GetNumSubgroupMembers())
+        DebugPrint("GetNumGroupMembers():", GetNumGroupMembers())
+        
+        -- Simple Party Sync info
+        if addon.SimplePartySync then
+            DebugPrint("Simple Party Sync Status:", addon.SimplePartySync:GetStatus())
+            DebugPrint("Is Group Leader:", addon.SimplePartySync:IsGroupLeader())
+            DebugPrint("Is Active:", addon.SimplePartySync:IsActive())
         else
-            print("  ProfileSync not available")
+            DebugPrint("SimplePartySync not available!")
+        end
+        
+    elseif command == "status" then
+        -- Show simple party sync system status
+        print("|cff00ff00CC Rotation Helper|r: === Simple Party Sync Status ===")
+        
+        -- Simple Party Sync status
+        if addon.SimplePartySync then
+            print("Status: " .. addon.SimplePartySync:GetStatus())
+            print("In Group: " .. (addon.SimplePartySync:IsInGroup() and "Yes" or "No"))
+            print("Is Leader: " .. (addon.SimplePartySync:IsGroupLeader() and "Yes" or "No"))
+            print("Active: " .. (addon.SimplePartySync:IsActive() and "Yes" or "No"))
+        else
+            print("SimplePartySync: Not initialized")
         end
     elseif command == "preview" then
         -- Toggle config preview manually

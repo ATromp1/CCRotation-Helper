@@ -30,159 +30,97 @@ addon.Database.ccTypeDisplayNames = {
 -- CC Type order for UI consistency
 addon.Database.ccTypeOrder = {"stun", "disorient", "fear", "knock", "incapacitate"}
 
--- Dungeon name mappings
-addon.Database.dungeonNames = {
-    ["ROOK"] = "The Rookery",
-    ["WORK"] = "Operation: Mechagon - Workshop",
-    ["TOP"] = "Theater of Pain", 
-    ["ML"] = "Motherlode",
-    ["FL"] = "Floodgate",
-    ["DFC"] = "Darkflame Cleft",
-    ["CBM"] = "Cinderbrew Meadery",
-    ["PRIO"] = "Priory of the Sacred Flame"
-}
 
--- Function to extract dungeon info from NPC name
-function addon.Database:ExtractDungeonInfo(npcName)
-    local abbreviation, mobName = npcName:match("^([A-Z]+)%s*-%s*(.+)$")
-    if abbreviation and self.dungeonNames[abbreviation] then
-        return abbreviation, self.dungeonNames[abbreviation], mobName
-    end
-    return nil, "Other", npcName
-end
 
--- Default NPC configurations from your WeakAura
+-- Default NPC configurations for Season 1 Mythic+
 addon.Database.defaultNPCs = {
-    -- The Rookery
-    [207198] = { name = "ROOK - Cursed Thunderer", cc = {true, true, true, true, true} },
-    [214439] = { name = "ROOK - Corrupted Oracle", cc = {true, true, true, true, true} },
+    -- Ara-Kara, City of Echoes
+    -- Placeholder entries - will be filled as NPCs are discovered
 
-    -- Operation: Mechagon - Workshop
-    [151657] = { name = "WORK - Bomb tonk", cc = {true, false, false, true, false} },
-    [236033] = { name = "WORK - Metal gunk", cc = {true, true, true, true, true} },
-    [151773] = { name = "WORK - Junkyard Dog", cc = {true, true, false, true, true} },
-    [144294] = { name = "WORK - Mechagon tinkerer", cc = {true, true, true, true, true} },
-    [144295] = { name = "WORK - Mechagon Mechanic", cc = {true, true, true, true, true} },
-
-    -- Theater of Pain
-    [174197] = { name = "TOP - Battlefield Ritualist", cc = {true, true, true, true, true} },
-    [174210] = { name = "TOP - Sludge Spewer", cc = {true, true, false, true, true} },
-    [169875] = { name = "TOP - Shackled Soul", cc = {true, true, false, true, true} },
-    [160495] = { name = "TOP - Maniacal Soulbinder", cc = {true, true, true, true, true} },
-    [170882] = { name = "TOP - Bone Magus", cc = {true, true, false, true, true} },
-    [164510] = { name = "TOP - Shambling Arbalest", cc = {true, true, false, true, true} },
-    [166524] = { name = "TOP - Deathwalker", cc = {true, true, true, true, true} },
-
-    -- Motherlode
-    [136470] = { name = "ML - Refreshment Vendor", cc = {true, true, true, true, true} },
-    [134232] = { name = "ML - Hired Assassin", cc = {true, true, true, true, true} },
-    [130488] = { name = "ML - Mech Jockey", cc = {true, true, true, true, true} },
-    [130661] = { name = "ML - Venture Earthshaper", cc = {true, true, true, true, true} },
-    [130635] = { name = "ML - Stonefury", cc = {true, true, true, true, true} },
-    [129802] = { name = "ML - Earthrager", cc = {true, true, true, true, true} },
-    [133432] = { name = "ML - Venture co Alchemist", cc = {true, true, true, true, true} },
-    [133482] = { name = "ML - Crawler mine", cc = {true, false, false, true, false} },
-
-    -- Fungal Folly
-    [231385] = { name = "FL - Darkfuse Inspector", cc = {true, true, true, true, true} },
-    [229069] = { name = "FL - Mechadrone Sniper", cc = {true, false, false, false, true} },
-    [229212] = { name = "FL - Darkfuse Demolitionist", cc = {true, true, true, true, true} },
-    [229686] = { name = "FL - Venture co Surveyor", cc = {true, true, true, true, true} },
-    [231014] = { name = "FL - Loaderbot", cc = {true, false, false, false, false} },
-    [231496] = { name = "FL - Venture co diver", cc = {true, true, true, true, true} },
-    [231223] = { name = "FL - Disturbed kelp", cc = {true, true, true, true, true} },
-    [231312] = { name = "FL - Venture co electrician", cc = {true, true, true, true, true} },
-
-    -- Darkflame Cleft
-    [211121] = { name = "DFC - Rank Overseer", cc = {false, false, false, true, false} },
-    [210812] = { name = "DFC - Royal Wicklighter", cc = {true, true, true, true, true} },
-    [210818] = { name = "DFC - Lowly Moleherd", cc = {true, true, true, true, true} },
-    [212383] = { name = "DFC - Kobold taskworker", cc = {true, true, true, true, true} },
-    [220815] = { name = "DFC - Blazing Fiend 2", cc = {true, true, true, true, true} },
-    [223772] = { name = "DFC - Blazing Fiend", cc = {true, true, true, true, true} },
-    [223773] = { name = "DFC - Blazing Fiend 3", cc = {true, true, true, true, true} },
-    [211228] = { name = "DFC - Blazing Fiend 4", cc = {true, true, true, true, true} },
-    [223774] = { name = "DFC - Blazing Fiend 5", cc = {true, true, true, true, true} },
-    [223777] = { name = "DFC - Blazing Fiend 6", cc = {true, true, true, true, true} },
-    [223770] = { name = "DFC - Blazing Fiend 7", cc = {true, true, true, true, true} },
-    [223775] = { name = "DFC - Blazing Fiend 8", cc = {true, true, true, true, true} },
-    [223776] = { name = "DFC - Blazing Fiend 9", cc = {true, true, true, true, true} },
-    [213913] = { name = "DFC - Kobold flametender", cc = {true, true, true, true, true} },
-    [208456] = { name = "DFC - Shuffling Horror", cc = {true, true, true, true, true} },
-    [208457] = { name = "DFC - Skittering Darkness", cc = {true, true, true, true, true} },
-    [210148] = { name = "DFC - Menial laborer", cc = {true, true, true, true, true} },
-    [213008] = { name = "DFC - Wriggling darkspawn", cc = {true, true, true, true, true} },
-
-    -- Cinderbrew Meadery
-    [218671] = { name = "CBM - Venture Pyromaniac", cc = {true, true, true, true, true} },
-    [214668] = { name = "CBM - Venture Patron", cc = {true, true, true, true, true} },
-    [214673] = { name = "CBM - Flavor Scientist", cc = {true, true, true, true, true} },
-    [220060] = { name = "CBM - Taste Tester", cc = {true, true, true, true, true} },
-    [210264] = { name = "CBM - Bee wrangler", cc = {true, true, true, true, true} },
-    [210265] = { name = "CBM - Worker bee", cc = {true, true, true, true, true} },
-    [220141] = { name = "CBM - Royal jelly purveyor", cc = {true, true, true, true, true} },
-    [218016] = { name = "CBM - Ravenour Cinderbee", cc = {true, true, true, true, true} },
+    -- The Dawnbreaker
+    [213892] = { name = "Nightfall Shadowmage", dungeon = "The Dawnbreaker", cc = {true, true, true, true, true} },
+    [213893] = { name = "Nightfall Darkcaster", dungeon = "The Dawnbreaker", cc = {true, true, true, true, true} },
+    [224616] = { name = "Animated Shadow", dungeon = "The Dawnbreaker", cc = {true, true, true, true, true} },
 
     -- Priory of the Sacred Flame
-    [206705] = { name = "PRIO - Arathi Footman", cc = {true, true, true, true, true} },
-    [206697] = { name = "PRIO - Devout Priest", cc = {true, true, true, true, true} },
-    [206698] = { name = "PRIO - Fanatical Conjuror", cc = {true, true, true, true, true} },
-    [206699] = { name = "PRIO - War Lynx", cc = {true, true, true, true, false} },
-    [207943] = { name = "PRIO - Arathi neophyte", cc = {true, true, true, true, true} },
-    [221760] = { name = "PRIO - Risen Mage", cc = {true, true, false, true, true} },
+    [206705] = { name = "Arathi Footman", dungeon = "Priory of the Sacred Flame", cc = {true, true, true, true, true} },
+    [206697] = { name = "Devout Priest", dungeon = "Priory of the Sacred Flame", cc = {true, true, true, true, true} },
+    [206698] = { name = "Fanatical Conjuror", dungeon = "Priory of the Sacred Flame", cc = {true, true, true, true, true} },
+    [206699] = { name = "War Lynx", dungeon = "Priory of the Sacred Flame", cc = {true, true, true, true, false} },
+    [207943] = { name = "Arathi neophyte", dungeon = "Priory of the Sacred Flame", cc = {true, true, true, true, true} },
+    [221760] = { name = "Risen Mage", dungeon = "Priory of the Sacred Flame", cc = {true, true, false, true, true} },
+
+    -- Operation Floodgate
+    -- Placeholder entries - will be filled as NPCs are discovered
+
+    -- Eco-Dome Al'dani
+    -- Placeholder entries - will be filled as NPCs are discovered
+
+    -- Halls of Atonement
+    -- Placeholder entries - will be filled as NPCs are discovered
+
+    -- Tazavesh Streets
+    [177817] = { name = "Support Officer", dungeon = "Tazavesh Streets", cc = {true, true, true, true, true} },
+    [179840] = { name = "Market Peacekeeper", dungeon = "Tazavesh Streets", cc = {true, true, true, true, true} },
+    [179841] = { name = "Veteran Sparkcaster", dungeon = "Tazavesh Streets", cc = {true, true, true, true, true} },
+    [176395] = { name = "Overloaded Mailemental", dungeon = "Tazavesh Streets", cc = {true, true, true, true, true} },
+    [176396] = { name = "Defective Sorter", dungeon = "Tazavesh Streets", cc = {true, true, true, true, true} },
+
+    -- Tazavesh Gambit
+    -- Placeholder entries - will be filled as NPCs are discovered
 }
 
--- Default spell configurations
+-- Default spell configurations - unified format
 addon.Database.defaultSpells = {
     -- Demon Hunter
-    [179057] = { name = "Chaos nova", ccType = "stun", priority = 1 },
-    [207684] = { name = "Misery", ccType = "fear", priority = 16 },
-    [202138] = { name = "Chains", ccType = "knock", priority = 17 },
+    [179057] = { name = "Chaos nova", ccType = "stun", priority = 1, active = true, source = "database" },
+    [207684] = { name = "Misery", ccType = "fear", priority = 16, active = true, source = "database" },
+    [202138] = { name = "Chains", ccType = "knock", priority = 17, active = true, source = "database" },
 
     -- Death Knight
-    [207167] = { name = "Sleet", ccType = "disorient", priority = 8 },
+    [207167] = { name = "Sleet", ccType = "disorient", priority = 8, active = true, source = "database" },
 
     -- Druid
-    [99] = { name = "Roar", ccType = "incapacitate", priority = 14 },
-    [132469] = { name = "Typhoon", ccType = "knock", priority = 15 },
+    [99] = { name = "Roar", ccType = "incapacitate", priority = 14, active = true, source = "database" },
+    [132469] = { name = "Typhoon", ccType = "knock", priority = 15, active = true, source = "database" },
 
     -- Evoker
-    [368970] = { name = "Tail swipe", ccType = "knock", priority = 5 },
-    [357214] = { name = "Wing buffet", ccType = "knock", priority = 24 },
+    [368970] = { name = "Tail swipe", ccType = "knock", priority = 5, active = true, source = "database" },
+    [357214] = { name = "Wing buffet", ccType = "knock", priority = 24, active = true, source = "database" },
 
     -- Hunter
-    [462031] = { name = "Explosive trap", ccType = "knock", priority = 22 },
-    [186387] = { name = "Bursting shot", ccType = "knock", priority = 23 },
+    [462031] = { name = "Explosive trap", ccType = "knock", priority = 22, active = true, source = "database" },
+    [186387] = { name = "Bursting shot", ccType = "knock", priority = 23, active = true, source = "database" },
 
     -- Mage
-    [157980] = { name = "Supernova", ccType = "knock", priority = 9 },
-    [458513] = { name = "Gravity lapse", ccType = "knock", priority = 10 },
-    [31661] = { name = "DB", ccType = "disorient", priority = 11 },
-    [157981] = { name = "Blastwave", ccType = "knock", priority = 12 },
+    [157980] = { name = "Supernova", ccType = "knock", priority = 9, active = true, source = "database" },
+    [458513] = { name = "Gravity lapse", ccType = "knock", priority = 10, active = true, source = "database" },
+    [31661] = { name = "DB", ccType = "disorient", priority = 11, active = true, source = "database" },
+    [157981] = { name = "Blastwave", ccType = "knock", priority = 12, active = true, source = "database" },
 
     -- Monk
-    [119381] = { name = "Sweep", ccType = "stun", priority = 4 },
-    [116844] = { name = "Ring of peace", ccType = "knock", priority = 18 },
+    [119381] = { name = "Sweep", ccType = "stun", priority = 4, active = true, source = "database" },
+    [116844] = { name = "Ring of peace", ccType = "knock", priority = 18, active = true, source = "database" },
 
     -- Paladin
-    [115750] = { name = "Blinding light", ccType = "disorient", priority = 13 },
+    [115750] = { name = "Blinding light", ccType = "disorient", priority = 13, active = true, source = "database" },
 
     -- Priest
-    [8122] = { name = "Fear", ccType = "fear", priority = 7 },
+    [8122] = { name = "Fear", ccType = "fear", priority = 7, active = true, source = "database" },
 
     -- Rogue
-    [2094] = { name = "Blind", ccType = "disorient", priority = 21 },
+    [2094] = { name = "Blind", ccType = "disorient", priority = 21, active = true, source = "database" },
 
     -- Shaman
-    [51490] = { name = "Thunderstorm", ccType = "knock", priority = 2 },
-    [192058] = { name = "Incap", ccType = "stun", priority = 3 },
+    [51490] = { name = "Thunderstorm", ccType = "knock", priority = 2, active = true, source = "database" },
+    [192058] = { name = "Incap", ccType = "stun", priority = 3, active = true, source = "database" },
 
     -- Warlock
-    [30283] = { name = "Shadowfury", ccType = "stun", priority = 20 },
+    [30283] = { name = "Shadowfury", ccType = "stun", priority = 20, active = true, source = "database" },
 
     -- Warrior
-    [46968] = { name = "Shockwave", ccType = "stun", priority = 6 },
-    [5246] = { name = "Fear", ccType = "fear", priority = 19 },
+    [46968] = { name = "Shockwave", ccType = "stun", priority = 6, active = true, source = "database" },
+    [5246] = { name = "Fear", ccType = "fear", priority = 19, active = true, source = "database" },
 }
 
 -- Convert CC array to effectiveness map
@@ -326,22 +264,13 @@ function addon.Database:GetCurrentDungeonInfo()
         return nil, instanceType
     end
     
-    -- Check if this is a known dungeon (for future features)
-    local isKnownDungeon = false
-    for _, fullName in pairs(self.dungeonNames) do
-        if name == fullName then
-            isKnownDungeon = true
-            break
-        end
-    end
-    
     -- Return dungeon name and instance type
-    return name, instanceType, isKnownDungeon
+    return name, instanceType
 end
 
 -- Get NPCs that belong to the current dungeon
 function addon.Database:GetCurrentDungeonNPCs()
-    local dungeonName, instanceType, isKnownDungeon = self:GetCurrentDungeonInfo()
+    local dungeonName, instanceType = self:GetCurrentDungeonInfo()
     if not dungeonName then
         return {}
     end
@@ -350,14 +279,13 @@ function addon.Database:GetCurrentDungeonNPCs()
     
     -- Get database NPCs for this dungeon
     for npcID, data in pairs(self.defaultNPCs) do
-        local npcAbbrev, npcDungeon, mobName = self:ExtractDungeonInfo(data.name)
-        if npcDungeon == dungeonName then
+        if data.dungeon == dungeonName then
             dungeonNPCs[npcID] = {
                 id = npcID,
                 name = data.name,
-                mobName = mobName,
                 cc = data.cc,
-                source = "database"
+                source = "database",
+                dungeon = data.dungeon
             }
         end
     end
@@ -365,13 +293,10 @@ function addon.Database:GetCurrentDungeonNPCs()
     -- Get custom NPCs for this dungeon
     if addon.Config and addon.Config.db then
         for npcID, data in pairs(addon.Config.db.customNPCs) do
-            local npcAbbrev, npcDungeon, mobName = self:ExtractDungeonInfo(data.name)
-            -- Check both name-based detection and explicit dungeon field
-            if npcDungeon == dungeonName or data.dungeon == dungeonName then
+            if data.dungeon == dungeonName then
                 dungeonNPCs[npcID] = {
                     id = npcID,
                     name = data.name,
-                    mobName = mobName,
                     cc = data.cc,
                     source = "custom",
                     dungeon = data.dungeon
@@ -385,6 +310,26 @@ end
 
 -- Check if we're currently in a dungeon that has NPCs in our database
 function addon.Database:IsInKnownDungeon()
-    local dungeonName, instanceType, isKnownDungeon = self:GetCurrentDungeonInfo()
-    return dungeonName ~= nil and isKnownDungeon
+    local dungeonName, instanceType = self:GetCurrentDungeonInfo()
+    if not dungeonName then
+        return false
+    end
+    
+    -- Check if we have any NPCs for this dungeon
+    for npcID, data in pairs(self.defaultNPCs) do
+        if data.dungeon == dungeonName then
+            return true
+        end
+    end
+    
+    -- Check custom NPCs too
+    if addon.Config and addon.Config.db then
+        for npcID, data in pairs(addon.Config.db.customNPCs) do
+            if data.dungeon == dungeonName then
+                return true
+            end
+        end
+    end
+    
+    return false
 end
