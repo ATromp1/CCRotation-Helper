@@ -40,13 +40,13 @@ function BaseComponent:validateContainer(container)
     if container.type == "InlineGroup" then
         -- InlineGroup is ideal for component separation
         if not container.frame:GetWidth() or container.frame:GetWidth() == 0 then
-            print("Warning: Component container should use SetFullWidth(true) for proper layout")
+            self:DebugPrint("Warning: Component container should use SetFullWidth(true) for proper layout")
         end
     elseif container.type == "SimpleGroup" then
         -- SimpleGroup is acceptable for internal organization
         -- No additional validation needed
     else
-        print("Warning: Component container type '" .. (container.type or "unknown") .. "' may not provide proper visual separation. Consider using InlineGroup.")
+        self:DebugPrint("Warning: Component container type '" .. (container.type or "unknown") .. "' may not provide proper visual separation. Consider using InlineGroup.")
     end
 end
 

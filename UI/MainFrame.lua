@@ -36,9 +36,7 @@ function UI:Initialize()
         
         -- Register for secondary queue state changes
         addon.CCRotation:RegisterEventListener("SECONDARY_QUEUE_STATE_CHANGED", function(shouldShow)
-            if addon.Config:Get("debugMode") then
-                print("CCR UI Debug: Secondary queue state changed to " .. (shouldShow and "SHOW" or "HIDE"))
-            end
+            addon.Config:DebugPrint("Secondary queue state changed to " .. (shouldShow and "SHOW" or "HIDE"))
             self.iconRenderer.shouldShowSecondary = shouldShow
         end)
     end

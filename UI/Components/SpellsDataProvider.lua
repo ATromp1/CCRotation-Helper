@@ -1,43 +1,47 @@
--- SpellsDataProvider.lua - Data abstraction layer for spell components
--- Provides clean interface between components and data layer
-
 local addonName, addon = ...
 
 local SpellsDataProvider = {}
 
--- Get CC type list for dropdowns
-function SpellsDataProvider:getCCTypeList()
-    local ccTypeList = {}
-    for _, ccType in ipairs(addon.Database.ccTypeOrder) do
-        ccTypeList[ccType] = addon.Database.ccTypeDisplayNames[ccType]
+-- Get effective spell data (synced data takes priority over profile data)
+function SpellsDataProvider:getEffectiveSpellData()
+    -- If we have synced spell data from party sync, use that
+    if addon.SimplePartySync and addon.SimplePartySync.syncedSpells then
+        addon.Config:DebugPrint("Using SYNCED spell data from party leader")
+        return addon.SimplePartySync.syncedSpells
     end
+    
+    -- Otherwise use profile data
+    addon.Config:DebugPrint("Using LOCAL profile spell data")
+    return addon.Config.db.spells or {}
+end
+
+-- Get valid CC types for dropdown
+function SpellsDataProvider:getCCTypes()
+    local ccTypeList = {}
+    for type, displayName in pairs(addon.Config.ccTypeMapping) do
+        table.insert(ccTypeList, displayName)
+    end
+    table.sort(ccTypeList)
+    
+    -- Add "- All -" option at the beginning for filtering
+    table.insert(ccTypeList, 1, "- All -")
+    
     return ccTypeList
 end
 
 -- Get all active spells
 function SpellsDataProvider:getActiveSpells()
     local allSpells = {}
+    local effectiveSpells = self:getEffectiveSpellData()
     
-    -- Add database spells (if not inactive)
-    for spellID, data in pairs(addon.Database.defaultSpells) do
-        if not addon.Config.db.inactiveSpells[spellID] then
+    -- Get only active spells from effective data
+    for spellID, spell in pairs(effectiveSpells) do
+        if spell.active then
             allSpells[spellID] = {
-                name = data.name,
-                ccType = data.ccType,
-                priority = data.priority,
-                source = "database"
-            }
-        end
-    end
-    
-    -- Add custom spells (if not inactive, override database if same ID)
-    for spellID, data in pairs(addon.Config.db.customSpells) do
-        if not addon.Config.db.inactiveSpells[spellID] then
-            allSpells[spellID] = {
-                name = data.name,
-                ccType = data.ccType,
-                priority = data.priority,
-                source = "custom"
+                name = spell.name,
+                ccType = spell.ccType,
+                priority = spell.priority,
+                source = spell.source
             }
         end
     end
@@ -47,15 +51,27 @@ end
 
 -- Get disabled spells
 function SpellsDataProvider:getDisabledSpells()
-    return addon.Config.db.inactiveSpells
+    local disabledSpells = {}
+    local effectiveSpells = self:getEffectiveSpellData()
+    
+    -- Get only inactive spells from effective data
+    for spellID, spell in pairs(effectiveSpells) do
+        if not spell.active then
+            disabledSpells[spellID] = spell
+        end
+    end
+    
+    return disabledSpells
 end
 
 -- Add custom spell
 function SpellsDataProvider:addCustomSpell(spellID, spellName, ccType, priority)
-    addon.Config.db.customSpells[spellID] = {
+    addon.Config.db.spells[spellID] = {
         name = spellName,
         ccType = ccType,
-        priority = priority
+        priority = priority,
+        active = true,
+        source = "custom"
     }
     
     -- Update rotation system
@@ -64,16 +80,8 @@ end
 
 -- Update spell data
 function SpellsDataProvider:updateSpell(spellID, spellData, field, value)
-    if spellData.source == "custom" then
-        addon.Config.db.customSpells[spellID][field] = value
-    else
-        -- Create custom entry to override database spell
-        addon.Config.db.customSpells[spellID] = {
-            name = spellData.name,
-            ccType = spellData.ccType,
-            priority = spellData.priority,
-            [field] = value
-        }
+    if addon.Config.db.spells[spellID] then
+        addon.Config.db.spells[spellID][field] = value
     end
     
     self:onConfigChanged()
@@ -81,12 +89,10 @@ end
 
 -- Disable spell
 function SpellsDataProvider:disableSpell(spellID, spellData)
-    addon.Config.db.inactiveSpells[spellID] = {
-        name = spellData.name,
-        ccType = spellData.ccType,
-        priority = spellData.priority,
-        source = spellData.source
-    }
+    -- Set spell as inactive in unified table
+    if addon.Config.db.spells[spellID] then
+        addon.Config.db.spells[spellID].active = false
+    end
     
     -- Renumber remaining active spells
     self:renumberSpellPriorities()
@@ -96,38 +102,18 @@ end
 
 -- Enable spell
 function SpellsDataProvider:enableSpell(spellID)
-    local disabledSpellData = addon.Config.db.inactiveSpells[spellID]
-    addon.Config.db.inactiveSpells[spellID] = nil
-    
     -- Find the highest current priority among active spells
     local highestPriority = 0
-    local allActiveSpells = self:getActiveSpells()
-    for _, spellData in pairs(allActiveSpells) do
-        if spellData.priority > highestPriority then
-            highestPriority = spellData.priority
+    for _, spell in pairs(addon.Config.db.spells) do
+        if spell.active and spell.priority > highestPriority then
+            highestPriority = spell.priority
         end
     end
     
-    -- Assign the enabled spell a priority higher than the current highest
-    local newPriority = highestPriority + 1
-    
-    -- If it's a database spell being re-enabled, create/update custom entry to set priority
-    if disabledSpellData and addon.Database.defaultSpells[spellID] then
-        -- Database spell - create custom override for priority
-        addon.Config.db.customSpells[spellID] = addon.Config.db.customSpells[spellID] or {}
-        addon.Config.db.customSpells[spellID].priority = newPriority
-        -- Preserve any existing custom name/ccType if they exist
-        if not addon.Config.db.customSpells[spellID].name then
-            addon.Config.db.customSpells[spellID].name = disabledSpellData.name
-        end
-        if not addon.Config.db.customSpells[spellID].ccType then
-            addon.Config.db.customSpells[spellID].ccType = disabledSpellData.ccType
-        end
-    elseif disabledSpellData then
-        -- Custom spell - update priority in customSpells
-        if addon.Config.db.customSpells[spellID] then
-            addon.Config.db.customSpells[spellID].priority = newPriority
-        end
+    -- Set spell as active with new priority
+    if addon.Config.db.spells[spellID] then
+        addon.Config.db.spells[spellID].active = true
+        addon.Config.db.spells[spellID].priority = highestPriority + 1
     end
     
     self:onConfigChanged()
@@ -135,8 +121,63 @@ end
 
 -- Delete custom spell
 function SpellsDataProvider:deleteCustomSpell(spellID)
-    addon.Config.db.inactiveSpells[spellID] = nil
-    addon.Config.db.customSpells[spellID] = nil
+    addon.Config.db.spells[spellID] = nil
+    
+    self:onConfigChanged()
+end
+
+-- Move spell priority (up or down)
+function SpellsDataProvider:moveSpellPriority(spellID, spellData, direction, sortedSpells, index)
+    -- Extract the actual direction parameter (3rd parameter)
+    local directionStr = tostring(direction)
+    
+    if not addon.Config.db.spells[spellID] or not addon.Config.db.spells[spellID].active then
+        return
+    end
+    
+    -- Get all active spells sorted by priority
+    local activeSpells = {}
+    for id, spell in pairs(addon.Config.db.spells) do
+        if spell.active then
+            table.insert(activeSpells, {spellID = id, priority = spell.priority, name = spell.name})
+        end
+    end
+    
+    table.sort(activeSpells, function(a, b)
+        return a.priority < b.priority
+    end)
+    
+    -- Find current position in sorted list
+    local currentIndex = nil
+    for i, spell in ipairs(activeSpells) do
+        if spell.spellID == spellID then
+            currentIndex = i
+            break
+        end
+    end
+    
+    if not currentIndex then
+        return
+    end
+    
+    -- Calculate new position  
+    local moveOffset = (directionStr == "up" and -1 or 1)
+    local newIndex = currentIndex + moveOffset
+    
+    -- Check bounds
+    if newIndex < 1 or newIndex > #activeSpells then
+        return -- Can't move beyond bounds
+    end
+    
+    -- Swap positions in the array
+    local temp = activeSpells[currentIndex]
+    activeSpells[currentIndex] = activeSpells[newIndex]
+    activeSpells[newIndex] = temp
+    
+    -- Reassign priorities based on new order
+    for i, spell in ipairs(activeSpells) do
+        addon.Config.db.spells[spell.spellID].priority = i
+    end
     
     self:onConfigChanged()
 end
@@ -151,57 +192,18 @@ function SpellsDataProvider:renumberSpellPriorities()
     for spellID, data in pairs(allSpells) do
         table.insert(sortedSpells, {spellID = spellID, data = data})
     end
-    table.sort(sortedSpells, function(a, b) return a.data.priority < b.data.priority end)
     
-    -- Renumber priorities starting from 1
+    table.sort(sortedSpells, function(a, b)
+        return a.data.priority < b.data.priority
+    end)
+    
+    -- Reassign priorities starting from 1
     for i, spell in ipairs(sortedSpells) do
         local newPriority = i
         
-        if spell.data.source == "custom" then
-            -- Update custom spell priority
-            addon.Config.db.customSpells[spell.spellID].priority = newPriority
-        else
-            -- Create custom entry to override database spell
-            addon.Config.db.customSpells[spell.spellID] = {
-                name = spell.data.name,
-                ccType = spell.data.ccType,
-                priority = newPriority
-            }
-        end
-    end
-end
-
--- Move spell priority up or down
-function SpellsDataProvider:moveSpellPriority(spellID, spellData, direction, sortedSpells, currentIndex)
-    local targetIndex = direction == "up" and currentIndex - 1 or currentIndex + 1
-    
-    if targetIndex < 1 or targetIndex > #sortedSpells then
-        return -- Can't move beyond bounds
-    end
-    
-    -- Create a new priority ordering by reordering the entire list
-    local newOrder = {}
-    for i, spell in ipairs(sortedSpells) do
-        newOrder[i] = spell
-    end
-    
-    -- Swap positions in the array
-    newOrder[currentIndex], newOrder[targetIndex] = newOrder[targetIndex], newOrder[currentIndex]
-    
-    -- Now assign sequential priorities based on the new order
-    for i, spell in ipairs(newOrder) do
-        local newPriority = i
-        
-        if spell.data.source == "custom" then
-            -- Update custom spell priority
-            addon.Config.db.customSpells[spell.spellID].priority = newPriority
-        else
-            -- Create custom entry to override database spell
-            addon.Config.db.customSpells[spell.spellID] = {
-                name = spell.data.name,
-                ccType = spell.data.ccType,
-                priority = newPriority
-            }
+        -- Update the priority in unified table
+        if addon.Config.db.spells[spell.spellID] then
+            addon.Config.db.spells[spell.spellID].priority = newPriority
         end
     end
     
@@ -213,8 +215,11 @@ function SpellsDataProvider:onConfigChanged()
     -- Update rotation system
     self:updateRotationSystem()
     
-    -- Fire event for config changes (ProfileSync will handle sync automatically)
+    -- Fire event for config changes
     addon.Config:FireEvent("PROFILE_DATA_CHANGED", "spells")
+    
+    -- Broadcast to party if leader
+    addon.Config:BroadcastProfileChangeIfLeader()
 end
 
 -- Update rotation system after data changes
@@ -234,18 +239,12 @@ function SpellsDataProvider:updateRotationSystem()
         elseif addon.CCRotation.RebuildQueue then
             addon.CCRotation:RebuildQueue()
         end
-        
-        -- Force immediate UI update with the newly rebuilt queues
-        if addon.UI and addon.UI.UpdateDisplay then
-            addon.UI:UpdateDisplay(addon.CCRotation.cooldownQueue, addon.CCRotation.unavailableQueue)
-        end
     end
 end
 
--- Register in addon namespace
+-- Create namespace if it doesn't exist
 if not addon.DataProviders then
     addon.DataProviders = {}
 end
-addon.DataProviders.Spells = SpellsDataProvider
 
-return SpellsDataProvider
+addon.DataProviders.Spells = SpellsDataProvider

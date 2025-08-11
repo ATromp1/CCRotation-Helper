@@ -27,16 +27,6 @@ function ProfilesTab.create(container)
     local profileGroup = addon.BaseComponent:createInlineGroup("Profile Management", scroll)
     local profileManagement = addon.Components.ProfileManagement:new(profileGroup, {})
     profileManagement:buildUI()
-    
-    -- Profile Sync Section  
-    local syncGroup = addon.BaseComponent:createInlineGroup("Profile Sync (Party/Raid)", scroll)
-    local profileSync = addon.Components.ProfileSync:new(syncGroup, {})
-    profileSync:buildUI()
-    
-    -- Profile Request Section
-    local requestGroup = addon.BaseComponent:createInlineGroup("Request Profile from Party Member", scroll)
-    local profileRequest = addon.Components.ProfileRequest:new(requestGroup, {})
-    profileRequest:buildUI()
 end
 
 -- Register the tab module

@@ -76,30 +76,38 @@ function AddSpellForm:new(container, callbacks, dataProvider)
 end
 
 function AddSpellForm:buildUI()
+    -- Check if editing is disabled due to party sync
+    local isEditingDisabled = addon.UI and addon.UI:IsEditingDisabledByPartySync()
+    
     -- Spell ID input
     local spellIDEdit = self.AceGUI:Create("EditBox")
-    spellIDEdit:SetLabel("Spell ID")
+    spellIDEdit:SetLabel(isEditingDisabled and "Spell ID (Read-only - Party Sync Active)" or "Spell ID")
     spellIDEdit:SetWidth(150)
+    spellIDEdit:SetDisabled(isEditingDisabled)
     self.container:AddChild(spellIDEdit)
     
     -- Spell name input
     local spellNameEdit = self.AceGUI:Create("EditBox")
-    spellNameEdit:SetLabel("Spell Name")
+    spellNameEdit:SetLabel(isEditingDisabled and "Spell Name (Read-only - Party Sync Active)" or "Spell Name")
     spellNameEdit:SetWidth(200)
+    spellNameEdit:SetDisabled(isEditingDisabled)
     self.container:AddChild(spellNameEdit)
     
     -- CC Type dropdown using local helper
     local ccTypeDropdown = createCCTypeDropdown(self.AceGUI, 150, "stun")
+    ccTypeDropdown:SetDisabled(isEditingDisabled)
     self.container:AddChild(ccTypeDropdown)
     
     -- Priority input using local helper
     local priorityEdit = createPriorityInput(self.AceGUI, 100, 25)
+    priorityEdit:SetDisabled(isEditingDisabled)
     self.container:AddChild(priorityEdit)
     
     -- Add button
     local addButton = self.AceGUI:Create("Button")
-    addButton:SetText("Add Spell")
+    addButton:SetText(isEditingDisabled and "Add Spell (Disabled)" or "Add Spell")
     addButton:SetWidth(100)
+    addButton:SetDisabled(isEditingDisabled)
     addButton:SetCallback("OnClick", function()
         local spellID = tonumber(spellIDEdit:GetText())
         local spellName = spellNameEdit:GetText():trim()
@@ -143,6 +151,9 @@ function DisabledSpellsList:new(container, callbacks, dataProvider)
 end
 
 function DisabledSpellsList:buildUI()
+    -- Check if editing is disabled due to party sync
+    local isEditingDisabled = addon.UI and addon.UI:IsEditingDisabledByPartySync()
+    
     -- Get disabled spells from data provider
     local inactiveSpells = self.dataProvider and self.dataProvider:getDisabledSpells() or addon.Config.db.inactiveSpells
     
@@ -170,8 +181,9 @@ function DisabledSpellsList:buildUI()
         
         -- Enable button
         local enableButton = self.AceGUI:Create("Button")
-        enableButton:SetText("Enable")
+        enableButton:SetText(isEditingDisabled and "Enable (Disabled)" or "Enable")
         enableButton:SetWidth(80)
+        enableButton:SetDisabled(isEditingDisabled)
         enableButton:SetCallback("OnClick", function()
             -- Use data provider for spell operations
             if self.dataProvider then
@@ -207,8 +219,9 @@ function DisabledSpellsList:buildUI()
         local isCustomSpell = (addon.Database.defaultSpells[spellID] == nil)
         if isCustomSpell then
             local deleteButton = self.AceGUI:Create("Button")
-            deleteButton:SetText("Delete")
+            deleteButton:SetText(isEditingDisabled and "Delete (Disabled)" or "Delete")
             deleteButton:SetWidth(80)
+            deleteButton:SetDisabled(isEditingDisabled)
             deleteButton:SetCallback("OnClick", function()
                 -- Use data provider for spell operations
                 if self.dataProvider then
@@ -242,28 +255,118 @@ function TrackedSpellsList:new(container, callbacks, dataProvider)
     return instance
 end
 
+function TrackedSpellsList:GetTableKeys(tbl)
+    if not tbl then return {} end
+    local keys = {}
+    for k, _ in pairs(tbl) do
+        table.insert(keys, tostring(k))
+    end
+    return keys
+end
+
+function TrackedSpellsList:countKeys(tbl)
+    if not tbl then return 0 end
+    local count = 0
+    for _ in pairs(tbl) do
+        count = count + 1
+    end
+    return count
+end
+
+function TrackedSpellsList:hashProfileData(profileData)
+    if not profileData then 
+        return "nil" 
+    end
+    
+    -- Create simple hash of spell-relevant data
+    local hash = ""
+    
+    if profileData.customSpells then
+        for spellId, data in pairs(profileData.customSpells) do
+            hash = hash .. spellId .. (data.priority or "") .. (data.ccType or "")
+        end
+    end
+    
+    if profileData.inactiveSpells then
+        for spellId, _ in pairs(profileData.inactiveSpells) do
+            hash = hash .. "inactive" .. spellId
+        end
+    end
+    
+    return hash
+end
+
 function TrackedSpellsList:Initialize()
     -- Register for profile sync events to refresh UI when sync data arrives
-    -- Using BaseComponent method for cleaner registration
     self:RegisterEventListener("PROFILE_SYNC_RECEIVED", function(profileData)
-        if profileData.customSpells or profileData.inactiveSpells then
-            -- Only refresh UI if the spells tab is currently active
-            if addon.UI and addon.UI:IsConfigTabActive("spells") then
-                self:refreshUI()
-            end
+        if addon.UI and addon.UI:IsConfigTabActive("spells") then
+            self:refreshUI()
+        end
+    end)
+    
+    -- Register for direct profile data changes (from current profile updates)
+    self:RegisterEventListener("PROFILE_DATA_CHANGED", function(dataType, value)
+        if addon.UI and addon.UI:IsConfigTabActive("spells") and 
+           (dataType == "customSpells" or dataType == "inactiveSpells") then
+            self:refreshUI()
+        end
+    end)
+    
+    -- Register for WoW group events since we're using simple sync now
+    local AceEvent = LibStub("AceEvent-3.0")
+    AceEvent:Embed(self)
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupChanged")
+    self:RegisterEvent("PARTY_LEADER_CHANGED", "OnGroupChanged")
+end
+
+function TrackedSpellsList:OnGroupChanged()
+    -- Only refresh UI if the spells tab is currently active
+    if addon.UI and addon.UI:IsConfigTabActive("spells") then
+        self:refreshUI()
+    end
+end
+
+function TrackedSpellsList:applyProfileData(profileData)
+    if not profileData then return end
+    
+    -- Update customSpells in config
+    if profileData.customSpells then
+        addon.Config.db.customSpells = profileData.customSpells
+    end
+    
+    -- Update inactiveSpells in config
+    if profileData.inactiveSpells then
+        addon.Config.db.inactiveSpells = profileData.inactiveSpells
+    end
+    
+    -- Update tracked spells in rotation system
+    if addon.CCRotation then
+        addon.CCRotation.trackedCooldowns = addon.Config:GetTrackedSpells()
+        if addon.CCRotation.RebuildQueue then
+            addon.CCRotation:RebuildQueue()
+        end
+    end
+end
+
+function TrackedSpellsList:refreshUI()
+    -- Only refresh if the spells tab is currently active
+    if not (addon.UI and addon.UI:IsConfigTabActive("spells")) then
+        return
+    end
+    
+    -- Delay refresh slightly to avoid race conditions with other components
+    C_Timer.After(0.1, function()
+        if self.container and addon.UI and addon.UI:IsConfigTabActive("spells") then
+            self.container:ReleaseChildren()
+            self:buildUI()
         end
     end)
 end
 
-function TrackedSpellsList:refreshUI()
-    -- Clear current container and rebuild UI with updated data
-    if self.container then
-        self.container:ReleaseChildren()
-        self:buildUI()
-    end
-end
-
 function TrackedSpellsList:buildUI()
+    -- Check if editing is disabled due to party sync
+    local isEditingDisabled = addon.UI and addon.UI:IsEditingDisabledByPartySync()
+    
     -- Get all active spells from data provider
     local allSpells = self.dataProvider and self.dataProvider:getActiveSpells() or {}
     
@@ -345,11 +448,11 @@ function TrackedSpellsList:buildUI()
         rowGroup:SetLayout("Flow")
         self.container:AddChild(rowGroup)
         
-        -- Move up button (disabled for first item)
+        -- Move up button (disabled for first item or party sync)
         local upButton = self.AceGUI:Create("Button")
-        upButton:SetText("Up")
+        upButton:SetText(isEditingDisabled and "Up (Disabled)" or "Up")
         upButton:SetWidth(60)
-        if i == 1 then
+        if i == 1 or isEditingDisabled then
             upButton:SetDisabled(true)
         else
             upButton:SetCallback("OnClick", function()
@@ -362,11 +465,11 @@ function TrackedSpellsList:buildUI()
         end
         rowGroup:AddChild(upButton)
         
-        -- Move down button (disabled for last item)
+        -- Move down button (disabled for last item or party sync)
         local downButton = self.AceGUI:Create("Button")
-        downButton:SetText("Down")
+        downButton:SetText(isEditingDisabled and "Down (Disabled)" or "Down")
         downButton:SetWidth(70)
-        if i == #sortedSpells then
+        if i == #sortedSpells or isEditingDisabled then
             downButton:SetDisabled(true)
         else
             downButton:SetCallback("OnClick", function()
@@ -416,6 +519,7 @@ function TrackedSpellsList:buildUI()
         local spellIDEdit = self.AceGUI:Create("EditBox")
         spellIDEdit:SetText(tostring(spell.spellID))
         spellIDEdit:SetWidth(80)
+        spellIDEdit:SetDisabled(isEditingDisabled)
         spellIDEdit:SetCallback("OnEnterPressed", function(widget, event, text)
             local newSpellID = tonumber(text)
             if newSpellID and newSpellID ~= spell.spellID then
@@ -427,6 +531,7 @@ function TrackedSpellsList:buildUI()
         
         -- Editable CC type dropdown using local helper
         local ccTypeDropdown = createCCTypeDropdown(self.AceGUI, 120, addon.Config:NormalizeCCType(spell.data.ccType))
+        ccTypeDropdown:SetDisabled(isEditingDisabled)
         ccTypeDropdown:SetCallback("OnValueChanged", function(widget, event, value)
             -- Use data provider for spell operations
             if self.dataProvider then
@@ -451,8 +556,9 @@ function TrackedSpellsList:buildUI()
         
         -- Disable button (for all spells)
         local disableButton = self.AceGUI:Create("Button")
-        disableButton:SetText("Disable")
+        disableButton:SetText(isEditingDisabled and "Disable (Disabled)" or "Disable")
         disableButton:SetWidth(80)
+        disableButton:SetDisabled(isEditingDisabled)
         disableButton:SetCallback("OnClick", function()
             -- Use data provider for spell operations
             if self.dataProvider then

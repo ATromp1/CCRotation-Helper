@@ -72,17 +72,17 @@ function addon.UI:CreateConfigFrame()
     tabGroup:SetCallback("OnGroupSelected", function(container, event, group)
         activeTab = group -- Update active tab tracking
         
+        -- Store active tab reference BEFORE releasing children to prevent race conditions
+        if addon.UI then
+            addon.UI.activeConfigTab = activeTab
+        end
+        
         function container:RefreshCurrentTab()
             tabGroup:SelectTab(group)
         end
 
         container:ReleaseChildren()
         loadTab(group, container)
-        
-        -- Store active tab reference for components to check
-        if addon.UI then
-            addon.UI.activeConfigTab = activeTab
-        end
     end)
     tabGroup:SelectTab("profiles")
     frame:AddChild(tabGroup)
@@ -115,11 +115,24 @@ end
 function addon.UI:IsConfigTabActive(tabName)
     -- Return false if config frame doesn't exist or isn't shown
     if not self.configFrame or not self.configFrame:IsShown() then
+        addon.Config:DebugPrint("IsConfigTabActive:", tabName, "- config frame not shown")
         return false
     end
     
     -- Check if the specified tab is currently active
-    return self.activeConfigTab == tabName
+    local isActive = self.activeConfigTab == tabName
+    addon.Config:DebugPrint("IsConfigTabActive:", tabName, "- current tab:", self.activeConfigTab, "- result:", isActive)
+    return isActive
+end
+
+-- Check if editing should be disabled due to party sync (user is follower, not leader)
+function addon.UI:IsEditingDisabledByPartySync()
+    if not addon.ProfileSync then
+        return false
+    end
+    
+    -- Disable editing if profile selection is locked (party sync active and not leader)
+    return addon.ProfileSync:IsProfileSelectionLocked()
 end
 
 -- Show configuration frame
