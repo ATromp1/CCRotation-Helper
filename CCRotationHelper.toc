@@ -2,7 +2,7 @@
 ## Title: CC Rotation Helper
 ## Notes: Crowd Control rotation tracker for Mythic+ dungeons
 ## Author: Furo
-## Version: 1.3.4
+## Version: 1.3.5
 ## SavedVariables: CCRotationDB
 ## IconTexture: Interface\AddOns\CCRotationHelper\media\CCRotationHelper.tga
 
