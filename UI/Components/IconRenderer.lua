@@ -217,9 +217,10 @@ function IconRenderer:updateIconDisplay(icon, iconIndex, cooldownData, needsUpda
         icon.cooldownEndTime = nil
     end
     
-    -- Always update effectiveness state - desaturate if not effective OR no enabled NPCs
+    -- Always update effectiveness state - desaturate if not effective OR (optionally) no enabled NPCs
     local hasActiveEnabledNPCs = addon.CCRotation and addon.CCRotation:HasActiveEnabledNPCs() or false
-    local shouldDesaturate = not cooldownData.isEffective or not hasActiveEnabledNPCs
+    local shouldDesaturateForNPCs = config:Get("desaturateWhenNoTrackedNPCs") and not hasActiveEnabledNPCs
+    local shouldDesaturate = not cooldownData.isEffective or shouldDesaturateForNPCs
     icon.displayTexture:SetDesaturated(shouldDesaturate)
     
     -- Set spell name (only on first icon, using global setting)

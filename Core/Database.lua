@@ -35,7 +35,9 @@ addon.Database.ccTypeOrder = {"stun", "disorient", "fear", "knock", "incapacitat
 -- Default NPC configurations for Season 1 Mythic+
 addon.Database.defaultNPCs = {
     -- Ara-Kara, City of Echoes
-    -- Placeholder entries - will be filled as NPCs are discovered
+    [216293] = { name = "Trilling Attendant", dungeon = "Ara-Kara, City of Echoes", cc = {true, true, true, true, true} },
+    [223253] = { name = "Bloodstained Webmage", dungeon = "Ara-Kara, City of Echoes", cc = {true, true, true, true, true} },
+    [216340] = { name = "Sentry Stagshell", dungeon = "Ara-Kara, City of Echoes", cc = {true, true, true, true, true} },
 
     -- The Dawnbreaker
     [213892] = { name = "Nightfall Shadowmage", dungeon = "The Dawnbreaker", cc = {true, true, true, true, true} },
@@ -51,13 +53,25 @@ addon.Database.defaultNPCs = {
     [221760] = { name = "Risen Mage", dungeon = "Priory of the Sacred Flame", cc = {true, true, false, true, true} },
 
     -- Operation Floodgate
-    -- Placeholder entries - will be filled as NPCs are discovered
+    [229686] = { name = "Venture Co. Surveyor", dungeon = "Operation Floodgate", cc = {true, true, true, true, true} },
+    [229252] = { name = "Darkfuse Hyena", dungeon = "Operation Floodgate", cc = {true, true, true, true, false} },
+    [231014] = { name = "Loaderbot", dungeon = "Operation Floodgate", cc = {true, false, false, false, false} },
+    [229069] = { name = "Mechadrone Sniper", dungeon = "Operation Floodgate", cc = {true, true, false, true, false} },
+    [231496] = { name = "Venture Co. Diver", dungeon = "Operation Floodgate", cc = {true, true, true, true, true} },
+    [229212] = { name = "Darkfuse Demolitionist", dungeon = "Operation Floodgate", cc = {true, true, true, true, true} },
+    [231223] = { name = "Disturbed Kelp", dungeon = "Operation Floodgate", cc = {true, true, true, true, true} },
+    [231312] = { name = "Venture Co. Electrician", dungeon = "Operation Floodgate", cc = {true, true, true, true, true} },
 
     -- Eco-Dome Al'dani
-    -- Placeholder entries - will be filled as NPCs are discovered
+    [234883] = { name = "Voracious Gorger", dungeon = "Eco-Dome Al'dani", cc = {true, true, true, true, true} },
+    [242209] = { name = "Overgorged Mite", dungeon = "Eco-Dome Al'dani", cc = {true, true, true, true, true} },
+    [234962] = { name = "Wastelander Farstalker", dungeon = "Eco-Dome Al'dani", cc = {true, true, true, true, true} },
+    [234957] = { name = "Wastelander Ritualist", dungeon = "Eco-Dome Al'dani", cc = {true, true, true, true, true} },
 
     -- Halls of Atonement
-    -- Placeholder entries - will be filled as NPCs are discovered
+    [164562] = { name = "Depraved Houndmaster", dungeon = "Halls of Atonement", cc = {true, true, true, true, true} },
+    [165414] = { name = "Depraved Obliterator", dungeon = "Halls of Atonement", cc = {true, true, true, true, true} },
+    [165529] = { name = "Depraved Collector", dungeon = "Halls of Atonement", cc = {true, true, true, true, true} },
 
     -- Tazavesh Streets
     [177817] = { name = "Support Officer", dungeon = "Tazavesh Streets", cc = {true, true, true, true, true} },
@@ -67,7 +81,12 @@ addon.Database.defaultNPCs = {
     [176396] = { name = "Defective Sorter", dungeon = "Tazavesh Streets", cc = {true, true, true, true, true} },
 
     -- Tazavesh Gambit
-    -- Placeholder entries - will be filled as NPCs are discovered
+    [178139] = { name = "Murkbrine Shellcrusher", dungeon = "Tazavesh Gambit", cc = {true, true, true, true, true} },
+    [178142] = { name = "Murkbrine Fishmancer", dungeon = "Tazavesh Gambit", cc = {true, true, true, true, true} },
+    [176551] = { name = "Vault Purifier", dungeon = "Tazavesh Gambit", cc = {true, true, true, true, true} },
+    [179388] = { name = "Hourglass Tidesage", dungeon = "Tazavesh Gambit", cc = {true, true, true, true, true} },
+    [180015] = { name = "Burly Deckhand", dungeon = "Tazavesh Gambit", cc = {true, true, true, true, true} },
+    [180431] = { name = "Focused Ritualist", dungeon = "Tazavesh Gambit", cc = {true, true, true, true, true} },
 }
 
 -- Default spell configurations - unified format
@@ -94,7 +113,7 @@ addon.Database.defaultSpells = {
 
     -- Mage
     [157980] = { name = "Supernova", ccType = "knock", priority = 9, active = true, source = "database" },
-    [458513] = { name = "Gravity lapse", ccType = "knock", priority = 10, active = true, source = "database" },
+    [449700] = { name = "Gravity lapse", ccType = "knock", priority = 10, active = true, source = "database" },
     [31661] = { name = "DB", ccType = "disorient", priority = 11, active = true, source = "database" },
     [157981] = { name = "Blastwave", ccType = "knock", priority = 12, active = true, source = "database" },
 

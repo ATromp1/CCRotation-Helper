@@ -529,13 +529,16 @@ function TrackedSpellsList:buildUI()
         spellIDEdit:SetText(tostring(spell.spellID))
         spellIDEdit:SetWidth(80)
         spellIDEdit:SetDisabled(isEditingDisabled)
-        spellIDEdit:SetCallback("OnEnterPressed", function(widget, event, text)
+        local function handleSpellIDChange(widget, event, text)
             local newSpellID = tonumber(text)
             if newSpellID and newSpellID ~= spell.spellID then
                 -- Update spell ID (complex operation that may require full refresh)
                 self:triggerCallback('onSpellIDChanged', spell.spellID, newSpellID, spell.data)
             end
-        end)
+        end
+        
+        spellIDEdit:SetCallback("OnEnterPressed", handleSpellIDChange)
+        spellIDEdit:SetCallback("OnEditFocusLost", handleSpellIDChange)
         rowGroup:AddChild(spellIDEdit)
         
         -- Editable CC type dropdown using local helper

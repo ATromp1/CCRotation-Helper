@@ -87,6 +87,26 @@ function SpellsDataProvider:updateSpell(spellID, spellData, field, value)
     self:onConfigChanged()
 end
 
+-- Change spell ID (complex operation that moves data from old ID to new ID)
+function SpellsDataProvider:changeSpellID(oldSpellID, newSpellID, spellData)
+    if not addon.Config.db.spells[oldSpellID] then
+        return false, "Original spell not found"
+    end
+    
+    if addon.Config.db.spells[newSpellID] then
+        return false, "New spell ID already exists"
+    end
+    
+    -- Copy data from old spell ID to new spell ID
+    addon.Config.db.spells[newSpellID] = addon.Config.db.spells[oldSpellID]
+    
+    -- Remove old spell ID entry
+    addon.Config.db.spells[oldSpellID] = nil
+    
+    self:onConfigChanged()
+    return true
+end
+
 -- Disable spell
 function SpellsDataProvider:disableSpell(spellID, spellData)
     -- Set spell as inactive in unified table

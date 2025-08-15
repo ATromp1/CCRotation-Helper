@@ -70,9 +70,22 @@ function SpellsTab.create(container)
             end
         end,
         onSpellIDChanged = function(oldSpellID, newSpellID, spellData)
-            -- Spell ID changes are complex, require full tab refresh
-            container:ReleaseChildren()
-            SpellsTab.create(container)
+            -- Use data provider to handle spell ID change
+            if dataProvider and dataProvider.changeSpellID then
+                local success, errorMsg = dataProvider:changeSpellID(oldSpellID, newSpellID, spellData)
+                if success then
+                    -- Spell ID changes are complex, require full tab refresh
+                    container:ReleaseChildren()
+                    SpellsTab.create(container)
+                else
+                    -- Show error message if the change failed
+                    addon.Config:DebugPrint("Failed to change spell ID:", errorMsg)
+                end
+            else
+                -- Fallback to old behavior if data provider doesn't support it
+                container:ReleaseChildren()
+                SpellsTab.create(container)
+            end
         end,
         onSpellDisabled = function(spellID)
             -- This will be overridden after disabledSpellsList is created
