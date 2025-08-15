@@ -256,9 +256,25 @@ function CCRotation:DoRebuildQueue()
         end
     end
     
+    -- Clean up stale cooldown data if group composition changed
+    if groupChanged then
+        self:CleanupStaleSpellCooldowns()
+    end
+    
     -- Recalculate if there were cooldown changes OR group composition changed
     if hasChanges or groupChanged then
         self:RecalculateQueue()
+    end
+end
+
+-- Clean up spell cooldown data for players no longer in group
+function CCRotation:CleanupStaleSpellCooldowns()
+    for key, spellData in pairs(self.spellCooldowns) do
+        local guid = spellData.GUID
+        if not self.GUIDToUnit[guid] then
+            -- This GUID is no longer in our group, remove its cooldown data
+            self.spellCooldowns[key] = nil
+        end
     end
 end
 
@@ -351,8 +367,11 @@ function CCRotation:SortAndSeparateQueues()
             -- Special case: when not in a group, treat yourself as always in range
             if unit == "player" and not IsInGroup() then
                 cooldownData.inRange = true
-            else
+            elseif IsInGroup() and UnitExists(unit) then
                 cooldownData.inRange = UnitInRange(unit)
+            else
+                -- Not in group or unit doesn't exist - treat as out of range
+                cooldownData.inRange = false
             end
             
             if cooldownData.isDead or not cooldownData.inRange then

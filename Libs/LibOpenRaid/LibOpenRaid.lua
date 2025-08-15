@@ -498,7 +498,19 @@ end
             for i = #commScheduler, 1, -1 do
                 local commData = commScheduler[i]
                 if (commData) then
-                    sendData(commData.data, commData.channel)
+                    -- Validate that we're still in the appropriate group before sending
+                    local canSend = false
+                    if commData.channel == "PARTY" or commData.channel == "INSTANCE_CHAT" then
+                        canSend = IsInGroup() and not IsInRaid()
+                    elseif commData.channel == "RAID" then
+                        canSend = IsInRaid()
+                    elseif commData.channel == "GUILD" then
+                        canSend = IsInGuild()
+                    end
+                    
+                    if canSend then
+                        sendData(commData.data, commData.channel)
+                    end
                     table.remove(commScheduler, i)
                     return
                 end
@@ -2125,6 +2137,17 @@ end
         --clear the data
         openRaidLib.CooldownManager.EraseData()
 
+        --cancel all cooldown tickers since we're no longer in a group
+        for spellId, tickerObject in pairs(openRaidLib.CooldownManager.CooldownTickers) do
+            if tickerObject and not tickerObject:IsCancelled() then
+                tickerObject:Cancel()
+            end
+        end
+        table.wipe(openRaidLib.CooldownManager.CooldownTickers)
+
+        --clear any queued communication messages
+        table.wipe(commScheduler)
+
         --trigger a public callback
         openRaidLib.publicCallback.TriggerCallback("CooldownListWipe", openRaidLib.CooldownManager.UnitData)
 
@@ -2471,6 +2494,11 @@ end
 
 --send to comm a specific cooldown that was just used, a charge got available or its cooldown is over (ready to use)
 function openRaidLib.CooldownManager.SendPlayerCooldownUpdate(spellId, cooldownTimeLeft, charges, startTimeOffset, duration, auraDuration)
+    -- Don't send cooldown updates if not in a group or raid
+    if not IsInGroup() then
+        return
+    end
+    
     local dataToSend = "" .. CONST_COMM_COOLDOWNUPDATE_PREFIX .. "," .. spellId .. "," .. cooldownTimeLeft .. "," .. charges .. "," .. startTimeOffset .. "," .. duration .. "," .. auraDuration
     openRaidLib.commHandler.SendCommData(dataToSend)
     diagnosticComm("SendPlayerCooldownUpdate| " .. dataToSend) --debug

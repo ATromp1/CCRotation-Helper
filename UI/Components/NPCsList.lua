@@ -43,8 +43,17 @@ end
 function CurrentLocationComponent:refreshUI()
     -- Clear current container and rebuild UI with updated location data
     if self.container then
-        self.container:ReleaseChildren()
-        self:buildUI()
+        -- Use scroll preservation if container is a ScrollFrame
+        if self.container.SetScroll and addon.ScrollHelper then
+            addon.ScrollHelper:refreshWithScrollPreservation(self.container, function()
+                self.container:ReleaseChildren()
+                self:buildUI()
+            end)
+        else
+            -- Fallback to normal refresh
+            self.container:ReleaseChildren()
+            self:buildUI()
+        end
     end
 end
 

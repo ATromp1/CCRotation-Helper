@@ -43,6 +43,7 @@ UI\Components\NPCsList.lua
 UI\Components\ProfilesDataProvider.lua
 UI\Components\ProfilesList.lua
 UI\Components\ConfigDataProvider.lua
+UI\Components\ScrollHelper.lua
 UI\Components\FormControls.lua
 UI\Components\DisplaySettings.lua
 UI\Components\TextSettings.lua

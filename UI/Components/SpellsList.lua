@@ -357,8 +357,17 @@ function TrackedSpellsList:refreshUI()
     -- Delay refresh slightly to avoid race conditions with other components
     C_Timer.After(0.1, function()
         if self.container and addon.UI and addon.UI:IsConfigTabActive("spells") then
-            self.container:ReleaseChildren()
-            self:buildUI()
+            -- Use scroll preservation if container supports it and ScrollHelper is available
+            if self.container.SetScroll and addon.ScrollHelper then
+                addon.ScrollHelper:refreshWithScrollPreservation(self.container, function()
+                    self.container:ReleaseChildren()
+                    self:buildUI()
+                end)
+            else
+                -- Fallback to normal refresh
+                self.container:ReleaseChildren()
+                self:buildUI()
+            end
         end
     end)
 end

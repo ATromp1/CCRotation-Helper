@@ -31,7 +31,27 @@ function addon.SimplePartySync:UpdateGroupStatus()
 end
 
 function addon.SimplePartySync:IsInGroup()
-    return IsInGroup() or IsInRaid()
+    -- In delves, IsInGroup() returns true but you're only grouped with NPCs
+    -- Check if we have actual player group members
+    if IsInRaid() then
+        return true -- Raids are always player groups
+    end
+    
+    if IsInGroup() then
+        -- Check if we have any real players in the group besides ourselves
+        local numGroupMembers = GetNumSubgroupMembers() -- This counts party members excluding yourself
+        if numGroupMembers > 0 then
+            -- Verify at least one group member is a real player
+            for i = 1, numGroupMembers do
+                local unit = "party" .. i
+                if UnitIsPlayer(unit) then
+                    return true -- Found at least one real player
+                end
+            end
+        end
+    end
+    
+    return false -- Solo or only grouped with NPCs
 end
 
 function addon.SimplePartySync:IsGroupLeader()
@@ -48,10 +68,10 @@ function addon.SimplePartySync:StartBroadcasting()
     
     -- Then broadcast every 5 seconds
     broadcastTimer = C_Timer.NewTicker(BROADCAST_INTERVAL, function()
-        if self:IsInGroup() and self:IsGroupLeader() then
-            self:BroadcastProfile()
+        if addon.SimplePartySync:IsInGroup() and addon.SimplePartySync:IsGroupLeader() then
+            addon.SimplePartySync:BroadcastProfile()
         else
-            self:StopBroadcasting()
+            addon.SimplePartySync:StopBroadcasting()
         end
     end)
 end
@@ -170,6 +190,10 @@ end
 
 -- Event handlers
 function addon.SimplePartySync:GROUP_ROSTER_UPDATE()
+    -- Immediately stop broadcasting if no longer in group
+    if not self:IsInGroup() then
+        self:StopBroadcasting()
+    end
     self:UpdateGroupStatus()
 end
 
