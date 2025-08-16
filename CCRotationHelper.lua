@@ -26,12 +26,14 @@ function CCRotationHelper:OnAddonLoaded(loadedAddonName)
     -- Initialize configuration
     addon.Config:Initialize()
     
-    -- Initialize simple party sync system
-    if addon.SimplePartySync then
-        addon.SimplePartySync:Initialize()
+    -- Initialize party sync system
+    if addon.PartySync then
+        addon.PartySync:Initialize()
+        -- Register config listener now that Config is initialized
+        addon.PartySync:RegisterConfigListener()
     end
     
-    -- Initialize legacy profile sync (will be refactored)
+    -- Initialize legacy profile sync compatibility layer
     if addon.ProfileSync then
         addon.ProfileSync:Initialize()
     end
@@ -173,27 +175,27 @@ SlashCmdList["CCROTATION"] = function(msg)
         DebugPrint("GetNumSubgroupMembers():", GetNumSubgroupMembers())
         DebugPrint("GetNumGroupMembers():", GetNumGroupMembers())
         
-        -- Simple Party Sync info
-        if addon.SimplePartySync then
-            DebugPrint("Simple Party Sync Status:", addon.SimplePartySync:GetStatus())
-            DebugPrint("Is Group Leader:", addon.SimplePartySync:IsGroupLeader())
-            DebugPrint("Is Active:", addon.SimplePartySync:IsActive())
+        -- Party Sync info
+        if addon.PartySync then
+            DebugPrint("Party Sync Status:", addon.PartySync:GetStatus())
+            DebugPrint("Is Group Leader:", addon.PartySync:IsGroupLeader())
+            DebugPrint("Is Active:", addon.PartySync:IsActive())
         else
-            DebugPrint("SimplePartySync not available!")
+            DebugPrint("PartySync not available!")
         end
         
     elseif command == "status" then
         -- Show simple party sync system status
-        print("|cff00ff00CC Rotation Helper|r: === Simple Party Sync Status ===")
+        print("|cff00ff00CC Rotation Helper|r: === Party Sync Status ===")
         
-        -- Simple Party Sync status
-        if addon.SimplePartySync then
-            print("Status: " .. addon.SimplePartySync:GetStatus())
-            print("In Group: " .. (addon.SimplePartySync:IsInGroup() and "Yes" or "No"))
-            print("Is Leader: " .. (addon.SimplePartySync:IsGroupLeader() and "Yes" or "No"))
-            print("Active: " .. (addon.SimplePartySync:IsActive() and "Yes" or "No"))
+        -- Party Sync status
+        if addon.PartySync then
+            print("Status: " .. addon.PartySync:GetStatus())
+            print("In Group: " .. (addon.PartySync:IsInGroup() and "Yes" or "No"))
+            print("Is Leader: " .. (addon.PartySync:IsGroupLeader() and "Yes" or "No"))
+            print("Active: " .. (addon.PartySync:IsActive() and "Yes" or "No"))
         else
-            print("SimplePartySync: Not initialized")
+            print("PartySync: Not initialized")
         end
     elseif command == "preview" then
         -- Toggle config preview manually
@@ -208,21 +210,132 @@ SlashCmdList["CCROTATION"] = function(msg)
         else
             print("|cff00ff00CC Rotation Helper|r: UI not initialized")
         end
+        
+    elseif command == "syncdata" then
+        -- Show what's being broadcast or received
+        if not addon.PartySync then
+            print("|cffff0000Error:|r PartySync not available")
+            return
+        end
+        
+        if addon.PartySync:IsGroupLeader() then
+            print("|cff00ff00CC Rotation Helper|r: === BROADCASTING DATA ===")
+            if addon.Config and addon.Config.database then
+                local data = addon.Config.database.profile.spells or {}
+                
+                -- Collect active spells and sort by priority
+                local activeSpells = {}
+                for id, spell in pairs(data) do
+                    if spell.active then
+                        table.insert(activeSpells, {
+                            id = id,
+                            name = spell.name or "Unknown",
+                            priority = spell.priority or 999,
+                            ccType = spell.ccType or "unknown"
+                        })
+                    end
+                end
+                
+                -- Sort by priority (lower number = higher priority)
+                table.sort(activeSpells, function(a, b)
+                    return a.priority < b.priority
+                end)
+                
+                -- Display sorted spells
+                for i, spell in ipairs(activeSpells) do
+                    print(string.format("  %d. Spell %s: %s (Priority: %d, Type: %s)", 
+                        i, spell.id, spell.name, spell.priority, spell.ccType))
+                end
+                print(string.format("Total broadcasting: %d active spells", #activeSpells))
+                
+                -- Show priority players (sorted alphabetically)
+                local priorityPlayers = addon.Config.database.profile.priorityPlayers or {}
+                local priorityNames = {}
+                for name in pairs(priorityPlayers) do
+                    table.insert(priorityNames, name)
+                end
+                table.sort(priorityNames)
+                
+                for i, name in ipairs(priorityNames) do
+                    print(string.format("  Priority Player %d: %s", i, name))
+                end
+                print(string.format("Total priority players: %d", #priorityNames))
+            end
+        elseif addon.PartySync:IsInPartySync() then
+            print("|cff00ff00CC Rotation Helper|r: === RECEIVING DATA ===")
+            local syncedSpells = addon.PartySync:GetDisplaySpells()
+            
+            -- Collect synced spells and sort by priority
+            local activeSyncedSpells = {}
+            if syncedSpells then
+                for id, spell in pairs(syncedSpells) do
+                    if spell.active then
+                        table.insert(activeSyncedSpells, {
+                            id = id,
+                            name = spell.name or "Unknown",
+                            priority = spell.priority or 999,
+                            ccType = spell.ccType or "unknown"
+                        })
+                    end
+                end
+            end
+            
+            -- Sort by priority (lower number = higher priority)
+            table.sort(activeSyncedSpells, function(a, b)
+                return a.priority < b.priority
+            end)
+            
+            -- Display sorted synced spells
+            for i, spell in ipairs(activeSyncedSpells) do
+                print(string.format("  %d. Synced Spell %s: %s (Priority: %d, Type: %s)", 
+                    i, spell.id, spell.name, spell.priority, spell.ccType))
+            end
+            print(string.format("Total receiving: %d synced spells", #activeSyncedSpells))
+            
+            -- Show synced priority players (sorted alphabetically)
+            local syncedPriority = addon.PartySync:GetDisplayPriorityPlayers()
+            local syncedPriorityNames = {}
+            if syncedPriority then
+                for name in pairs(syncedPriority) do
+                    table.insert(syncedPriorityNames, name)
+                end
+            end
+            table.sort(syncedPriorityNames)
+            
+            for i, name in ipairs(syncedPriorityNames) do
+                print(string.format("  Priority Player %d: %s", i, name))
+            end
+            print(string.format("Total synced priority players: %d", #syncedPriorityNames))
+        else
+            print("|cff00ff00CC Rotation Helper|r: Not in party sync mode")
+        end
+
+    elseif command == "hash" then
+        -- Show current data hash
+        if addon.PartySync then
+            print("|cff00ff00CC Rotation Helper|r: === DATA HASH ===")
+            local hash = addon.PartySync:GetCurrentDataHash()
+            if hash then
+                print("Current data hash:", hash)
+            else
+                print("No hash available")
+            end
+        else
+            print("|cffff0000Error:|r PartySync not available")
+        end
     else
         print("|cff00ff00CC Rotation Helper|r Commands:")
         print("  /ccr config - Open configuration")
         print("  /ccr toggle - Enable/disable addon")
         print("  /ccr reset - Reset position to default")
-        print("  /ccr position - Show position debug info and toggle anchor")
-        print("  /ccr icons - Show icon debug info and attempt recovery")
-        print("  /ccr debugnpc - Toggle NPC debug frame")
-        print("  /ccr resetdebug - Reset NPC debug frame position")
-        print("  /ccr profile - Show current profile info")
-        print("  /ccr sync [profilename] - Share profile with party")
-        print("  /ccr request PlayerName ProfileName - Request profile from player")
+        print("  /ccr status - Show party sync status")
         print("  /ccr debug - Toggle debug mode")
         print("  /ccr preview - Toggle config positioning preview")
-        print("  /ccr resetdb - Reset corrupted database (WARNING: loses all settings)")
+        print("|cffFFFF00Party Sync Commands:|r")
+        print("  /ccr syncdata - Show what you're broadcasting/receiving")
+        print("  /ccr hash - Show current data hash")
+        print("  /ccr debugnpc - Toggle NPC debug frame")
+        print("  /ccr resetdb - Reset database (WARNING: loses all settings)")
     end
 end
 

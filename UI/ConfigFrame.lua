@@ -115,14 +115,28 @@ end
 function addon.UI:IsConfigTabActive(tabName)
     -- Return false if config frame doesn't exist or isn't shown
     if not self.configFrame or not self.configFrame:IsShown() then
-        addon.Config:DebugPrint("IsConfigTabActive:", tabName, "- config frame not shown")
         return false
     end
     
     -- Check if the specified tab is currently active
     local isActive = self.activeConfigTab == tabName
-    addon.Config:DebugPrint("IsConfigTabActive:", tabName, "- current tab:", self.activeConfigTab, "- result:", isActive)
     return isActive
+end
+
+-- Refresh a specific tab if it's currently active
+function addon.UI:RefreshTabIfActive(tabName)
+    if not self:IsConfigTabActive(tabName) then
+        return
+    end
+    
+    -- Find the tab group and trigger a refresh by re-selecting the current tab
+    if self.configFrame and self.configFrame.tabGroup then
+        local tabGroup = self.configFrame.tabGroup
+        if tabGroup and tabGroup.SelectTab then
+            -- Re-select the current tab to force a refresh
+            tabGroup:SelectTab(tabName)
+        end
+    end
 end
 
 -- Check if editing should be disabled due to party sync (user is follower, not leader)

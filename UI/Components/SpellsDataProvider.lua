@@ -4,13 +4,16 @@ local SpellsDataProvider = {}
 
 -- Get effective spell data (synced data takes priority over profile data)
 function SpellsDataProvider:getEffectiveSpellData()
-    -- If we have synced spell data from party sync, use that
-    if addon.SimplePartySync and addon.SimplePartySync.syncedSpells then
-        addon.Config:DebugPrint("Using SYNCED spell data from party leader")
-        return addon.SimplePartySync.syncedSpells
+    -- If we're in party sync mode, use synced data
+    if addon.PartySync and addon.PartySync:IsInPartySync() then
+        local syncedSpells = addon.PartySync:GetDisplaySpells()
+        if syncedSpells then
+            addon.Config:DebugPrint("Using SYNCED spell data from party leader")
+            return syncedSpells
+        end
     end
     
-    -- Otherwise use profile data
+    -- Otherwise use local profile data
     addon.Config:DebugPrint("Using LOCAL profile spell data")
     return addon.Config.db.spells or {}
 end
@@ -237,9 +240,6 @@ function SpellsDataProvider:onConfigChanged()
     
     -- Fire event for config changes
     addon.Config:FireEvent("PROFILE_DATA_CHANGED", "spells")
-    
-    -- Broadcast to party if leader
-    addon.Config:BroadcastProfileChangeIfLeader()
 end
 
 -- Update rotation system after data changes

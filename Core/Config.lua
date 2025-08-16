@@ -284,8 +284,6 @@ function addon.Config:Set(key, value)
     -- Determine if this is a profile-specific or global setting
     if self:IsProfileSetting(key) then
         self.db[key] = value
-        -- If we're the party leader and this is a profile setting, broadcast the change
-        self:BroadcastProfileChangeIfLeader()
     else
         self.global[key] = value
     end
@@ -386,13 +384,11 @@ end
 function addon.Config:AddPriorityPlayer(playerName)
     self.db.priorityPlayers[playerName] = true
     self:FireEvent("PROFILE_DATA_CHANGED", "priorityPlayers", playerName)
-    self:BroadcastProfileChangeIfLeader()
 end
 
 function addon.Config:RemovePriorityPlayer(playerName)
     self.db.priorityPlayers[playerName] = nil
     self:FireEvent("PROFILE_DATA_CHANGED", "priorityPlayers", playerName)
-    self:BroadcastProfileChangeIfLeader()
 end
 
 -- Normalize CC type to string format (handle both old numeric and new string values)
@@ -548,26 +544,23 @@ end
 -- Check if profile selection is currently locked (during party sync)
 function addon.Config:IsProfileSelectionLocked()
     -- Profile selection is locked when we're receiving synced data from a party leader
-    if addon.SimplePartySync then
-        -- Locked if we're in a group, not the leader, and have synced data
-        return addon.SimplePartySync:IsInGroup() and 
-               not addon.SimplePartySync:IsGroupLeader() and 
-               addon.SimplePartySync.syncedSpells ~= nil
+    if addon.PartySync then
+        return addon.PartySync:IsProfileSelectionLocked()
     end
     return false
 end
 
 -- Get party sync information for UI display
 function addon.Config:GetPartySyncStatus()
-    if not addon.SimplePartySync then
+    if not addon.PartySync then
         return { isActive = false }
     end
     
-    local isActive = addon.SimplePartySync:IsActive()
+    local isActive = addon.PartySync:IsActive()
     local leaderName = nil
     
     if isActive then
-        if addon.SimplePartySync:IsGroupLeader() then
+        if addon.PartySync:IsGroupLeader() then
             leaderName = UnitName("player")
         else
             -- Find the group leader name
@@ -587,16 +580,9 @@ function addon.Config:GetPartySyncStatus()
     
     return {
         isActive = isActive,
-        status = addon.SimplePartySync:GetStatus(),
+        status = addon.PartySync:GetStatus(),
         leaderName = leaderName
     }
-end
-
--- Broadcast profile changes if we're the party leader in sync mode
-function addon.Config:BroadcastProfileChangeIfLeader()
-    if addon.SimplePartySync and addon.SimplePartySync:IsGroupLeader() and addon.SimplePartySync:IsActive() then
-        addon.SimplePartySync:BroadcastProfile()
-    end
 end
 
 -- Debug utility function

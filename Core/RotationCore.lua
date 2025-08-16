@@ -678,8 +678,6 @@ function CCRotation:ShouldShowSecondaryQueue()
         if addon.Config:Get("debugMode") then
             local spellInfo = C_Spell.GetSpellInfo(firstAbility.spellID)
             local spellName = spellInfo and spellInfo.name or "Unknown"
-            addon.Config:DebugPrint("First ability " .. spellName .. " is " .. (isReady and "ready" or "on cooldown") .. 
-                  " - secondary queue should be " .. (isReady and "hidden" or "shown"))
         end
         
         return not isReady -- Show secondary if first ability is NOT ready

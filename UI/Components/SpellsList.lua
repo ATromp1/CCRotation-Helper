@@ -120,10 +120,12 @@ function AddSpellForm:buildUI()
                 self.dataProvider:addCustomSpell(spellID, spellName, ccType, priority)
             else
                 -- Fallback to direct access if no data provider
-                addon.Config.db.customSpells[spellID] = {
+                addon.Config.db.spells[spellID] = {
                     name = spellName,
                     ccType = ccType,
-                    priority = priority
+                    priority = priority,
+                    active = true,
+                    source = "custom"
                 }
             end
             
@@ -147,7 +149,40 @@ function DisabledSpellsList:new(container, callbacks, dataProvider)
     local instance = BaseComponent:new(container, callbacks, dataProvider)
     setmetatable(instance, {__index = self})
     instance:validateImplementation("DisabledSpellsList")
+    
+    -- Initialize event listeners
+    instance:Initialize()
+    
     return instance
+end
+
+function DisabledSpellsList:Initialize()
+    -- Register for profile sync events to refresh UI when sync data arrives
+    self:RegisterEventListener("PROFILE_SYNC_RECEIVED", function(profileData)
+        if addon.UI and addon.UI:IsConfigTabActive("spells") then
+            self:refreshUI()
+        end
+    end)
+    
+    -- Register for direct profile data changes (from current profile updates)
+    self:RegisterEventListener("PROFILE_DATA_CHANGED", function(dataType, value)
+        if addon.UI and addon.UI:IsConfigTabActive("spells") and dataType == "spells" then
+            self:refreshUI()
+        end
+    end)
+end
+
+-- Add refreshUI method for DisabledSpellsList
+function DisabledSpellsList:refreshUI()
+    if not self.container then return end
+    
+    -- Simple delayed refresh to avoid conflicts
+    C_Timer.After(0.1, function()
+        if self.container then
+            self.container:ReleaseChildren()
+            self:buildUI()
+        end
+    end)
 end
 
 function DisabledSpellsList:buildUI()
@@ -155,7 +190,16 @@ function DisabledSpellsList:buildUI()
     local isEditingDisabled = addon.UI and addon.UI:IsEditingDisabledByPartySync()
     
     -- Get disabled spells from data provider
-    local inactiveSpells = self.dataProvider and self.dataProvider:getDisabledSpells() or addon.Config.db.inactiveSpells
+    local inactiveSpells = self.dataProvider and self.dataProvider:getDisabledSpells() or {}
+    
+    -- Fallback to direct access if no data provider
+    if not self.dataProvider then
+        for spellID, spell in pairs(addon.Config.db.spells or {}) do
+            if not spell.active then
+                inactiveSpells[spellID] = spell
+            end
+        end
+    end
     
     -- Check if there are any inactive spells
     local hasInactiveSpells = false
@@ -190,7 +234,9 @@ function DisabledSpellsList:buildUI()
                 self.dataProvider:enableSpell(spellID)
             else
                 -- Fallback to direct access
-                addon.Config.db.inactiveSpells[spellID] = nil
+                if addon.Config.db.spells[spellID] then
+                    addon.Config.db.spells[spellID].active = true
+                end
                 if addon.DataProviders and addon.DataProviders.Spells then
                     addon.DataProviders.Spells:renumberSpellPriorities()
                 end
@@ -228,8 +274,7 @@ function DisabledSpellsList:buildUI()
                     self.dataProvider:deleteCustomSpell(spellID)
                 else
                     -- Fallback to direct access
-                    addon.Config.db.inactiveSpells[spellID] = nil
-                    addon.Config.db.customSpells[spellID] = nil
+                    addon.Config.db.spells[spellID] = nil
                 end
                 
                 -- Trigger callback to parent
@@ -307,7 +352,7 @@ function TrackedSpellsList:Initialize()
     -- Register for direct profile data changes (from current profile updates)
     self:RegisterEventListener("PROFILE_DATA_CHANGED", function(dataType, value)
         if addon.UI and addon.UI:IsConfigTabActive("spells") and 
-           (dataType == "customSpells" or dataType == "inactiveSpells") then
+           (dataType == "spells" or dataType == "customSpells" or dataType == "inactiveSpells") then
             self:refreshUI()
         end
     end)
@@ -381,26 +426,14 @@ function TrackedSpellsList:buildUI()
     
     -- Fallback to direct access if no data provider
     if not self.dataProvider then
-        -- Add database spells (if not inactive)
-        for spellID, data in pairs(addon.Database.defaultSpells) do
-            if not addon.Config.db.inactiveSpells[spellID] then
+        -- Use unified spells table from config
+        for spellID, spell in pairs(addon.Config.db.spells or {}) do
+            if spell.active then
                 allSpells[spellID] = {
-                    name = data.name,
-                    ccType = data.ccType,
-                    priority = data.priority,
-                    source = "database"
-                }
-            end
-        end
-        
-        -- Add custom spells (if not inactive, override database if same ID)
-        for spellID, data in pairs(addon.Config.db.customSpells) do
-            if not addon.Config.db.inactiveSpells[spellID] then
-                allSpells[spellID] = {
-                    name = data.name,
-                    ccType = data.ccType,
-                    priority = data.priority,
-                    source = "custom"
+                    name = spell.name,
+                    ccType = spell.ccType,
+                    priority = spell.priority,
+                    source = spell.source or "unknown"
                 }
             end
         end
@@ -507,14 +540,8 @@ function TrackedSpellsList:buildUI()
                     self.dataProvider:updateSpell(spell.spellID, spell.data, 'name', newName)
                 else
                     -- Fallback to direct access
-                    if spell.data.source == "custom" then
-                        addon.Config.db.customSpells[spell.spellID].name = newName
-                    else
-                        addon.Config.db.customSpells[spell.spellID] = {
-                            name = newName,
-                            ccType = spell.data.ccType,
-                            priority = spell.data.priority
-                        }
+                    if addon.Config.db.spells[spell.spellID] then
+                        addon.Config.db.spells[spell.spellID].name = newName
                     end
                 end
                 
@@ -550,14 +577,8 @@ function TrackedSpellsList:buildUI()
                 self.dataProvider:updateSpell(spell.spellID, spell.data, 'ccType', value)
             else
                 -- Fallback to direct access
-                if spell.data.source == "custom" then
-                    addon.Config.db.customSpells[spell.spellID].ccType = value
-                else
-                    addon.Config.db.customSpells[spell.spellID] = {
-                        name = spell.data.name,
-                        ccType = value,
-                        priority = spell.data.priority
-                    }
+                if addon.Config.db.spells[spell.spellID] then
+                    addon.Config.db.spells[spell.spellID].ccType = value
                 end
             end
             
@@ -577,12 +598,9 @@ function TrackedSpellsList:buildUI()
                 self.dataProvider:disableSpell(spell.spellID, spell.data)
             else
                 -- Fallback to direct access
-                addon.Config.db.inactiveSpells[spell.spellID] = {
-                    name = spell.data.name,
-                    ccType = spell.data.ccType,
-                    priority = spell.data.priority,
-                    source = spell.data.source
-                }
+                if addon.Config.db.spells[spell.spellID] then
+                    addon.Config.db.spells[spell.spellID].active = false
+                end
                 if addon.DataProviders and addon.DataProviders.Spells then
                     addon.DataProviders.Spells:renumberSpellPriorities()
                 end

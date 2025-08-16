@@ -85,7 +85,6 @@ end
 function ProfileManagement:refreshUI()
     -- Only refresh if the profiles tab is currently active
     if not (addon.UI and addon.UI:IsConfigTabActive("profiles")) then
-        addon.Config:DebugPrint("ProfileManagement:refreshUI - Skipping refresh, not on profiles tab")
         return
     end
     
@@ -275,7 +274,6 @@ end
 function AddonUsersList:refreshUI()
     -- Only refresh if the profiles tab is currently active
     if not (addon.UI and addon.UI:IsConfigTabActive("profiles")) then
-        addon.Config:DebugPrint("AddonUsersList:refreshUI - Skipping refresh, not on profiles tab")
         return
     end
     
