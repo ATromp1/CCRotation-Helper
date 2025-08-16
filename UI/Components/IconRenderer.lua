@@ -437,10 +437,11 @@ function IconRenderer:updateStatusIndicators(icon, cooldownData, now)
         icon.rangeIndicator:Hide()
     end
     
-    -- Desaturate icon if any status indicator is shown OR if not effective OR no enabled NPCs
+    -- Desaturate icon if any status indicator is shown OR if not effective OR on cooldown OR (optionally) no fighting NPCs
     local isOnCooldown = (cooldownData.charges or 0) == 0 or (cooldownData.expirationTime and cooldownData.expirationTime > now)
     local hasActiveEnabledNPCs = addon.CCRotation and addon.CCRotation:HasActiveEnabledNPCs() or false
-    local shouldDesaturate = hasStatusIndicator or (not cooldownData.isEffective) or isOnCooldown or (not hasActiveEnabledNPCs)
+    local shouldDesaturateForNPCs = addon.Config:Get("desaturateWhenNoTrackedNPCs") and not hasActiveEnabledNPCs
+    local shouldDesaturate = hasStatusIndicator or (not cooldownData.isEffective) or isOnCooldown or shouldDesaturateForNPCs
     icon.displayTexture:SetDesaturated(shouldDesaturate)
 end
 

@@ -33,10 +33,6 @@ function CCRotationHelper:OnAddonLoaded(loadedAddonName)
         addon.PartySync:RegisterConfigListener()
     end
     
-    -- Initialize legacy profile sync compatibility layer
-    if addon.ProfileSync then
-        addon.ProfileSync:Initialize()
-    end
     
 end
 
@@ -124,13 +120,13 @@ SlashCmdList["CCROTATION"] = function(msg)
     elseif command == "partysync" then
         -- Toggle party sync debug frame
         if addon.DebugFrame then
-            addon.DebugFrame:ShowFrame("ProfileSync", "Party Sync Debug")
+            addon.DebugFrame:ShowFrame("PartySync", "Party Sync Debug")
             -- Test the debug system
-            addon.DebugFrame:Print("ProfileSync", "DEBUG", "=== DEBUG FRAME TEST ===")
-            addon.DebugFrame:Print("ProfileSync", "DEBUG", "If you see this, the debug system is working")
-            addon.DebugFrame:Print("ProfileSync", "INIT", "Test INIT category")
-            addon.DebugFrame:Print("ProfileSync", "GROUP", "Test GROUP category")
-            addon.DebugFrame:Print("ProfileSync", "COMM", "Test COMM category")
+            addon.DebugFrame:Print("PartySync", "DEBUG", "=== DEBUG FRAME TEST ===")
+            addon.DebugFrame:Print("PartySync", "DEBUG", "If you see this, the debug system is working")
+            addon.DebugFrame:Print("PartySync", "INIT", "Test INIT category")
+            addon.DebugFrame:Print("PartySync", "GROUP", "Test GROUP category")
+            addon.DebugFrame:Print("PartySync", "COMM", "Test COMM category")
         else
             print("|cff00ff00CC Rotation Helper|r: DebugFrame not initialized")
         end
@@ -163,7 +159,7 @@ SlashCmdList["CCROTATION"] = function(msg)
         -- Debug party information in party sync frame
         local function DebugPrint(...)
             if addon.DebugFrame and addon.DebugFrame.Print then
-                addon.DebugFrame:Print("ProfileSync", "DEBUG", ...)
+                addon.DebugFrame:Print("PartySync", "DEBUG", ...)
             else
                 print(...)
             end

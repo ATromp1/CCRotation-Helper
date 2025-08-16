@@ -248,10 +248,10 @@ function addon.Config:OnProfileChanged()
     self:DebugPrint("Profile change event fired")
     
     -- If we're the party leader and in party sync mode, broadcast the profile change
-    if addon.ProfileSync and UnitIsGroupLeader("player") and IsInGroup() and addon.ProfileSync:IsInPartySync() then
+    if addon.PartySync and UnitIsGroupLeader("player") and IsInGroup() and addon.PartySync:IsInPartySync() then
         -- Delay broadcast slightly to allow profile switch to complete
         C_Timer.After(0.5, function()
-            addon.ProfileSync:BroadcastProfileAsLeader()
+            addon.PartySync:BroadcastProfile()
         end)
     end
 end
@@ -409,23 +409,14 @@ function addon.Config:GetCurrentProfileName()
 end
 
 function addon.Config:GetProfileNames()
-    -- Ensure Party Sync profile exists before getting profile list
-    if addon.ProfileSync then
-        addon.ProfileSync:EnsurePartySyncProfileExists()
-    end
-    
     local profiles = {}
     -- AceDB's GetProfiles returns a numerically indexed array, not a key-value table
     local profileArray, count = self.database:GetProfiles(profiles)
     
-    -- Filter out the Party Sync profile from the user-visible list
     local filteredProfiles = {}
-    local partySyncProfileName = addon.ProfileSync and addon.ProfileSync:GetPartySyncProfileName() or "Party Sync"
     
     for _, profileName in ipairs(profiles) do
-        if profileName ~= partySyncProfileName then
-            table.insert(filteredProfiles, profileName)
-        end
+        table.insert(filteredProfiles, profileName)
     end
     
     table.sort(filteredProfiles)
@@ -484,11 +475,6 @@ function addon.Config:DeleteProfile(profileName)
         return false, "Cannot delete Default profile"
     end
     
-    -- Prevent deletion of Party Sync profile (and ensure it exists)
-    if addon.ProfileSync and profileName == addon.ProfileSync:GetPartySyncProfileName() then
-        addon.ProfileSync:EnsurePartySyncProfileExists()
-        return false, "Cannot delete the Party Sync profile"
-    end
     
     if not self:ProfileExists(profileName) then
         return false, "Profile does not exist"
@@ -509,7 +495,7 @@ function addon.Config:SwitchProfile(profileName)
     end
     
     -- Check if profile switching is locked (during party sync as non-leader)
-    if addon.ProfileSync and addon.ProfileSync:IsProfileSelectionLocked() then
+    if addon.PartySync and addon.PartySync:IsProfileSelectionLocked() then
         return false, "Profile switching is locked during party sync"
     end
     
@@ -518,8 +504,8 @@ function addon.Config:SwitchProfile(profileName)
     self.database:SetProfile(profileName)
     
     -- Track this as a user choice for future restoration
-    if addon.ProfileSync and addon.ProfileSync.TrackUserProfileChoice then
-        addon.ProfileSync:TrackUserProfileChoice(profileName)
+    if addon.PartySync and addon.PartySync.TrackUserProfileChoice then
+        addon.PartySync:TrackUserProfileChoice(profileName)
     end
     
     return true, "Switched to profile: " .. profileName
@@ -534,11 +520,7 @@ end
 
 
 function addon.Config:GetPartyMembers()
-    if not addon.ProfileSync then
-        return {}
-    end
-    
-    return addon.ProfileSync:GetPartyMembers()
+    return {}
 end
 
 -- Check if profile selection is currently locked (during party sync)

@@ -46,24 +46,17 @@ end
 
 -- Get addon users in party
 function ProfilesDataProvider:getAddonUsers()
-    if addon.ProfileSync and addon.ProfileSync.GetAddonUsers then
-        return addon.ProfileSync:GetAddonUsers()
-    end
     return {}
 end
 
 -- Refresh addon user detection
 function ProfilesDataProvider:refreshAddonUsers()
-    if addon.ProfileSync and addon.ProfileSync.RefreshAddonUsers then
-        addon.ProfileSync:RefreshAddonUsers()
-        return true
-    end
     return false
 end
 
 -- Check if profile sync is available
 function ProfilesDataProvider:isProfileSyncAvailable()
-    return addon.ProfileSync ~= nil
+    return addon.PartySync ~= nil
 end
 
 -- Register in addon namespace

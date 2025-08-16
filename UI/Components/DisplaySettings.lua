@@ -128,7 +128,7 @@ function DisplaySettings:buildUI()
     -- Desaturate icon when no tracked NPCs are in combat
     local desaturateNoNPCsControl = addon.Components.CheckboxControl:new(
         internalGroup,
-        "Desaturate icons when no tracked NPCs are in combat",
+        "Desaturate when no tracked NPCs are fighting us",
         "desaturateWhenNoTrackedNPCs",
         {
             onValueChanged = function(configKey, value)

@@ -30,7 +30,6 @@ Core\RotationCore.lua
 Core\SoundManager.lua
 Core\DebugFrame.lua
 Core\PartySync.lua
-Core\ProfileSync.lua
 
 # UI files  
 UI\Templates.xml

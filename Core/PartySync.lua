@@ -124,8 +124,6 @@ function addon.PartySync:Initialize()
     -- Start sync if we're already in a group
     self:UpdateGroupStatus()
     
-    -- Check if we need to restore profile after login
-    self:CheckProfileRestoreOnLogin()
 end
 
 -- Register config event listener (call this after Config is initialized)
@@ -417,7 +415,7 @@ function addon.PartySync:GetPartySyncInfo()
         isActive = self:IsInPartySync(),
         leaderName = self:IsInGroup() and not self:IsGroupLeader() and UnitName("party1") or nil,
         participants = {},
-        syncProfile = "Party Sync"
+        syncProfile = nil
     }
 end
 
@@ -459,19 +457,7 @@ end
 
 -- Profile restoration on login
 function addon.PartySync:CheckProfileRestoreOnLogin()
-    local partySyncProfileName = "Party Sync"
-    local currentProfile = addon.Config and addon.Config:GetCurrentProfileName()
-    
-    -- If we're on the party sync profile but not in an active sync, switch back
-    if currentProfile == partySyncProfileName and not self:IsInPartySync() then
-        local lastProfile = self:GetUserLastChosenProfile()
-        if lastProfile and lastProfile ~= partySyncProfileName then
-            DebugPrint("restore", "Restoring profile after login:", lastProfile)
-            if addon.Config then
-                addon.Config:SetProfile(lastProfile)
-            end
-        end
-    end
+    -- No longer needed - new PartySync doesn't use separate profiles
 end
 
 -- Data access methods for UI (returns synced data when in sync, otherwise normal data)

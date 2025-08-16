@@ -67,8 +67,8 @@ end
 
 function ProfileManagement:handleBecameLeader()
     -- Handle profile switching when becoming party leader
-    if addon.ProfileSync and addon.ProfileSync.GetRecommendedLeaderProfile then
-        local recommendedProfile = addon.ProfileSync:GetRecommendedLeaderProfile()
+    if addon.PartySync and addon.PartySync.GetRecommendedLeaderProfile then
+        local recommendedProfile = addon.PartySync:GetRecommendedLeaderProfile()
         local currentProfile = addon.Config:GetCurrentProfileName()
         
         if recommendedProfile ~= currentProfile then
@@ -178,6 +178,8 @@ function ProfileManagement:buildProfileSwitcher(currentProfile, container)
             local success, msg = self.dataProvider:switchProfile(profileName)
             if success then
                 self:triggerCallback("onProfileSwitched", profileName)
+                -- Refresh UI to update current profile display
+                self:refreshUI()
             end
         end
     end)
@@ -201,6 +203,8 @@ function ProfileManagement:buildProfileCreator(container)
             if success then
                 newProfileInput:SetText("")
                 self:triggerCallback("onProfileCreated", name)
+                -- Refresh UI to show the new profile in dropdown
+                self:refreshUI()
             end
         end
     end)
@@ -236,6 +240,8 @@ function ProfileManagement:buildProfileActions(container)
                 local success, msg = self.dataProvider:deleteProfile(profile)
                 if success then
                     self:triggerCallback("onProfileDeleted", profile)
+                    -- Refresh UI to update profile dropdown
+                    self:refreshUI()
                 end
                 widget:SetValue(0)
             end,
@@ -307,7 +313,7 @@ function AddonUsersList:buildUsersInternalUI()
     end
     
     -- Get detailed addon user information
-    local addonUsersInfo = addon.ProfileSync and addon.ProfileSync:GetAddonUsersWithDetails() or {}
+    local addonUsersInfo = {}
     
     if #addonUsersInfo == 0 then
         local noUsersLabel = self.AceGUI:Create("Label")
@@ -365,7 +371,7 @@ function AddonUsersList:buildUsersInternalUI()
     end
     
     -- Show sync status
-    local partySyncInfo = addon.ProfileSync and addon.ProfileSync:GetPartySyncInfo() or {isActive = false}
+    local partySyncInfo = addon.PartySync and addon.PartySync:GetPartySyncInfo() or {isActive = false}
     local syncStatusLabel = self.AceGUI:Create("Label")
     if partySyncInfo.isActive then
         syncStatusLabel:SetText("|cff00ff00Party Sync: Active|r")
@@ -392,14 +398,8 @@ function AddonUsersList:buildUsersInternalUI()
         refreshButton:SetText("Scan for Addon Users")
         refreshButton:SetWidth(150)
         refreshButton:SetCallback("OnClick", function()
-            if addon.ProfileSync and addon.ProfileSync.RefreshAddonUsers then
-                addon.ProfileSync:RefreshAddonUsers()
-                -- Refresh UI after a short delay to allow responses
-                C_Timer.After(3, function()
-                    if self.usersInternalGroup then
-                        self:refreshUI()
-                    end
-                end)
+            if self.usersInternalGroup then
+                self:refreshUI()
             end
         end)
         self.usersInternalGroup:AddChild(refreshButton)
