@@ -263,17 +263,14 @@ function addon.PartySync:BroadcastProfile()
         return
     end
     
-    -- Get current profile data
     local profileData = {
         spells = addon.Config.db.spells or {},
         customNPCs = addon.Config.db.customNPCs or {},
         priorityPlayers = addon.Config.db.priorityPlayers or {}
     }
     
-    -- Calculate hash of current data
     local currentHash = CalculateDataHash(profileData)
     
-    -- Only send if data has changed
     if currentHash == lastDataHash then
         DebugPrint("COMM", "Data unchanged, skipping broadcast (hash:", currentHash, ")")
         return
@@ -282,10 +279,7 @@ function addon.PartySync:BroadcastProfile()
     DebugPrint("COMM", "Data changed, broadcasting (old hash:", lastDataHash, "new hash:", currentHash, ")")
     lastDataHash = currentHash
     
-    -- Add hash to the payload
-    profileData.hash = currentHash
-    
-    -- Serialize and send using AceComm
+    profileData.transmissionHash = currentHash
     local serialized = AceSerializer:Serialize(profileData)
     if serialized then
         -- Use AceComm to send the message
@@ -319,17 +313,28 @@ function addon.PartySync:OnCommReceived(prefix, message, distribution, sender)
     
     DebugPrint("COMM", "Received sync from leader:", sender)
     
-    -- Deserialize data
     local success, profileData = AceSerializer:Deserialize(message)
     if not success then
         DebugPrint("COMM", "Failed to deserialize sync message")
         return
     end
     
-    -- Leader has already filtered duplicates, so always apply what we receive
-    DebugPrint("COMM", "Applying synced data from leader:", sender)
+    if profileData.transmissionHash then
+        local dataToVerify = {
+            spells = profileData.spells,
+            customNPCs = profileData.customNPCs,
+            priorityPlayers = profileData.priorityPlayers
+        }
+        local calculatedHash = CalculateDataHash(dataToVerify)
+        
+        if calculatedHash == profileData.transmissionHash then
+            DebugPrint("COMM", "Transmission integrity verified (hash:", calculatedHash, ")")
+        else
+            DebugPrint("COMM", "WARNING: Transmission hash mismatch! Expected:", profileData.transmissionHash, "Got:", calculatedHash)
+        end
+    end
     
-    -- Apply the data
+    DebugPrint("COMM", "Applying synced data from leader:", sender)
     addon.PartySync:ApplyProfileData(profileData)
 end
 
