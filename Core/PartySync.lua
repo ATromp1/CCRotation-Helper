@@ -39,12 +39,20 @@ end
 local function CalculateDataHash(data)
     local str = ""
     
-    -- Hash active spells with their priorities
+    -- Hash active spells with all relevant properties
     if data.spells then
         local spellList = {}
         for spellID, spell in pairs(data.spells) do
             if spell.active then
-                table.insert(spellList, spellID .. ":" .. (spell.priority or 0))
+                -- Include all properties that affect functionality
+                local spellStr = string.format("%s:%s:%s:%s:%s", 
+                    spellID, 
+                    spell.priority or 0,
+                    spell.name or "",
+                    spell.ccType or "",
+                    spell.active and "1" or "0"
+                )
+                table.insert(spellList, spellStr)
             end
         end
         table.sort(spellList)
@@ -59,6 +67,30 @@ local function CalculateDataHash(data)
         end
         table.sort(playerList)
         str = str .. "|" .. table.concat(playerList, ",")
+    end
+    
+    -- Hash custom NPCs
+    if data.customNPCs then
+        local npcList = {}
+        for npcID, npc in pairs(data.customNPCs) do
+            local npcStr = string.format("%s:%s", npcID, npc.name or "")
+            if npc.cc then
+                for i = 1, 5 do
+                    local ccValue = npc.cc[i]
+                    if type(ccValue) == "boolean" then
+                        ccValue = ccValue and 1 or 0
+                    elseif type(ccValue) == "number" then
+                        ccValue = ccValue
+                    else
+                        ccValue = 0
+                    end
+                    npcStr = npcStr .. ":" .. ccValue
+                end
+            end
+            table.insert(npcList, npcStr)
+        end
+        table.sort(npcList)
+        str = str .. "|" .. table.concat(npcList, ",")
     end
     
     -- Simple string hash (djb2 algorithm)
@@ -409,15 +441,6 @@ function addon.PartySync:IsProfileSelectionLocked()
     return self:IsInPartySync()
 end
 
--- Legacy compatibility methods for existing UI
-function addon.PartySync:GetPartySyncInfo()
-    return {
-        isActive = self:IsInPartySync(),
-        leaderName = self:IsInGroup() and not self:IsGroupLeader() and UnitName("party1") or nil,
-        participants = {},
-        syncProfile = nil
-    }
-end
 
 -- User profile choice tracking (legacy compatibility)
 function addon.PartySync:TrackUserProfileChoice(profileName)
@@ -455,10 +478,6 @@ function addon.PartySync:GetRecommendedLeaderProfile()
     return nil
 end
 
--- Profile restoration on login
-function addon.PartySync:CheckProfileRestoreOnLogin()
-    -- No longer needed - new PartySync doesn't use separate profiles
-end
 
 -- Data access methods for UI (returns synced data when in sync, otherwise normal data)
 function addon.PartySync:GetDisplaySpells()
@@ -488,8 +507,10 @@ function addon.PartySync:GetCurrentDataHash()
         return nil
     end
     
+    -- Use the same data structure as BroadcastProfile for consistency
     local profileData = {
         spells = addon.Config.db.spells or {},
+        customNPCs = addon.Config.db.customNPCs or {},
         priorityPlayers = addon.Config.db.priorityPlayers or {}
     }
     
