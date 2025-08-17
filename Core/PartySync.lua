@@ -8,8 +8,8 @@ local AceComm = LibStub("AceComm-3.0")
 
 -- Configuration
 local SYNC_PREFIX = "CCRH_SYNC"
+local REQUEST_PREFIX = "CCRH_REQ"
 local BROADCAST_INTERVAL = 5 -- seconds
-local COMM_PREFIX = "CCRH_SYNC" -- For legacy compatibility
 
 -- State tracking
 local broadcastTimer = nil
@@ -127,8 +127,8 @@ function addon.PartySync:Initialize()
     
     -- Register AceComm for communication
     addon.PartySync:RegisterComm(SYNC_PREFIX, "OnCommReceived")
-    DebugPrint("init", "AceComm registered for prefix:", SYNC_PREFIX)
-    
+    addon.PartySync:RegisterComm(REQUEST_PREFIX, "OnRequestReceived")
+
     -- Create a frame to handle group events using WoW's native event system
     if not addon.PartySync.eventFrame then
         addon.PartySync.eventFrame = CreateFrame("Frame", "CCRPartySyncEventFrame")
@@ -169,8 +169,10 @@ function addon.PartySync:Initialize()
         userProfileTracking.lastUserChosenProfile = addon.Config.global.lastUserChosenProfile
     end
     
-    -- Start sync if we're already in a group
-    self:UpdateGroupStatus()
+    -- Start sync if we're already in a group (delay to ensure group status is ready)
+    C_Timer.After(1, function()
+        self:UpdateGroupStatus()
+    end)
     
 end
 
@@ -193,6 +195,8 @@ end
 function addon.PartySync:UpdateGroupStatus()
     if self:IsInGroup() and self:IsGroupLeader() then
         self:StartBroadcasting()
+    elseif self:IsInGroup() and not self:IsGroupLeader() then
+        self:RequestSync()
     else
         self:StopBroadcasting()
     end
@@ -289,6 +293,74 @@ function addon.PartySync:BroadcastProfile()
         
         if not success then
             DebugPrint("COMM", "Failed to send sync message")
+        end
+    end
+end
+
+-- Request sync from leader
+function addon.PartySync:RequestSync()
+    if not self:IsInGroup() or self:IsGroupLeader() then
+        return
+    end
+    
+    if syncedData.spells then
+        return
+    end
+    
+    DebugPrint("COMM", "Requesting sync from leader")
+    local success = pcall(function()
+        addon.PartySync:SendCommMessage(REQUEST_PREFIX, "REQUEST", "PARTY")
+    end)
+    
+    if not success then
+        DebugPrint("COMM", "Failed to send sync request")
+    end
+end
+
+function addon.PartySync:OnRequestReceived(prefix, message, distribution, sender)
+    if prefix ~= REQUEST_PREFIX then
+        return
+    end
+    
+    if sender == UnitName("player") then
+        return
+    end
+    
+    if not self:IsGroupLeader() then
+        return
+    end
+    
+    DebugPrint("COMM", "Received sync request from:", sender)
+    
+    -- Force immediate broadcast regardless of hash
+    self:ForceBroadcast()
+end
+
+-- Force broadcast (ignoring hash check)
+function addon.PartySync:ForceBroadcast()
+    if not addon.Config or not addon.Config.db then
+        return
+    end
+    
+    local profileData = {
+        spells = addon.Config.db.spells or {},
+        customNPCs = addon.Config.db.customNPCs or {},
+        priorityPlayers = addon.Config.db.priorityPlayers or {}
+    }
+    
+    local currentHash = CalculateDataHash(profileData)
+    profileData.transmissionHash = currentHash
+    
+    DebugPrint("COMM", "Force broadcasting (hash:", currentHash, ")")
+    
+    local serialized = AceSerializer:Serialize(profileData)
+    if serialized then
+        local success = pcall(function()
+            addon.PartySync:SendCommMessage(SYNC_PREFIX, serialized, "PARTY")
+        end)
+        
+        if not success then
+            DebugPrint("COMM", "Failed to send forced sync message")
         end
     end
 end
