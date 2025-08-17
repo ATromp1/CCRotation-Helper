@@ -309,12 +309,145 @@ SlashCmdList["CCROTATION"] = function(msg)
     elseif command == "hash" then
         -- Show current data hash
         if addon.PartySync then
-            print("|cff00ff00CC Rotation Helper|r: === DATA HASH ===")
+            print("|cff00ff00CC Rotation Helper|r: === DATA HASH DEBUG ===")
             local hash = addon.PartySync:GetCurrentDataHash()
             if hash then
                 print("Current data hash:", hash)
+                
+                if addon.Config and addon.Config.db then
+                    local profileData = {
+                        spells = addon.Config.db.spells or {},
+                        customNPCs = addon.Config.db.customNPCs or {},
+                        priorityPlayers = addon.Config.db.priorityPlayers or {}
+                    }
+                    
+                    local activeSpells = 0
+                    for spellID, spell in pairs(profileData.spells) do
+                        if spell.active then
+                            activeSpells = activeSpells + 1
+                        end
+                    end
+                    
+                    local priorityPlayers = 0
+                    for _ in pairs(profileData.priorityPlayers) do
+                        priorityPlayers = priorityPlayers + 1
+                    end
+                    
+                    local customNPCs = 0
+                    for _ in pairs(profileData.customNPCs) do
+                        customNPCs = customNPCs + 1
+                    end
+                    
+                    print("Data being hashed:")
+                    print("  Active spells:", activeSpells)
+                    print("  Priority players:", priorityPlayers)
+                    print("  Custom NPCs:", customNPCs)
+                    
+                    local spellCount = 0
+                    for spellID, spell in pairs(profileData.spells) do
+                        if spell.active and spellCount < 3 then
+                            print(string.format("  Spell %s: %s (Priority: %s, Type: %s)", 
+                                spellID, spell.name or "Unknown", spell.priority or 0, spell.ccType or "unknown"))
+                            spellCount = spellCount + 1
+                        end
+                    end
+                    
+                    if activeSpells > 3 then
+                        print("  ... and", activeSpells - 3, "more spells")
+                    end
+                end
             else
                 print("No hash available")
+            end
+        else
+            print("|cffff0000Error:|r PartySync not available")
+        end
+    elseif command == "hashraw" then
+        if addon.PartySync then
+            print("|cff00ff00CC Rotation Helper|r: === RAW HASH STRING ===")
+            if addon.Config and addon.Config.db then
+                local profileData = {
+                    spells = addon.Config.db.spells or {},
+                    customNPCs = addon.Config.db.customNPCs or {},
+                    priorityPlayers = addon.Config.db.priorityPlayers or {}
+                }
+                
+                local str = ""
+                
+                if profileData.spells then
+                    local spellIDs = {}
+                    for spellID, spell in pairs(profileData.spells) do
+                        if spell.active then
+                            table.insert(spellIDs, tonumber(spellID) or 0)
+                        end
+                    end
+                    table.sort(spellIDs)
+                    
+                    local spellList = {}
+                    for _, spellID in ipairs(spellIDs) do
+                        local spell = profileData.spells[tostring(spellID)]
+                        if spell and spell.active then
+                            local spellStr = string.format("%s:%s:%s:%s:%s", 
+                                spellID, 
+                                spell.priority or 0,
+                                spell.name or "",
+                                spell.ccType or "",
+                                spell.active and "1" or "0"
+                            )
+                            table.insert(spellList, spellStr)
+                        end
+                    end
+                    str = str .. table.concat(spellList, ",")
+                end
+                
+                if profileData.priorityPlayers then
+                    local playerList = {}
+                    for player in pairs(profileData.priorityPlayers) do
+                        table.insert(playerList, player)
+                    end
+                    table.sort(playerList)
+                    str = str .. "|" .. table.concat(playerList, ",")
+                end
+                
+                if profileData.customNPCs then
+                    local npcIDs = {}
+                    for npcID in pairs(profileData.customNPCs) do
+                        table.insert(npcIDs, tonumber(npcID) or 0)
+                    end
+                    table.sort(npcIDs)
+                    
+                    local npcList = {}
+                    for _, npcID in ipairs(npcIDs) do
+                        local npc = profileData.customNPCs[tostring(npcID)]
+                        if npc then
+                            local npcStr = string.format("%s:%s", npcID, npc.name or "")
+                            if npc.cc then
+                                for i = 1, 5 do
+                                    local ccValue = npc.cc[i]
+                                    if type(ccValue) == "boolean" then
+                                        ccValue = ccValue and 1 or 0
+                                    elseif type(ccValue) == "number" then
+                                        ccValue = ccValue
+                                    else
+                                        ccValue = 0
+                                    end
+                                    npcStr = npcStr .. ":" .. ccValue
+                                end
+                            end
+                            table.insert(npcList, npcStr)
+                        end
+                    end
+                    str = str .. "|" .. table.concat(npcList, ",")
+                end
+                
+                print("Raw hash string (first 500 chars):")
+                print(string.sub(str, 1, 500))
+                if #str > 500 then
+                    print("... (truncated, total length: " .. #str .. ")")
+                end
+                print("Full string length:", #str)
+            else
+                print("No config data available")
             end
         else
             print("|cffff0000Error:|r PartySync not available")
@@ -330,6 +463,7 @@ SlashCmdList["CCROTATION"] = function(msg)
         print("|cffFFFF00Party Sync Commands:|r")
         print("  /ccr syncdata - Show what you're broadcasting/receiving")
         print("  /ccr hash - Show current data hash")
+        print("  /ccr hashraw - Show raw hash string for comparison")
         print("  /ccr debugnpc - Toggle NPC debug frame")
         print("  /ccr resetdb - Reset database (WARNING: loses all settings)")
     end
