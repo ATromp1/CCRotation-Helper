@@ -41,9 +41,18 @@ local function CalculateDataHash(data)
     
     -- Hash active spells with all relevant properties
     if data.spells then
-        local spellList = {}
+        local spellIDs = {}
         for spellID, spell in pairs(data.spells) do
             if spell.active then
+                table.insert(spellIDs, tonumber(spellID) or 0)
+            end
+        end
+        table.sort(spellIDs)
+        
+        local spellList = {}
+        for _, spellID in ipairs(spellIDs) do
+            local spell = data.spells[tostring(spellID)]
+            if spell and spell.active then
                 -- Include all properties that affect functionality
                 local spellStr = string.format("%s:%s:%s:%s:%s", 
                     spellID, 
@@ -55,7 +64,6 @@ local function CalculateDataHash(data)
                 table.insert(spellList, spellStr)
             end
         end
-        table.sort(spellList)
         str = str .. table.concat(spellList, ",")
     end
     
@@ -71,25 +79,33 @@ local function CalculateDataHash(data)
     
     -- Hash custom NPCs
     if data.customNPCs then
-        local npcList = {}
-        for npcID, npc in pairs(data.customNPCs) do
-            local npcStr = string.format("%s:%s", npcID, npc.name or "")
-            if npc.cc then
-                for i = 1, 5 do
-                    local ccValue = npc.cc[i]
-                    if type(ccValue) == "boolean" then
-                        ccValue = ccValue and 1 or 0
-                    elseif type(ccValue) == "number" then
-                        ccValue = ccValue
-                    else
-                        ccValue = 0
-                    end
-                    npcStr = npcStr .. ":" .. ccValue
-                end
-            end
-            table.insert(npcList, npcStr)
+        local npcIDs = {}
+        for npcID in pairs(data.customNPCs) do
+            table.insert(npcIDs, tonumber(npcID) or 0)
         end
-        table.sort(npcList)
+        table.sort(npcIDs)
+        
+        local npcList = {}
+        for _, npcID in ipairs(npcIDs) do
+            local npc = data.customNPCs[tostring(npcID)]
+            if npc then
+                local npcStr = string.format("%s:%s", npcID, npc.name or "")
+                if npc.cc then
+                    for i = 1, 5 do
+                        local ccValue = npc.cc[i]
+                        if type(ccValue) == "boolean" then
+                            ccValue = ccValue and 1 or 0
+                        elseif type(ccValue) == "number" then
+                            ccValue = ccValue
+                        else
+                            ccValue = 0
+                        end
+                        npcStr = npcStr .. ":" .. ccValue
+                    end
+                end
+                table.insert(npcList, npcStr)
+            end
+        end
         str = str .. "|" .. table.concat(npcList, ",")
     end
     
