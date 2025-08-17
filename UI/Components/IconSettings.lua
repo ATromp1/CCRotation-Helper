@@ -4,11 +4,12 @@
 local addonName, addon = ...
 local AceGUI = LibStub("AceGUI-3.0")
 
+local BaseComponent = addon.BaseComponent
 local IconSettings = {}
-setmetatable(IconSettings, {__index = addon.BaseComponent})
+setmetatable(IconSettings, {__index = BaseComponent})
 
 function IconSettings:new(container, callbacks)
-    local instance = addon.BaseComponent:new(container, callbacks, addon.DataProviders.Config)
+    local instance = BaseComponent:new(container, callbacks, addon.DataProviders.Config)
     setmetatable(instance, {__index = self})
     
     -- Store references to AceGUI widgets for show/hide logic

@@ -69,5 +69,3 @@ UI\UIHelpers.lua
 # Main addon file
 CCRotationHelper.lua
 
-# Debug utilities
-Debug.lua

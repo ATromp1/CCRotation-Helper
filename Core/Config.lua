@@ -144,12 +144,6 @@ local defaults = {
         showPlayerName4 = false,
         showPlayerName5 = false,
         
-        -- Sound options
-        enableSounds = false,
-        nextSpellSound = "Interface\\AddOns\\CCRotation\\Sounds\\next.ogg",
-        enableTurnNotification = false, -- Play TTS when it's player's turn next
-        turnNotificationText = "Next", -- Text to speak when it's player's turn
-        turnNotificationVolume = 100, -- Volume for turn notification (0 to 100)
         
         -- Anchor settings
         anchorLocked = false,
@@ -159,8 +153,6 @@ local defaults = {
         showInSolo = false,
         onlyInDungeons = false,
         
-        -- Party sync data
-        partySyncLastActiveProfile = nil,
         
         -- Minimap icon settings
         minimap = {
@@ -218,11 +210,6 @@ function addon.Config:EnsureCharacterProfile()
         self:DebugPrint("Created profile for " .. characterName)
     end
     
-    -- Set default sync profile to current character's profile if not already set
-    if not self.db.partySyncLastActiveProfile then
-        self.db.partySyncLastActiveProfile = self.database:GetCurrentProfile()
-        self:DebugPrint("Set default sync profile to " .. self.db.partySyncLastActiveProfile)
-    end
 end
 
 -- Called when profile changes (switch, copy, reset)
@@ -256,20 +243,6 @@ function addon.Config:OnProfileChanged()
     end
 end
 
-function addon.Config:MergeDefaults(target, source)
-    for key, value in pairs(source) do
-        if target[key] == nil then
-            if type(value) == "table" then
-                target[key] = {}
-                self:MergeDefaults(target[key], value)
-            else
-                target[key] = value
-            end
-        elseif type(value) == "table" and type(target[key]) == "table" then
-            self:MergeDefaults(target[key], value)
-        end
-    end
-end
 
 function addon.Config:Get(key)
     -- Use same logic as Set() to determine where to read from
@@ -519,9 +492,6 @@ end
 
 
 
-function addon.Config:GetPartyMembers()
-    return {}
-end
 
 -- Check if profile selection is currently locked (during party sync)
 function addon.Config:IsProfileSelectionLocked()

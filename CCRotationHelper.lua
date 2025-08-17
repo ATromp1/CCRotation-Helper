@@ -2,10 +2,7 @@
 local addonName, addon = ...
 
 -- Load Ace3 libraries
-local AceAddon = LibStub("AceAddon-3.0")
-local AceEvent = LibStub("AceEvent-3.0")
 local AceComm = LibStub("AceComm-3.0")
-local AceSerializer = LibStub("AceSerializer-3.0")
 
 -- Create main addon frame
 local CCRotationHelper = CreateFrame("Frame", "CCRotationHelperFrame")
@@ -16,7 +13,6 @@ CCRotationHelper:RegisterEvent("PLAYER_LOGIN")
 addon.frame = CCRotationHelper
 
 -- Add Ace3 functionality to our addon object
-AceEvent:Embed(addon)
 AceComm:Embed(addon)
 
 -- Addon loaded handler

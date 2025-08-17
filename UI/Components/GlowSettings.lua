@@ -4,11 +4,12 @@
 local addonName, addon = ...
 local AceGUI = LibStub("AceGUI-3.0")
 
+local BaseComponent = addon.BaseComponent
 local GlowSettings = {}
-setmetatable(GlowSettings, {__index = addon.BaseComponent})
+setmetatable(GlowSettings, {__index = BaseComponent})
 
 function GlowSettings:new(container, callbacks)
-    local instance = addon.BaseComponent:new(container, callbacks, addon.DataProviders.Config)
+    local instance = BaseComponent:new(container, callbacks, addon.DataProviders.Config)
     setmetatable(instance, {__index = self})
     
     -- Container for dynamic controls
