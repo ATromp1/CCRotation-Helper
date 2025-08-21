@@ -39,30 +39,39 @@ end
 local function CalculateDataHash(data)
     local str = ""
     
-    -- Hash active spells with all relevant properties
+    -- Hash all spells (both active and inactive) preserving priority order
     if data.spells then
-        local spellIDs = {}
+        local spellEntries = {}
         for spellID, spell in pairs(data.spells) do
-            if spell.active then
-                table.insert(spellIDs, tonumber(spellID) or 0)
-            end
+            table.insert(spellEntries, {
+                id = tonumber(spellID) or 0,
+                spell = spell
+            })
         end
-        table.sort(spellIDs)
+        
+        -- Sort by priority first (to capture reordering), then by ID for stability
+        table.sort(spellEntries, function(a, b)
+            local aPriority = a.spell.priority or 999
+            local bPriority = b.spell.priority or 999
+            if aPriority == bPriority then
+                return a.id < b.id
+            end
+            return aPriority < bPriority
+        end)
         
         local spellList = {}
-        for _, spellID in ipairs(spellIDs) do
-            local spell = data.spells[tostring(spellID)]
-            if spell and spell.active then
-                -- Include all properties that affect functionality
-                local spellStr = string.format("%s:%s:%s:%s:%s", 
-                    spellID, 
-                    spell.priority or 0,
-                    spell.name or "",
-                    spell.ccType or "",
-                    spell.active and "1" or "0"
-                )
-                table.insert(spellList, spellStr)
-            end
+        for _, entry in ipairs(spellEntries) do
+            local spellID = entry.id
+            local spell = entry.spell
+            -- Include all spells (active and inactive) with all relevant properties
+            local spellStr = string.format("%s:%s:%s:%s:%s", 
+                spellID, 
+                spell.priority or 0,
+                spell.name or "",
+                spell.ccType or "",
+                spell.active and "1" or "0"
+            )
+            table.insert(spellList, spellStr)
         end
         str = str .. table.concat(spellList, ",")
     end
@@ -599,15 +608,15 @@ end
 
 -- Get current data hash for debugging
 function addon.PartySync:GetCurrentDataHash()
-    if not addon.Config or not addon.Config.db then
+    if not addon.Config then
         return nil
     end
     
-    -- Use the same data structure as BroadcastProfile for consistency
+    -- Use display data (synced when in party sync, otherwise local)
     local profileData = {
-        spells = addon.Config.db.spells or {},
-        customNPCs = addon.Config.db.customNPCs or {},
-        priorityPlayers = addon.Config.db.priorityPlayers or {}
+        spells = self:GetDisplaySpells() or {},
+        customNPCs = self:GetDisplayCustomNPCs() or {},
+        priorityPlayers = self:GetDisplayPriorityPlayers() or {}
     }
     
     return CalculateDataHash(profileData)
