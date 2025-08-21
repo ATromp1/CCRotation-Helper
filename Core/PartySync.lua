@@ -500,11 +500,14 @@ end
 
 -- Event handlers
 function addon.PartySync:GROUP_ROSTER_UPDATE()
-    -- Immediately stop broadcasting if no longer in group
-    if not addon.PartySync:IsInGroup() then
-        addon.PartySync:StopBroadcasting()
-    end
-    addon.PartySync:UpdateGroupStatus()
+    -- Delay operations to avoid taint issues with Blizzard frames
+    C_Timer.After(0.1, function()
+        -- Immediately stop broadcasting if no longer in group
+        if not addon.PartySync:IsInGroup() then
+            addon.PartySync:StopBroadcasting()
+        end
+        addon.PartySync:UpdateGroupStatus()
+    end)
 end
 
 function addon.PartySync:PARTY_LEADER_CHANGED()

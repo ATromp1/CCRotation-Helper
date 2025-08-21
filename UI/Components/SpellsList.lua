@@ -365,10 +365,13 @@ function TrackedSpellsList:Initialize()
 end
 
 function TrackedSpellsList:OnGroupChanged()
-    -- Only refresh UI if the spells tab is currently active
-    if addon.UI and addon.UI:IsConfigTabActive("spells") then
-        self:refreshUI()
-    end
+    -- Delay UI operations to avoid taint issues with Blizzard frames
+    C_Timer.After(0.1, function()
+        -- Only refresh UI if the spells tab is currently active
+        if addon.UI and addon.UI:IsConfigTabActive("spells") then
+            self:refreshUI()
+        end
+    end)
 end
 
 function TrackedSpellsList:applyProfileData(profileData)

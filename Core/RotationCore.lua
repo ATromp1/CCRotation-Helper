@@ -125,8 +125,11 @@ function CCRotation:OnEvent(event, ...)
         -- Fire location change event for UI components
         self:FireEvent("LOCATION_CHANGED")
     elseif event == "GROUP_ROSTER_UPDATE" then
-        self:RefreshGUIDToUnit()
-        self:RebuildQueue()
+        -- Delay operations to avoid taint issues with Blizzard frames
+        C_Timer.After(0.1, function()
+            self:RefreshGUIDToUnit()
+            self:RebuildQueue()
+        end)
     elseif event == "PLAYER_REGEN_DISABLED" then
         self:OnCombatStart()
     elseif event == "PLAYER_REGEN_ENABLED" then
