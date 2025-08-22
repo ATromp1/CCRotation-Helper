@@ -154,7 +154,7 @@ function addon.PartySync:Initialize()
             if event == "GROUP_ROSTER_UPDATE" then
                 addon.PartySync:GROUP_ROSTER_UPDATE()
             elseif event == "PARTY_LEADER_CHANGED" then
-                addon.PartySync:PARTY_LEADER_CHANGED()
+                addon.PartySync:UpdateGroupStatus()
             end
         end)
         
@@ -166,7 +166,7 @@ function addon.PartySync:Initialize()
         DebugPrint("init", "Config found, registering PROFILE_DATA_CHANGED listener")
         addon.Config:RegisterEventListener("PROFILE_DATA_CHANGED", function(dataType, value)
             -- If we're the leader and actively syncing, broadcast immediately
-            if addon.PartySync:IsGroupLeader() and addon.PartySync:IsInGroup() then
+            if UnitIsGroupLeader("player") and addon.PartySync:IsInGroup() then
                 DebugPrint("COMM", "Config changed, broadcasting immediately")
                 addon.PartySync:BroadcastProfile()
             end
@@ -194,7 +194,7 @@ function addon.PartySync:RegisterConfigListener()
         DebugPrint("init", "Registering PROFILE_DATA_CHANGED listener (delayed)")
         addon.Config:RegisterEventListener("PROFILE_DATA_CHANGED", function(dataType, value)
             -- If we're the leader and actively syncing, broadcast immediately
-            if addon.PartySync:IsGroupLeader() and addon.PartySync:IsInGroup() then
+            if UnitIsGroupLeader("player") and addon.PartySync:IsInGroup() then
                 DebugPrint("COMM", "Config changed, broadcasting immediately")
                 addon.PartySync:BroadcastProfile()
             end
@@ -238,10 +238,6 @@ function addon.PartySync:IsInGroup()
     return false -- Solo or only grouped with NPCs
 end
 
-function addon.PartySync:IsGroupLeader()
-    return UnitIsGroupLeader("player")
-end
-
 -- Broadcasting (leader only)
 function addon.PartySync:StartBroadcasting()
     if broadcastTimer then
@@ -255,7 +251,7 @@ function addon.PartySync:StartBroadcasting()
     
     -- Then broadcast every 5 seconds
     broadcastTimer = C_Timer.NewTicker(BROADCAST_INTERVAL, function()
-        if addon.PartySync:IsInGroup() and addon.PartySync:IsGroupLeader() then
+        if addon.PartySync:IsInGroup() and UnitIsGroupLeader("player") then
             addon.PartySync:BroadcastProfile()
         else
             addon.PartySync:StopBroadcasting()
@@ -531,10 +527,6 @@ function addon.PartySync:GROUP_ROSTER_UPDATE()
     end)
 end
 
-function addon.PartySync:PARTY_LEADER_CHANGED()
-    addon.PartySync:UpdateGroupStatus()
-end
-
 -- Public API for status checking
 function addon.PartySync:GetStatus()
     if not self:IsInGroup() then
@@ -546,18 +538,9 @@ function addon.PartySync:GetStatus()
     end
 end
 
-function addon.PartySync:IsActive()
-    return self:IsInGroup()
-end
-
 function addon.PartySync:IsInPartySync()
     return self:IsInGroup() and not self:IsGroupLeader() and syncedData.spells ~= nil
 end
-
-function addon.PartySync:IsProfileSelectionLocked()
-    return self:IsInPartySync()
-end
-
 
 -- User profile choice tracking (legacy compatibility)
 function addon.PartySync:TrackUserProfileChoice(profileName)
@@ -569,10 +552,6 @@ function addon.PartySync:TrackUserProfileChoice(profileName)
     end
     
     DebugPrint("profile", "User chose profile:", profileName)
-end
-
-function addon.PartySync:GetUserLastChosenProfile()
-    return userProfileTracking.lastUserChosenProfile
 end
 
 function addon.PartySync:GetRecommendedLeaderProfile()
@@ -594,7 +573,6 @@ function addon.PartySync:GetRecommendedLeaderProfile()
     
     return nil
 end
-
 
 -- Data access methods for UI (returns synced data when in sync, otherwise normal data)
 function addon.PartySync:GetDisplaySpells()

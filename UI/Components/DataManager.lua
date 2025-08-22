@@ -35,15 +35,11 @@ end
 
 DataManager.players = {}
 
--- Get priority players list
-function DataManager.players:getPriorityPlayers()
-    return addon.Config.db.priorityPlayers or {}
-end
-
 -- Get priority players as sorted array
 function DataManager.players:getPriorityPlayersArray()
     local players = {}
-    for name in pairs(self:getPriorityPlayers()) do
+    local priorityPlayers = addon.Config.db.priorityPlayers or {}
+    for name in pairs(priorityPlayers) do
         table.insert(players, name)
     end
     table.sort(players)
@@ -156,8 +152,8 @@ function DataManager.spells:addCustomSpell(spellID, spellName, ccType, priority)
         source = "custom"
     }
     
-    -- Update rotation system
-    self:onConfigChanged()
+    self:updateRotationSystem()
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "spells")
 end
 
 -- Update spell data
@@ -166,7 +162,8 @@ function DataManager.spells:updateSpell(spellID, field, value)
         addon.Config.db.spells[spellID][field] = value
     end
     
-    self:onConfigChanged()
+    self:updateRotationSystem()
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "spells")
 end
 
 -- Change spell ID (complex operation that moves data from old ID to new ID)
@@ -185,7 +182,8 @@ function DataManager.spells:changeSpellID(oldSpellID, newSpellID)
     -- Remove old spell ID entry
     addon.Config.db.spells[oldSpellID] = nil
     
-    self:onConfigChanged()
+    self:updateRotationSystem()
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "spells")
     return true
 end
 
@@ -196,7 +194,8 @@ function DataManager.spells:disableSpell(spellID)
         addon.Config.db.spells[spellID].active = false
     end
     
-    self:onConfigChanged()
+    self:updateRotationSystem()
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "spells")
 end
 
 -- Enable spell
@@ -206,7 +205,8 @@ function DataManager.spells:enableSpell(spellID)
         addon.Config.db.spells[spellID].active = true
     end
     
-    self:onConfigChanged()
+    self:updateRotationSystem()
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "spells")
 end
 
 -- Delete custom spell
@@ -216,7 +216,8 @@ function DataManager.spells:deleteCustomSpell(spellID)
     end
     
     addon.Config.db.spells[spellID] = nil
-    self:onConfigChanged()
+    self:updateRotationSystem()
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "spells")
     return true
 end
 
@@ -272,7 +273,8 @@ function DataManager.spells:moveSpellPriority(spellID, direction)
         addon.Config.db.spells[spell.spellID].priority = i
     end
     
-    self:onConfigChanged()
+    self:updateRotationSystem()
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "spells")
 end
 
 -- Renumber spell priorities to eliminate gaps
@@ -301,14 +303,7 @@ function DataManager.spells:renumberSpellPriorities()
     end
     
     -- Immediately update tracked cooldowns cache and rebuild queue
-    self:onConfigChanged()
-end
-
-function DataManager.spells:onConfigChanged()
-    -- Update rotation system
     self:updateRotationSystem()
-    
-    -- Fire event for config changes
     addon.Config:FireEvent("PROFILE_DATA_CHANGED", "spells")
 end
 
@@ -534,11 +529,6 @@ function DataManager.profiles:getCurrentProfileInfo()
     }
 end
 
-
--- Check if profile sync is available
-function DataManager.profiles:isProfileSyncAvailable()
-    return addon.PartySync ~= nil
-end
 
 -- =============================================================================
 -- Registration and Initialization

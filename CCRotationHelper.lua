@@ -168,8 +168,8 @@ SlashCmdList["CCROTATION"] = function(msg)
         -- Party Sync info
         if addon.PartySync then
             DebugPrint("Party Sync Status:", addon.PartySync:GetStatus())
-            DebugPrint("Is Group Leader:", addon.PartySync:IsGroupLeader())
-            DebugPrint("Is Active:", addon.PartySync:IsActive())
+            DebugPrint("Is Group Leader:", UnitIsGroupLeader("player"))
+            DebugPrint("Is Active:", addon.PartySync:IsInGroup())
         else
             DebugPrint("PartySync not available!")
         end
@@ -182,8 +182,8 @@ SlashCmdList["CCROTATION"] = function(msg)
         if addon.PartySync then
             print("Status: " .. addon.PartySync:GetStatus())
             print("In Group: " .. (addon.PartySync:IsInGroup() and "Yes" or "No"))
-            print("Is Leader: " .. (addon.PartySync:IsGroupLeader() and "Yes" or "No"))
-            print("Active: " .. (addon.PartySync:IsActive() and "Yes" or "No"))
+            print("Is Leader: " .. (UnitIsGroupLeader("player") and "Yes" or "No"))
+            print("Active: " .. (addon.PartySync:IsInGroup() and "Yes" or "No"))
         else
             print("PartySync: Not initialized")
         end

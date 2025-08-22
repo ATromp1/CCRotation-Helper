@@ -60,18 +60,6 @@ function AddSpellForm:Cleanup()
     end
 end
 
-local function createPriorityInput(AceGUI, width, defaultValue, callback)
-    local input = AceGUI:Create("EditBox")
-    input:SetLabel("Priority (1-50)")
-    input:SetWidth(width or 100)
-    input:SetText(tostring(defaultValue or 25))
-    
-    if callback then
-        input:SetCallback("OnEnterPressed", callback)
-    end
-    
-    return input
-end
 
 function AddSpellForm:new(container, callbacks, dataProvider)
     local instance = BaseComponent:new(container, callbacks, dataProvider)
@@ -103,8 +91,11 @@ function AddSpellForm:buildUI()
     ccTypeDropdown:SetDisabled(isEditingDisabled)
     self.container:AddChild(ccTypeDropdown)
     
-    -- Priority input using local helper
-    local priorityEdit = createPriorityInput(self.AceGUI, 100, 25)
+    -- Priority input
+    local priorityEdit = self.AceGUI:Create("EditBox")
+    priorityEdit:SetLabel("Priority (1-50)")
+    priorityEdit:SetWidth(100)
+    priorityEdit:SetText("25")
     priorityEdit:SetDisabled(isEditingDisabled)
     self.container:AddChild(priorityEdit)
     

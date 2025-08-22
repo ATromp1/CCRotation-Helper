@@ -146,7 +146,7 @@ function addon.UI:IsEditingDisabledByPartySync()
     end
     
     -- Disable editing if profile selection is locked (party sync active and not leader)
-    return addon.PartySync:IsProfileSelectionLocked()
+    return addon.PartySync:IsInPartySync()
 end
 
 -- Show configuration frame

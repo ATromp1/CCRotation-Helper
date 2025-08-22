@@ -472,7 +472,7 @@ function addon.Config:SwitchProfile(profileName)
     end
     
     -- Check if profile switching is locked (during party sync as non-leader)
-    if addon.PartySync and addon.PartySync:IsProfileSelectionLocked() then
+    if addon.PartySync and addon.PartySync:IsInPartySync() then
         return false, "Profile switching is locked during party sync"
     end
     
@@ -501,7 +501,7 @@ end
 function addon.Config:IsProfileSelectionLocked()
     -- Profile selection is locked when we're receiving synced data from a party leader
     if addon.PartySync then
-        return addon.PartySync:IsProfileSelectionLocked()
+        return addon.PartySync:IsInPartySync()
     end
     return false
 end
@@ -512,11 +512,11 @@ function addon.Config:GetPartySyncStatus()
         return { isActive = false }
     end
     
-    local isActive = addon.PartySync:IsActive()
+    local isActive = addon.PartySync:IsInGroup()
     local leaderName = nil
     
     if isActive then
-        if addon.PartySync:IsGroupLeader() then
+        if UnitIsGroupLeader("player") then
             leaderName = UnitName("player")
         else
             -- Find the group leader name

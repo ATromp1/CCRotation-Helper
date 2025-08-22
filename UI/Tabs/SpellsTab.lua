@@ -121,16 +121,9 @@ function SpellsTab.create(container)
     -- Initialize the component
     unifiedSpellsList:buildUI()
     
-    -- Add the management sections (add spell form)
-    SpellsTab.createManagementSections(scroll, container, unifiedSpellsList, refreshQueueDisplay)
-end
-
--- Create spell management sections
-function SpellsTab.createManagementSections(scroll, container, unifiedSpellsList, refreshQueueDisplay)
-    local dataProvider = addon.DataProviders and addon.DataProviders.Spells
+    -- Add spell form section
     local addSpellGroup = addon.BaseComponent:createInlineGroup("Add Custom Spell", scroll)
     
-    -- Load and create AddSpellForm component  
     if not addon.Components or not addon.Components.AddSpellForm then
         error("AddSpellForm component not loaded. Make sure UI/Components/SpellsList.lua is loaded first.")
     end
@@ -144,11 +137,10 @@ function SpellsTab.createManagementSections(scroll, container, unifiedSpellsList
         end
     }, dataProvider)
     
-    -- Store component reference for cleanup
     container.spellsTabComponents.addSpellForm = addSpellForm
-    
     addSpellForm:buildUI()
     
+    -- Help text for spell management
     local manageHelpText = AceGUI:Create("Label")
     manageHelpText:SetText("Use Up/Down buttons to reorder spells by priority. Use Enable/Disable buttons to toggle spells in-place while keeping their priority position. Disabled spells appear grayed out with reduced opacity. Use Delete button to permanently remove custom spells.")
     manageHelpText:SetFullWidth(true)

@@ -493,7 +493,7 @@ function CCRotation:CheckPugAnnouncement()
     end
     
     -- Only leaders can announce
-    if not addon.PartySync:IsGroupLeader() then
+    if not UnitIsGroupLeader("player") then
         return
     end
     
