@@ -23,6 +23,9 @@ local originalData = {
 }
 local lastDataHash = nil -- Track last sent/received data hash
 
+-- Track which players have the addon
+local playersWithAddon = {} -- [playerName] = true if they have the addon
+
 -- User profile choice tracking for legacy compatibility
 local userProfileTracking = {
     lastUserChosenProfile = nil
@@ -340,6 +343,8 @@ function addon.PartySync:OnRequestReceived(prefix, message, distribution, sender
     end
     
     DebugPrint("COMM", "Received sync request from:", sender)
+    -- Mark sender as having the addon
+    playersWithAddon[sender] = true
     
     -- Force immediate broadcast regardless of hash
     self:ForceBroadcast()
@@ -416,6 +421,8 @@ function addon.PartySync:OnCommReceived(prefix, message, distribution, sender)
     end
     
     DebugPrint("COMM", "Applying synced data from leader:", sender)
+    -- Mark sender as having the addon
+    playersWithAddon[sender] = true
     addon.PartySync:ApplyProfileData(profileData)
 end
 
@@ -509,6 +516,11 @@ end
 
 -- Event handlers
 function addon.PartySync:GROUP_ROSTER_UPDATE()
+    -- Clear addon tracking when group changes
+    wipe(playersWithAddon)
+    -- Always mark yourself as having the addon
+    playersWithAddon[UnitName("player")] = true
+    
     -- Delay operations to avoid taint issues with Blizzard frames
     C_Timer.After(0.1, function()
         -- Immediately stop broadcasting if no longer in group
@@ -620,6 +632,21 @@ function addon.PartySync:GetCurrentDataHash()
     }
     
     return CalculateDataHash(profileData)
+end
+
+-- Check if a player is a pug (doesn't have the addon)
+function addon.PartySync:IsPlayerPug(playerName)
+    if not playerName then
+        return false
+    end
+    
+    -- If we're not in a group, there are no pugs
+    if not self:IsInGroup() then
+        return false
+    end
+    
+    -- Check if player has responded to addon communications
+    return not playersWithAddon[playerName]
 end
 
 -- Debug methods

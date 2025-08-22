@@ -153,6 +153,10 @@ local defaults = {
         showInSolo = false,
         onlyInDungeons = false,
         
+        -- Pug announcer settings
+        pugAnnouncerEnabled = false,
+        pugAnnouncerChannel = "SAY", -- SAY, PARTY, or YELL
+        
         
         -- Minimap icon settings
         minimap = {

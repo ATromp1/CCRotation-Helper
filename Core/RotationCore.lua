@@ -41,6 +41,8 @@ function CCRotation:Initialize()
     self.GUIDToUnit = {}
     self.activeNPCs = {}
     self.wasPlayerNext = false  -- Track player turn state for notifications
+    self.lastAnnouncedSpell = nil  -- Track last announced spell to prevent spam
+    self.lastAnnouncementTime = 0  -- Track when we last made an announcement
     
     -- Initialize GUID mapping
     self:RefreshGUIDToUnit()
@@ -441,6 +443,9 @@ function CCRotation:SortAndSeparateQueues()
     self.cooldownQueue = availableQueue
     self.unavailableQueue = unavailableQueue
     
+    -- Check for pug announcements
+    self:CheckPugAnnouncement()
+    
     -- Check if player is next in queue and fire event for sound notification
     self:CheckPlayerTurnStatus()
 end
@@ -482,6 +487,73 @@ function CCRotation:CheckPlayerTurnStatus()
     end
     
     self.wasPlayerNext = isPlayerNext
+end
+
+-- Check if we need to announce the next ability for a pug
+function CCRotation:CheckPugAnnouncement()
+    local config = addon.Config
+    if not config:Get("pugAnnouncerEnabled") then
+        return
+    end
+    
+    -- Only leaders can announce
+    if not addon.PartySync:IsGroupLeader() then
+        return
+    end
+    
+    -- Only announce in combat (when we need CC)
+    if not InCombatLockdown() then
+        self.lastAnnouncedSpell = nil
+        return
+    end
+    
+    -- Check if there are any active enabled NPCs
+    local hasActiveEnabledNPCs = self:HasActiveEnabledNPCs()
+    if not hasActiveEnabledNPCs then
+        self.lastAnnouncedSpell = nil
+        return
+    end
+    
+    -- Check if first person in queue is a pug and their spell is ready
+    if #self.cooldownQueue > 0 then
+        local firstInQueue = self.cooldownQueue[1]
+        local unit = self.GUIDToUnit[firstInQueue.GUID]
+        
+        if unit and firstInQueue.isEffective then
+            local playerName = UnitName(unit)
+            
+            -- Check if this player is a pug
+            if addon.PartySync:IsPlayerPug(playerName) then
+                -- Check if spell is ready (has charges or cooldown is up)
+                local now = GetTime()
+                local isReady = firstInQueue.charges > 0 or firstInQueue.expirationTime <= now
+                
+                if isReady then
+                    local spellName = firstInQueue.name
+                    local announceKey = playerName .. ":" .. spellName
+                    
+                    -- Throttle announcements: minimum 5 seconds between announcements
+                    -- and don't repeat the same player+spell combo
+                    if self.lastAnnouncedSpell ~= announceKey and (now - self.lastAnnouncementTime) >= 5 then
+                        self.lastAnnouncedSpell = announceKey
+                        self.lastAnnouncementTime = now
+                        
+                        local channel = config:Get("pugAnnouncerChannel") or "SAY"
+                        local message = spellName .. " next"
+                        
+                        -- Send the announcement
+                        SendChatMessage(message, channel)
+                    end
+                end
+            else
+                -- First person isn't a pug, clear announcement tracking
+                self.lastAnnouncedSpell = nil
+            end
+        end
+    else
+        -- No one in queue, clear announcement tracking
+        self.lastAnnouncedSpell = nil
+    end
 end
 
 -- Combat start handler

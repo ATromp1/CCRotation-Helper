@@ -28,8 +28,6 @@ function CCRotationHelper:OnAddonLoaded(loadedAddonName)
         -- Register config listener now that Config is initialized
         addon.PartySync:RegisterConfigListener()
     end
-    
-    
 end
 
 -- Player login handler  
@@ -188,6 +186,50 @@ SlashCmdList["CCROTATION"] = function(msg)
             print("Active: " .. (addon.PartySync:IsActive() and "Yes" or "No"))
         else
             print("PartySync: Not initialized")
+        end
+    elseif command == "pugtest" then
+        -- Test pug announcer functionality
+        print("|cff00ff00CC Rotation Helper|r: === Pug Announcer Test ===")
+        
+        if not addon.PartySync:IsInGroup() then
+            print("Not in group - pug announcer requires being in a group")
+            return
+        end
+        
+        if not addon.PartySync:IsGroupLeader() then
+            print("Not group leader - only leaders can make announcements")
+            return
+        end
+        
+        local enabled = addon.Config:Get("pugAnnouncerEnabled")
+        local channel = addon.Config:Get("pugAnnouncerChannel")
+        print("Announcer enabled: " .. (enabled and "Yes" or "No"))
+        print("Announcer channel: " .. (channel or "SAY"))
+        
+        -- Check for pugs in group
+        local pugCount = 0
+        if IsInGroup() then
+            local numGroupMembers = GetNumGroupMembers()
+            local prefix = IsInRaid() and "raid" or "party"
+            
+            for i = 1, numGroupMembers do
+                local unit = prefix .. i
+                if UnitExists(unit) then
+                    local playerName = UnitName(unit)
+                    if addon.PartySync:IsPlayerPug(playerName) then
+                        pugCount = pugCount + 1
+                        print("Pug detected: " .. playerName)
+                    else
+                        print("Has addon: " .. playerName)
+                    end
+                end
+            end
+        end
+        
+        if pugCount == 0 then
+            print("No pugs detected in current group")
+        else
+            print("Total pugs: " .. pugCount)
         end
     elseif command == "preview" then
         -- Toggle config preview manually
@@ -456,6 +498,7 @@ SlashCmdList["CCROTATION"] = function(msg)
         print("  /ccr status - Show party sync status")
         print("  /ccr debug - Toggle debug mode")
         print("  /ccr preview - Toggle config positioning preview")
+        print("  /ccr pugtest - Test pug announcer functionality")
         print("|cffFFFF00Party Sync Commands:|r")
         print("  /ccr syncdata - Show what you're broadcasting/receiving")
         print("  /ccr hash - Show current data hash")

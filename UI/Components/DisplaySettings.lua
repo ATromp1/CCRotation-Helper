@@ -178,6 +178,34 @@ function DisplaySettings:buildUI()
     )
     turnNotificationControl:buildUI()
     
+    -- Pug announcer
+    local pugAnnouncerControl = addon.Components.CheckboxControl:new(
+        internalGroup,
+        "Announce abilities for players without addon",
+        "pugAnnouncerEnabled",
+        {
+            onValueChanged = function(configKey, value)
+                -- No refresh needed for announcer settings
+            end
+        }
+    )
+    pugAnnouncerControl:buildUI()
+    
+    -- Pug announcer channel dropdown
+    local pugChannelDropdown = self.AceGUI:Create("Dropdown")
+    pugChannelDropdown:SetLabel("Announcer channel")
+    pugChannelDropdown:SetWidth(150)
+    pugChannelDropdown:SetList({
+        ["SAY"] = "Say",
+        ["PARTY"] = "Party",
+        ["YELL"] = "Yell"
+    })
+    pugChannelDropdown:SetValue(addon.Config:Get("pugAnnouncerChannel") or "SAY")
+    pugChannelDropdown:SetCallback("OnValueChanged", function(widget, event, value)
+        addon.Config:Set("pugAnnouncerChannel", value)
+    end)
+    internalGroup:AddChild(pugChannelDropdown)
+    
     -- Turn notification text
     local turnNotificationTextEdit = self.AceGUI:Create("EditBox")
     turnNotificationTextEdit:SetLabel("Turn notification text")
