@@ -864,8 +864,393 @@ function QueueDisplayComponent:Cleanup()
     end
 end
 
+-- UnifiedSpellsList Component - Consolidates enabled and disabled spells into a single list
+local UnifiedSpellsList = {}
+setmetatable(UnifiedSpellsList, {__index = BaseComponent})
+
+function UnifiedSpellsList:new(container, callbacks, dataProvider)
+    local instance = BaseComponent:new(container, callbacks, dataProvider)
+    setmetatable(instance, {__index = self})
+    instance:validateImplementation("UnifiedSpellsList")
+    
+    -- Initialize event listeners
+    instance:Initialize()
+    
+    return instance
+end
+
+function UnifiedSpellsList:Initialize()
+    -- Register for profile sync events to refresh UI when sync data arrives
+    self:RegisterEventListener("PROFILE_SYNC_RECEIVED", function(profileData)
+        if addon.UI and addon.UI:IsConfigTabActive("spells") then
+            self:refreshUI()
+        end
+    end)
+    
+    -- Register for direct profile data changes (from current profile updates)
+    self:RegisterEventListener("PROFILE_DATA_CHANGED", function(dataType, value)
+        if addon.UI and addon.UI:IsConfigTabActive("spells") and 
+           (dataType == "spells" or dataType == "customSpells" or dataType == "inactiveSpells") then
+            self:refreshUI()
+        end
+    end)
+    
+    -- Register for WoW group events since we're using simple sync now
+    local AceEvent = LibStub("AceEvent-3.0")
+    AceEvent:Embed(self)
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupChanged")
+    self:RegisterEvent("PARTY_LEADER_CHANGED", "OnGroupChanged")
+end
+
+function UnifiedSpellsList:OnGroupChanged()
+    -- Delay UI operations to avoid taint issues with Blizzard frames
+    C_Timer.After(0.1, function()
+        -- Only refresh UI if the spells tab is currently active
+        if addon.UI and addon.UI:IsConfigTabActive("spells") then
+            self:refreshUI()
+        end
+    end)
+end
+
+-- Cleanup method for UnifiedSpellsList
+function UnifiedSpellsList:Cleanup()
+    -- Cancel any pending refresh
+    self.isRefreshing = false
+    
+    -- Unregister events
+    if self.UnregisterAllEvents then
+        self:UnregisterAllEvents()
+    end
+    
+    -- Clean up container
+    if self.container then
+        self.container:ReleaseChildren()
+    end
+end
+
+function UnifiedSpellsList:refreshUI()
+    -- Only refresh if the spells tab is currently active
+    if not (addon.UI and addon.UI:IsConfigTabActive("spells")) then
+        return
+    end
+    
+    -- Prevent multiple concurrent refreshes
+    if self.isRefreshing then return end
+    self.isRefreshing = true
+    
+    -- Delay refresh slightly to avoid race conditions with other components
+    C_Timer.After(0.1, function()
+        if self.container and addon.UI and addon.UI:IsConfigTabActive("spells") then
+            -- Use scroll preservation if container supports it and ScrollHelper is available
+            if self.container.SetScroll and addon.ScrollHelper then
+                addon.ScrollHelper:refreshWithScrollPreservation(self.container, function()
+                    self.container:ReleaseChildren()
+                    self:buildUI()
+                end)
+            else
+                -- Fallback to normal refresh
+                self.container:ReleaseChildren()
+                self:buildUI()
+            end
+        end
+        self.isRefreshing = false
+    end)
+end
+
+function UnifiedSpellsList:buildUI()
+    -- Check if editing is disabled due to party sync
+    local isEditingDisabled = addon.UI and addon.UI:IsEditingDisabledByPartySync()
+    
+    -- Get all spells (both active and disabled) from data provider
+    local allSpells = {}
+    local activeSpells = self.dataProvider and self.dataProvider:getActiveSpells() or {}
+    local disabledSpells = self.dataProvider and self.dataProvider:getDisabledSpells() or {}
+    
+    -- Combine active and disabled spells
+    for spellID, spell in pairs(activeSpells) do
+        allSpells[spellID] = {
+            name = spell.name,
+            ccType = spell.ccType,
+            priority = spell.priority,
+            source = spell.source or "unknown",
+            active = true
+        }
+    end
+    
+    for spellID, spell in pairs(disabledSpells) do
+        allSpells[spellID] = {
+            name = spell.name,
+            ccType = spell.ccType,
+            priority = spell.priority or 50, -- Default priority for disabled spells
+            source = spell.source or "unknown",
+            active = false
+        }
+    end
+    
+    -- Fallback to direct access if no data provider
+    if not self.dataProvider then
+        -- Use unified spells table from config
+        for spellID, spell in pairs(addon.Config.db.spells or {}) do
+            allSpells[spellID] = {
+                name = spell.name,
+                ccType = spell.ccType,
+                priority = spell.priority,
+                source = spell.source or "unknown",
+                active = spell.active
+            }
+        end
+    end
+    
+    -- Sort spells by priority only (keeping disabled spells in-place)
+    local sortedSpells = {}
+    for spellID, data in pairs(allSpells) do
+        table.insert(sortedSpells, {spellID = spellID, data = data})
+    end
+    table.sort(sortedSpells, function(a, b)
+        return a.data.priority < b.data.priority
+    end)
+    
+    -- Create header row
+    local headerGroup = self.AceGUI:Create("SimpleGroup")
+    headerGroup:SetFullWidth(true)
+    headerGroup:SetLayout("Flow")
+    self.container:AddChild(headerGroup)
+    
+    -- Header columns
+    local headerSpacer = self.AceGUI:Create("Label")
+    headerSpacer:SetText("Actions")
+    headerSpacer:SetWidth(140)
+    headerGroup:AddChild(headerSpacer)
+    
+    local iconHeader = self.AceGUI:Create("Label")
+    iconHeader:SetText("Icon")
+    iconHeader:SetWidth(40)
+    headerGroup:AddChild(iconHeader)
+    
+    local nameHeader = self.AceGUI:Create("Label")
+    nameHeader:SetText("Spell Name")
+    nameHeader:SetWidth(150)
+    headerGroup:AddChild(nameHeader)
+    
+    local idHeader = self.AceGUI:Create("Label")
+    idHeader:SetText("Spell ID")
+    idHeader:SetWidth(80)
+    headerGroup:AddChild(idHeader)
+    
+    local typeHeader = self.AceGUI:Create("Label")
+    typeHeader:SetText("CC Type")
+    typeHeader:SetWidth(120)
+    headerGroup:AddChild(typeHeader)
+    
+    local actionHeader = self.AceGUI:Create("Label")
+    actionHeader:SetText("Action")
+    actionHeader:SetWidth(80)
+    headerGroup:AddChild(actionHeader)
+    
+    -- Display spells as tabular rows
+    for i, spell in ipairs(sortedSpells) do
+        local rowGroup = self.AceGUI:Create("SimpleGroup")
+        rowGroup:SetFullWidth(true)
+        rowGroup:SetLayout("Flow")
+        self.container:AddChild(rowGroup)
+        
+        -- Move up button (disabled for first spell or party sync)
+        local upButton = self.AceGUI:Create("Button")
+        upButton:SetText(isEditingDisabled and "Up (Disabled)" or "Up")
+        upButton:SetWidth(60)
+        if i == 1 or isEditingDisabled then
+            upButton:SetDisabled(true)
+        else
+            upButton:SetCallback("OnClick", function()
+                -- Use data provider for spell operations
+                self.dataProvider:moveSpellPriority(spell.spellID, "up")
+                
+                -- Trigger callbacks
+                self:triggerCallback('onSpellMoved', spell.spellID, "up")
+            end)
+        end
+        rowGroup:AddChild(upButton)
+        
+        -- Move down button (disabled for last spell or party sync)
+        local downButton = self.AceGUI:Create("Button")
+        downButton:SetText(isEditingDisabled and "Down (Disabled)" or "Down")
+        downButton:SetWidth(70)
+        if i == #sortedSpells or isEditingDisabled then
+            downButton:SetDisabled(true)
+        else
+            downButton:SetCallback("OnClick", function()
+                -- Use data provider for spell operations
+                self.dataProvider:moveSpellPriority(spell.spellID, "down")
+                
+                -- Trigger callbacks
+                self:triggerCallback('onSpellMoved', spell.spellID, "down")
+            end)
+        end
+        rowGroup:AddChild(downButton)
+        
+        -- Spell icon using local helper
+        local spellIcon = createSpellIcon(self.AceGUI, spell.spellID, 32)
+        -- Apply visual effect for disabled spells by reducing opacity
+        if not spell.data.active then
+            -- Get the underlying frame and set alpha to make it appear faded
+            if spellIcon.image and spellIcon.image.SetAlpha then
+                spellIcon.image:SetAlpha(0.4)
+            end
+        end
+        rowGroup:AddChild(spellIcon)
+        
+        -- Editable spell name for all spells
+        local spellNameEdit = self.AceGUI:Create("EditBox")
+        spellNameEdit:SetText(spell.data.name)
+        spellNameEdit:SetWidth(150)
+        spellNameEdit:SetDisabled(isEditingDisabled)
+        -- Apply visual styling for disabled spells
+        if not spell.data.active then
+            spellNameEdit:SetText("|cff888888" .. spell.data.name .. "|r")
+        end
+        spellNameEdit:SetCallback("OnEnterPressed", function(widget, event, text)
+            local newName = text:trim()
+            -- Remove color coding if present
+            newName = newName:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+            if newName ~= "" then
+                -- Use data provider for spell operations
+                if self.dataProvider then
+                    self.dataProvider:updateSpell(spell.spellID, 'name', newName)
+                else
+                    -- Fallback to direct access
+                    if addon.Config.db.spells[spell.spellID] then
+                        addon.Config.db.spells[spell.spellID].name = newName
+                    end
+                end
+                
+                -- Trigger callback
+                self:triggerCallback('onSpellEdited', spell.spellID, 'name', newName)
+            end
+        end)
+        rowGroup:AddChild(spellNameEdit)
+        
+        -- Editable spell ID for all spells
+        local spellIDEdit = self.AceGUI:Create("EditBox")
+        spellIDEdit:SetText(tostring(spell.spellID))
+        spellIDEdit:SetWidth(80)
+        spellIDEdit:SetDisabled(isEditingDisabled)
+        -- Apply visual styling for disabled spells
+        if not spell.data.active then
+            spellIDEdit:SetText("|cff888888" .. tostring(spell.spellID) .. "|r")
+        end
+        local function handleSpellIDChange(widget, event, text)
+            local newSpellID = tonumber(text)
+            -- Remove color coding if present for comparison
+            local cleanText = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+            newSpellID = tonumber(cleanText)
+            if newSpellID and newSpellID ~= spell.spellID then
+                -- Update spell ID (complex operation that may require full refresh)
+                self:triggerCallback('onSpellIDChanged', spell.spellID, newSpellID, spell.data)
+            end
+        end
+        
+        spellIDEdit:SetCallback("OnEnterPressed", handleSpellIDChange)
+        spellIDEdit:SetCallback("OnEditFocusLost", handleSpellIDChange)
+        rowGroup:AddChild(spellIDEdit)
+        
+        -- Editable CC Type for all spells
+        local ccTypeDropdown = createCCTypeDropdown(self.AceGUI, 120, addon.Config:NormalizeCCType(spell.data.ccType))
+        ccTypeDropdown:SetDisabled(isEditingDisabled)
+        -- Apply visual styling for disabled spells
+        if not spell.data.active then
+            -- Get the display name for the current value
+            local ccTypeName = addon.Config:NormalizeCCType(spell.data.ccType) or "unknown"
+            local ccTypeDisplay = addon.Database.ccTypeDisplayNames[ccTypeName] or ccTypeName
+            ccTypeDropdown:SetText("|cff888888" .. ccTypeDisplay .. "|r")
+        end
+        ccTypeDropdown:SetCallback("OnValueChanged", function(widget, event, value)
+            -- Use data provider for spell operations
+            if self.dataProvider then
+                self.dataProvider:updateSpell(spell.spellID, 'ccType', value)
+            else
+                -- Fallback to direct access
+                if addon.Config.db.spells[spell.spellID] then
+                    addon.Config.db.spells[spell.spellID].ccType = value
+                end
+            end
+            
+            -- Trigger callback
+            self:triggerCallback('onSpellEdited', spell.spellID, 'ccType', value)
+        end)
+        rowGroup:AddChild(ccTypeDropdown)
+        
+        -- Action button - Enable/Disable based on current state, plus Delete for custom spells
+        if spell.data.active then
+            -- Disable button for active spells
+            local disableButton = self.AceGUI:Create("Button")
+            disableButton:SetText(isEditingDisabled and "Disable (Disabled)" or "Disable")
+            disableButton:SetWidth(80)
+            disableButton:SetDisabled(isEditingDisabled)
+            disableButton:SetCallback("OnClick", function()
+                -- Use data provider for spell operations
+                if self.dataProvider then
+                    self.dataProvider:disableSpell(spell.spellID)
+                else
+                    -- Fallback to direct access
+                    if addon.Config.db.spells[spell.spellID] then
+                        addon.Config.db.spells[spell.spellID].active = false
+                    end
+                end
+                
+                -- Trigger callback
+                self:triggerCallback('onSpellDisabled', spell.spellID)
+            end)
+            rowGroup:AddChild(disableButton)
+        else
+            -- Enable button for disabled spells
+            local enableButton = self.AceGUI:Create("Button")
+            enableButton:SetText(isEditingDisabled and "Enable (Disabled)" or "Enable")
+            enableButton:SetWidth(80)
+            enableButton:SetDisabled(isEditingDisabled)
+            enableButton:SetCallback("OnClick", function()
+                -- Use data provider for spell operations
+                if self.dataProvider then
+                    self.dataProvider:enableSpell(spell.spellID)
+                else
+                    -- Fallback to direct access
+                    if addon.Config.db.spells[spell.spellID] then
+                        addon.Config.db.spells[spell.spellID].active = true
+                    end
+                end
+                
+                -- Trigger callback to parent
+                self:triggerCallback('onSpellEnabled', spell.spellID)
+            end)
+            rowGroup:AddChild(enableButton)
+            
+            -- Delete button for custom disabled spells (add as second button)
+            local isCustomSpell = (addon.Database.defaultSpells[spell.spellID] == nil)
+            if isCustomSpell then
+                local deleteButton = self.AceGUI:Create("Button")
+                deleteButton:SetText(isEditingDisabled and "Del (Disabled)" or "Del")
+                deleteButton:SetWidth(40)
+                deleteButton:SetDisabled(isEditingDisabled)
+                deleteButton:SetCallback("OnClick", function()
+                    -- Use data provider for spell operations
+                    if self.dataProvider then
+                        self.dataProvider:deleteCustomSpell(spell.spellID)
+                    else
+                        -- Fallback to direct access
+                        addon.Config.db.spells[spell.spellID] = nil
+                    end
+                    
+                    -- Trigger callback to parent
+                    self:triggerCallback('onSpellDeleted', spell.spellID)
+                end)
+                rowGroup:AddChild(deleteButton)
+            end
+        end
+    end
+end
+
 -- Register components in addon namespace
 addon.Components.AddSpellForm = AddSpellForm
 addon.Components.DisabledSpellsList = DisabledSpellsList
 addon.Components.TrackedSpellsList = TrackedSpellsList
+addon.Components.UnifiedSpellsList = UnifiedSpellsList
 addon.Components.QueueDisplayComponent = QueueDisplayComponent

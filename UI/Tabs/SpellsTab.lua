@@ -60,21 +60,21 @@ function SpellsTab.create(container)
         end
     end
 
-    -- Current tracked spells display using TrackedSpellsList component
-    local spellListGroup = addon.BaseComponent:createInlineGroup("Currently Tracked Spells", scroll)
+    -- Unified spells display using UnifiedSpellsList component
+    local spellListGroup = addon.BaseComponent:createInlineGroup("All Spells", scroll)
     
-    -- Load and create TrackedSpellsList component
-    if not addon.Components or not addon.Components.TrackedSpellsList then
-        error("TrackedSpellsList component not loaded. Make sure UI/Components/SpellsList.lua is loaded first.")
+    -- Load and create UnifiedSpellsList component
+    if not addon.Components or not addon.Components.UnifiedSpellsList then
+        error("UnifiedSpellsList component not loaded. Make sure UI/Components/SpellsList.lua is loaded first.")
     end
     
     -- Create component reference first (forward declaration pattern)
-    local trackedSpellsList
+    local unifiedSpellsList
     
-    trackedSpellsList = addon.Components.TrackedSpellsList:new(spellListGroup, {
+    unifiedSpellsList = addon.Components.UnifiedSpellsList:new(spellListGroup, {
         onSpellMoved = function(spellID, direction)
-            -- Targeted refresh: refresh the tracked spells component and queue display
-            trackedSpellsList:refresh()
+            -- Targeted refresh: refresh the unified spells component and queue display
+            unifiedSpellsList:refreshUI()
             if refreshQueueDisplay then
                 refreshQueueDisplay()
             end
@@ -104,47 +104,47 @@ function SpellsTab.create(container)
             end
         end,
         onSpellDisabled = function(spellID)
-            -- This will be overridden after disabledSpellsList is created
-            -- Placeholder callback for initial component creation
+            -- Targeted refresh: refresh unified spells component and queue display
+            unifiedSpellsList:refreshUI()
+            if refreshQueueDisplay then
+                refreshQueueDisplay()
+            end
+            
+            -- Force layout refresh on the main scroll container to handle size changes
+            if scroll and scroll.DoLayout then
+                scroll:DoLayout()
+            end
+        end,
+        onSpellEnabled = function(spellID)
+            -- Targeted refresh: refresh unified spells component and queue display
+            unifiedSpellsList:refreshUI()
+            if refreshQueueDisplay then
+                refreshQueueDisplay()
+            end
+            
+            -- Force layout refresh on the main scroll container to handle size changes
+            if scroll and scroll.DoLayout then
+                scroll:DoLayout()
+            end
+        end,
+        onSpellDeleted = function(spellID)
+            -- Targeted refresh: refresh unified spells component
+            unifiedSpellsList:refreshUI()
         end
     }, dataProvider)
     
     -- Store component reference for cleanup
-    container.spellsTabComponents.trackedSpellsList = trackedSpellsList
+    container.spellsTabComponents.unifiedSpellsList = unifiedSpellsList
     
     -- Initialize the component
-    trackedSpellsList:buildUI()
+    unifiedSpellsList:buildUI()
     
-    -- Add the management sections (add/inactive spells) and get disabledSpellsList reference
-    local disabledSpellsList = SpellsTab.createManagementSections(scroll, container, trackedSpellsList, refreshQueueDisplay)
-    
-    -- Store additional components for cleanup
-    if disabledSpellsList then
-        container.spellsTabComponents.disabledSpellsList = disabledSpellsList
-    end
-    
-    -- Now update the TrackedSpellsList callback to also refresh DisabledSpellsList
-    -- Note: We need to update the callback after both components are created
-    local originalCallbacks = trackedSpellsList.callbacks
-    trackedSpellsList.callbacks.onSpellDisabled = function(spellID)
-        -- Targeted refresh: refresh both tracked spells component and disabled spells list
-        trackedSpellsList:refresh()
-        if disabledSpellsList then
-            disabledSpellsList:refresh()
-        end
-        if refreshQueueDisplay then
-            refreshQueueDisplay()
-        end
-        
-        -- Force layout refresh on the main scroll container to handle size changes
-        if scroll and scroll.DoLayout then
-            scroll:DoLayout()
-        end
-    end
+    -- Add the management sections (add spell form)
+    SpellsTab.createManagementSections(scroll, container, unifiedSpellsList, refreshQueueDisplay)
 end
 
--- Create spell management sections (add/disabled spells)
-function SpellsTab.createManagementSections(scroll, container, trackedSpellsList, refreshQueueDisplay)
+-- Create spell management sections (add spell form only - disabled spells are now integrated)
+function SpellsTab.createManagementSections(scroll, container, unifiedSpellsList, refreshQueueDisplay)
     -- Get data provider for components
     local dataProvider = addon.DataProviders and addon.DataProviders.Spells
     -- COMPONENT-BASED: Add new spell section using AddSpellForm component
@@ -157,9 +157,9 @@ function SpellsTab.createManagementSections(scroll, container, trackedSpellsList
     
     local addSpellForm = addon.Components.AddSpellForm:new(addSpellGroup, {
         onSpellAdded = function(spellID)
-            -- Targeted refresh: refresh the tracked spells list to show new spell
-            if trackedSpellsList then
-                trackedSpellsList:refresh()
+            -- Targeted refresh: refresh the unified spells list to show new spell
+            if unifiedSpellsList then
+                unifiedSpellsList:refreshUI()
             end
             -- Also update queue display since active spells changed
             if refreshQueueDisplay then
@@ -179,51 +179,11 @@ function SpellsTab.createManagementSections(scroll, container, trackedSpellsList
     -- Initialize the component
     addSpellForm:buildUI()
     
-    -- Disabled spells section using DisabledSpellsList component
-    local inactiveSpellsGroup = addon.BaseComponent:createInlineGroup("Disabled Spells", scroll)
-    
-    -- Load and create DisabledSpellsList component
-    if not addon.Components or not addon.Components.DisabledSpellsList then
-        error("DisabledSpellsList component not loaded. Make sure UI/Components/SpellsList.lua is loaded first.")
-    end
-    
-    -- Create component reference first
-    local disabledSpellsList
-    
-    disabledSpellsList = addon.Components.DisabledSpellsList:new(inactiveSpellsGroup, {
-        onSpellEnabled = function(spellID)
-            -- Targeted refresh: refresh both disabled spells and tracked spells
-            disabledSpellsList:refresh()
-            if trackedSpellsList then
-                trackedSpellsList:refresh()
-            end
-            -- Also update queue display since active spells changed
-            if refreshQueueDisplay then
-                refreshQueueDisplay()
-            end
-            
-            -- Force layout refresh on scroll container to handle size changes
-            if scroll and scroll.DoLayout then
-                scroll:DoLayout()
-            end
-        end,
-        onSpellDeleted = function(spellID)
-            -- Targeted refresh: only refresh the disabled spells component
-            disabledSpellsList:refresh()
-        end
-    }, dataProvider)
-    
-    -- Initialize the component
-    disabledSpellsList:buildUI()
-    
     -- Help text for spell management
     local manageHelpText = AceGUI:Create("Label")
-    manageHelpText:SetText("Use Up/Down buttons to reorder spells. Use Disable button to temporarily remove spells from rotation. Use Enable button to restore disabled spells.")
+    manageHelpText:SetText("Use Up/Down buttons to reorder spells by priority. Use Enable/Disable buttons to toggle spells in-place while keeping their priority position. Disabled spells appear grayed out with reduced opacity. Use Delete button to permanently remove custom spells.")
     manageHelpText:SetFullWidth(true)
     scroll:AddChild(manageHelpText)
-    
-    -- Return the disabledSpellsList reference for cross-component communication
-    return disabledSpellsList
 end
 
 -- Register SpellsTab module for ConfigFrame to load

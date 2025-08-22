@@ -191,31 +191,19 @@ end
 
 -- Disable spell
 function DataManager.spells:disableSpell(spellID)
-    -- Set spell as inactive in unified table
+    -- Simply set spell as inactive, keeping existing priority
     if addon.Config.db.spells[spellID] then
         addon.Config.db.spells[spellID].active = false
     end
-    
-    -- Renumber remaining active spells
-    self:renumberSpellPriorities()
     
     self:onConfigChanged()
 end
 
 -- Enable spell
 function DataManager.spells:enableSpell(spellID)
-    -- Find the highest current priority among active spells
-    local highestPriority = 0
-    for _, spell in pairs(addon.Config.db.spells) do
-        if spell.active and spell.priority > highestPriority then
-            highestPriority = spell.priority
-        end
-    end
-    
-    -- Set spell as active with new priority
+    -- Simply set spell as active, keeping existing priority
     if addon.Config.db.spells[spellID] then
         addon.Config.db.spells[spellID].active = true
-        addon.Config.db.spells[spellID].priority = highestPriority + 1
     end
     
     self:onConfigChanged()
