@@ -72,7 +72,7 @@ function ProfileManagement:handleBecameLeader()
         local currentProfile = addon.Config:GetCurrentProfileName()
         
         if recommendedProfile ~= currentProfile then
-            local success, msg = self.dataProvider:switchProfile(recommendedProfile)
+            local success, msg = addon.Config:SwitchProfile(recommendedProfile)
             -- Profile switch result handled by dataProvider
         else
         end
@@ -110,7 +110,7 @@ end
 function ProfileManagement:buildInternalUI()
     
     local currentProfile = self.dataProvider:getCurrentProfileInfo()
-    local partySyncStatus = self.dataProvider:getPartySyncStatus()
+    local partySyncStatus = addon.Config:GetPartySyncStatus()
     
     -- Current profile display (or party sync status)
     local currentLabel = self.AceGUI:Create("Label")
@@ -156,7 +156,7 @@ function ProfileManagement:buildProfileSwitcher(currentProfile, container)
     profileDropdown:SetWidth(200)
     profileDropdown:SetDisabled(currentProfile.isLocked)
     
-    local profiles = self.dataProvider:getProfileNames()
+    local profiles = addon.Config:GetProfileNames()
     local profileList = {}
     local currentIndex = nil
     
@@ -175,7 +175,7 @@ function ProfileManagement:buildProfileSwitcher(currentProfile, container)
     profileDropdown:SetCallback("OnValueChanged", function(widget, event, value)
         local profileName = profiles[value]
         if profileName then
-            local success, msg = self.dataProvider:switchProfile(profileName)
+            local success, msg = addon.Config:SwitchProfile(profileName)
             if success then
                 self:triggerCallback("onProfileSwitched", profileName)
                 -- Refresh UI to update current profile display
@@ -199,7 +199,7 @@ function ProfileManagement:buildProfileCreator(container)
     createBtn:SetCallback("OnClick", function()
         local name = newProfileInput:GetText()
         if name and name ~= "" then
-            local success, msg = self.dataProvider:createProfile(name)
+            local success, msg = addon.Config:CreateProfile(name)
             if success then
                 newProfileInput:SetText("")
                 self:triggerCallback("onProfileCreated", name)
@@ -217,7 +217,7 @@ function ProfileManagement:buildProfileActions(container)
     resetBtn:SetText("Reset Current Profile")
     resetBtn:SetWidth(150)
     resetBtn:SetCallback("OnClick", function()
-        local success, msg = self.dataProvider:resetCurrentProfile()
+        local success, msg = addon.Config:ResetProfile()
         if success then
             self:triggerCallback("onProfileReset")
         end
@@ -227,7 +227,7 @@ function ProfileManagement:buildProfileActions(container)
     -- Delete profile dropdown
     container:AddChild(addon.UI.Helpers:VerticalSpacer(5))
     local deleteDropdown = createProfilesDropdown("Delete profile", function(profile, widget)
-        if #self.dataProvider:getProfileNames() <= 1 then
+        if #addon.Config:GetProfileNames() <= 1 then
             widget:SetValue(0)
             return
         end
@@ -237,7 +237,7 @@ function ProfileManagement:buildProfileActions(container)
             "Do you want to delete profile: "..profile.."?", 
             "Delete",
             function()
-                local success, msg = self.dataProvider:deleteProfile(profile)
+                local success, msg = addon.Config:DeleteProfile(profile)
                 if success then
                     self:triggerCallback("onProfileDeleted", profile)
                     -- Refresh UI to update profile dropdown

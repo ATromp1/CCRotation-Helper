@@ -32,7 +32,9 @@ function GlowSettings:buildUI()
         "highlightNext",
         {
             onValueChanged = function()
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
             end
         }
     )
@@ -45,7 +47,9 @@ function GlowSettings:buildUI()
         "glowOnlyInCombat",
         {
             onValueChanged = function()
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
             end
         }
     )
@@ -75,7 +79,9 @@ function GlowSettings:buildUI()
     glowTypeDropdown:SetCallback("OnValueChanged", function(widget, event, value)
         self.dataProvider:set("glowType", value)
         self:rebuildGlowControls(value)
-        self.dataProvider:refreshDisplay()
+        if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
     end)
 end
 
@@ -92,7 +98,9 @@ function GlowSettings:rebuildGlowControls(glowType)
         glowColorPicker:SetColor(currentColor[1], currentColor[2], currentColor[3], currentColor[4])
         glowColorPicker:SetCallback("OnValueChanged", function(widget, event, r, g, b, a)
             self.dataProvider:set("glowColor", {r, g, b, a})
-            self.dataProvider:refreshDisplay()
+            if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
         end)
         glowColorPicker:SetFullWidth(true)
         self.dynamicContainer:AddChild(glowColorPicker)
@@ -115,7 +123,9 @@ function GlowSettings:createPixelGlowControls()
     glowFrequencySlider:SetValue(self.dataProvider:get("glowFrequency"))
     glowFrequencySlider:SetCallback("OnValueChanged", function(widget, event, value)
         self.dataProvider:set("glowFrequency", value)
-        self.dataProvider:refreshDisplay()
+        if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
     end)
     glowFrequencySlider:SetFullWidth(true)
     self.dynamicContainer:AddChild(glowFrequencySlider)
@@ -136,7 +146,9 @@ function GlowSettings:createPixelGlowControls()
         slider:SetValue(self.dataProvider:get(controlData.key))
         slider:SetCallback("OnValueChanged", function(widget, event, value)
             self.dataProvider:set(controlData.key, value)
-            self.dataProvider:refreshDisplay()
+            if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
         end)
         slider:SetFullWidth(true)
         self.dynamicContainer:AddChild(slider)
@@ -148,7 +160,9 @@ function GlowSettings:createPixelGlowControls()
     glowBorderCheck:SetValue(self.dataProvider:get("glowBorder"))
     glowBorderCheck:SetCallback("OnValueChanged", function(widget, event, value)
         self.dataProvider:set("glowBorder", value)
-        self.dataProvider:refreshDisplay()
+        if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
     end)
     glowBorderCheck:SetFullWidth(true)
     self.dynamicContainer:AddChild(glowBorderCheck)
@@ -170,7 +184,9 @@ function GlowSettings:createACShineControls()
         slider:SetValue(self.dataProvider:get(controlData.key))
         slider:SetCallback("OnValueChanged", function(widget, event, value)
             self.dataProvider:set(controlData.key, value)
-            self.dataProvider:refreshDisplay()
+            if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
         end)
         slider:SetFullWidth(true)
         self.dynamicContainer:AddChild(slider)

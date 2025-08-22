@@ -27,7 +27,9 @@ function IconSettings:buildUI()
         0.3, 3.0, 0.1,
         {
             onValueChanged = function()
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
             end
         }
     )
@@ -53,7 +55,9 @@ function IconSettings:buildUI()
         local iconIndex = i
         iconSlider:SetCallback("OnValueChanged", function(widget, event, value)
             self.dataProvider:set("iconSize" .. iconIndex, value)
-            self.dataProvider:refreshDisplay()
+            if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
         end)
         
         iconSlider:SetFullWidth(true)
@@ -81,7 +85,9 @@ function IconSettings:buildUI()
             end
         end
         
-        self.dataProvider:refreshDisplay()
+        if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
     end)
     
     -- Unavailable Queue Settings Header
@@ -97,7 +103,9 @@ function IconSettings:buildUI()
         "showUnavailableQueue",
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
                 -- Update config preview if active
                 if addon.UI and addon.UI.showConfigPreview then
                     addon.UI:showConfigPreview()
@@ -118,7 +126,9 @@ function IconSettings:buildUI()
     positioningModeDropdown:SetValue(self.dataProvider:get("unavailableQueuePositioning"))
     positioningModeDropdown:SetCallback("OnValueChanged", function(widget, event, value)
         self.dataProvider:set("unavailableQueuePositioning", value)
-        self.dataProvider:refreshDisplay()
+        if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
         -- Update config preview if active
         if addon.UI and addon.UI.showConfigPreview then
             addon.UI:showConfigPreview()
@@ -134,7 +144,9 @@ function IconSettings:buildUI()
         -500, 500, 1,
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
                 -- Update config preview if active
                 if addon.UI and addon.UI.showConfigPreview then
                     addon.UI:showConfigPreview()
@@ -152,7 +164,9 @@ function IconSettings:buildUI()
         -500, 500, 1,
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
                 -- Update config preview if active
                 if addon.UI and addon.UI.showConfigPreview then
                     addon.UI:showConfigPreview()
@@ -171,7 +185,9 @@ function IconSettings:buildUI()
         self.dataProvider:set("unavailableQueueY", -30)
         self.dataProvider:set("unavailableQueueAnchorPoint", "TOP")
         self.dataProvider:set("unavailableQueueRelativePoint", "BOTTOM")
-        self.dataProvider:refreshDisplay()
+        if addon.UI and addon.UI.RefreshDisplay then
+            addon.UI:RefreshDisplay()
+        end
         -- Update config preview if active
         if addon.UI and addon.UI.showConfigPreview then
             addon.UI:showConfigPreview()

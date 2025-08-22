@@ -35,7 +35,9 @@ function TextSettings:buildUI()
         8, 24, 1,
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
             end
         }
     )
@@ -49,7 +51,9 @@ function TextSettings:buildUI()
         5, 50, 1,
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
             end
         }
     )
@@ -63,7 +67,9 @@ function TextSettings:buildUI()
         8, 24, 1,
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
             end
         }
     )
@@ -77,7 +83,9 @@ function TextSettings:buildUI()
         3, 30, 1,
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
             end
         }
     )
@@ -91,7 +99,9 @@ function TextSettings:buildUI()
         10, 50, 1,
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
             end
         }
     )

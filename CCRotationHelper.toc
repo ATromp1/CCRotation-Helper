@@ -34,15 +34,11 @@ Core\PartySync.lua
 # UI files  
 UI\Templates.xml
 UI\Components\BaseComponent.lua
-UI\Components\SpellsDataProvider.lua
+UI\Components\DataManager.lua
 UI\Components\SpellsList.lua
-UI\Components\PlayersDataProvider.lua
 UI\Components\PlayersList.lua
-UI\Components\NPCsDataProvider.lua
 UI\Components\NPCsList.lua
-UI\Components\ProfilesDataProvider.lua
 UI\Components\ProfilesList.lua
-UI\Components\ConfigDataProvider.lua
 UI\Components\ScrollHelper.lua
 UI\Components\FormControls.lua
 UI\Components\DisplaySettings.lua

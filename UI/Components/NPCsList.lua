@@ -61,7 +61,7 @@ function CurrentLocationComponent:buildUI()
     -- Get current dungeon info from data provider
     local currentDungeonName, instanceType, isKnownDungeon
     if self.dataProvider then
-        currentDungeonName, instanceType, isKnownDungeon = self.dataProvider:getCurrentDungeonInfo()
+        currentDungeonName, instanceType, isKnownDungeon = addon.Database:GetCurrentDungeonInfo()
     else
         currentDungeonName, instanceType, isKnownDungeon = addon.Database:GetCurrentDungeonInfo()
     end
@@ -411,7 +411,7 @@ function NPCSearchComponent:buildUI()
     
     -- Lookup callbacks
     lookupTargetButton:SetCallback("OnClick", function()
-        local targetInfo = self.dataProvider and self.dataProvider:getTargetNPCInfo() or nil
+        local targetInfo = addon.Database:GetTargetNPCInfo()
         if not targetInfo then
             lookupStatusLabel:SetText("|cffff0000No valid NPC target found.|r")
             return
@@ -419,8 +419,7 @@ function NPCSearchComponent:buildUI()
         
         -- Check if target exists in our configuration
         local abbrev, dungeonName, mobName = self.dataProvider and 
-            self.dataProvider:extractDungeonInfo(targetInfo.name) or 
-            addon.Database:ExtractDungeonInfo(targetInfo.name)
+                        addon.Database:ExtractDungeonInfo(targetInfo.name)
             
         if targetInfo.exists then
             lookupStatusLabel:SetText("|cff00ff00Found: " .. targetInfo.name .. " (ID: " .. targetInfo.id .. ") in " .. (dungeonName or "Other") .. " dungeon section above.|r")
@@ -441,7 +440,7 @@ function NPCSearchComponent:buildUI()
             return
         end
         
-        local results = self.dataProvider and self.dataProvider:searchNPCsByName(searchTerm) or {}
+        local results = addon.Database:SearchNPCsByName(searchTerm)
         if #results == 0 then
             lookupStatusLabel:SetText("|cffff8800No NPCs found matching '" .. searchTerm .. "'.|r")
         else
@@ -452,8 +451,7 @@ function NPCSearchComponent:buildUI()
                 if i > 1 then resultText = resultText .. ", " end
                 local result = results[i]
                 local abbrev, dungeonName, mobName = self.dataProvider and 
-                    self.dataProvider:extractDungeonInfo(result.name) or 
-                    addon.Database:ExtractDungeonInfo(result.name)
+                                        addon.Database:ExtractDungeonInfo(result.name)
                 resultText = resultText .. (mobName or result.name) .. " (" .. result.id .. ")"
                 
                 if dungeonName then
@@ -498,7 +496,7 @@ end
 function AddNPCComponent:buildUI()
     -- Get current dungeon info for auto-selection
     local currentDungeonName, instanceType, isKnownDungeon = self.dataProvider and 
-        self.dataProvider:getCurrentDungeonInfo() or addon.Database:GetCurrentDungeonInfo()
+        addon.Database:GetCurrentDungeonInfo() or addon.Database:GetCurrentDungeonInfo()
     
     -- Lookup from target button
     local targetButton = self.AceGUI:Create("Button")
@@ -593,7 +591,7 @@ end
 
 function AddNPCComponent:setupTargetLookup(targetButton)
     targetButton:SetCallback("OnClick", function()
-        local targetInfo = self.dataProvider and self.dataProvider:getTargetNPCInfo() or nil
+        local targetInfo = addon.Database:GetTargetNPCInfo()
         if not targetInfo then
             self.statusLabel:SetText("|cffff0000No valid NPC target found.|r")
             return
@@ -605,13 +603,12 @@ function AddNPCComponent:setupTargetLookup(targetButton)
         
         -- Try to detect dungeon from name first
         local abbrev, dungeonName, mobName = self.dataProvider and 
-            self.dataProvider:extractDungeonInfo(targetInfo.name) or 
-            addon.Database:ExtractDungeonInfo(targetInfo.name)
+                        addon.Database:ExtractDungeonInfo(targetInfo.name)
         
         -- If no dungeon detected from name, use current location
         if not dungeonName or dungeonName == "Other" then
             local currentDungeonName, instanceType, isKnownDungeon = self.dataProvider and 
-                self.dataProvider:getCurrentDungeonInfo() or addon.Database:GetCurrentDungeonInfo()
+                addon.Database:GetCurrentDungeonInfo() or addon.Database:GetCurrentDungeonInfo()
             if currentDungeonName and isKnownDungeon then
                 dungeonName = currentDungeonName
                 mobName = targetInfo.name -- Use full name since no prefix detected
@@ -633,7 +630,7 @@ function AddNPCComponent:setupTargetLookup(targetButton)
         else
             -- Only override status if we haven't already set a "current dungeon" message
             local currentDungeonName = self.dataProvider and 
-                self.dataProvider:getCurrentDungeonInfo() or nil
+                addon.Database:GetCurrentDungeonInfo() or nil
             local currentStatusSet = (dungeonName and currentDungeonName and dungeonName == currentDungeonName)
             if not currentStatusSet then
                 self.statusLabel:SetText("|cff00ff00Target loaded: " .. targetInfo.name .. " (ID: " .. targetInfo.id .. ")|r")
@@ -650,7 +647,7 @@ function AddNPCComponent:setupSearch(searchButton)
             return
         end
         
-        local results = self.dataProvider and self.dataProvider:searchNPCsByName(searchTerm) or {}
+        local results = addon.Database:SearchNPCsByName(searchTerm)
         if #results == 0 then
             self.statusLabel:SetText("|cffff8800No NPCs found matching '" .. searchTerm .. "'.|r")
         elseif #results == 1 then
@@ -661,8 +658,7 @@ function AddNPCComponent:setupSearch(searchButton)
             
             -- Try to detect dungeon
             local abbrev, dungeonName, mobName = self.dataProvider and 
-                self.dataProvider:extractDungeonInfo(result.name) or 
-                addon.Database:ExtractDungeonInfo(result.name)
+                                addon.Database:ExtractDungeonInfo(result.name)
             if dungeonName and dungeonName ~= "Other" then
                 self.newNPCDungeonDropdown:SetValue(dungeonName)
                 self.npcNameEdit:SetText(mobName)
@@ -688,8 +684,7 @@ function AddNPCComponent:setupSearch(searchButton)
             
             -- Try to detect dungeon
             local abbrev, dungeonName, mobName = self.dataProvider and 
-                self.dataProvider:extractDungeonInfo(result.name) or 
-                addon.Database:ExtractDungeonInfo(result.name)
+                                addon.Database:ExtractDungeonInfo(result.name)
             if dungeonName and dungeonName ~= "Other" then
                 self.newNPCDungeonDropdown:SetValue(dungeonName)
                 self.npcNameEdit:SetText(mobName)
@@ -702,8 +697,7 @@ function AddNPCComponent:setupNPCIDValidation(npcIDEdit)
     npcIDEdit:SetCallback("OnTextChanged", function(widget, event, text)
         local npcID = tonumber(text)
         if npcID then
-            local exists, source = self.dataProvider and 
-                self.dataProvider:npcExists(npcID) or addon.Database:NPCExists(npcID)
+            local exists, source = addon.Database:NPCExists(npcID)
             if exists then
                 self.statusLabel:SetText("|cffff8800NPC ID " .. npcID .. " already exists (" .. source .. ").|r")
             else
@@ -729,8 +723,7 @@ function AddNPCComponent:addNPC()
     end
     
     -- Check if NPC already exists
-    local exists, source = self.dataProvider and 
-        self.dataProvider:npcExists(npcID) or addon.Database:NPCExists(npcID)
+    local exists, source = addon.Database:NPCExists(npcID)
     if exists then
         self.statusLabel:SetText("|cffff0000NPC ID " .. npcID .. " already exists in " .. source .. ". Use Reset button to modify database NPCs.|r")
         return
@@ -757,7 +750,7 @@ function AddNPCComponent:clearForm()
     
     -- Reset to current dungeon if we're in one, otherwise "Other"
     local currentDungeonName, instanceType, isKnownDungeon = self.dataProvider and 
-        self.dataProvider:getCurrentDungeonInfo() or addon.Database:GetCurrentDungeonInfo()
+        addon.Database:GetCurrentDungeonInfo() or addon.Database:GetCurrentDungeonInfo()
     if isKnownDungeon and currentDungeonName then
         self.newNPCDungeonDropdown:SetValue(currentDungeonName)
     else

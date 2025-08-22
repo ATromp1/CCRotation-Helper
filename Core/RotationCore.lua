@@ -297,9 +297,7 @@ function CCRotation:RecalculateQueue()
     local hasUnknownNPCs = false
     
     for npcID in pairs(self.activeNPCs) do
-        local effectiveness = addon.DataProviders and addon.DataProviders.NPCs and 
-            addon.DataProviders.NPCs:getNPCEffectiveness(npcID) or 
-            addon.Config:GetNPCEffectiveness(npcID)
+        local effectiveness = addon.Config:GetNPCEffectiveness(npcID)
         if effectiveness then
             hasKnownNPCs = true
         else
@@ -322,9 +320,7 @@ function CCRotation:RecalculateQueue()
                 -- Only keep if ANY known NPC accepts this CC type
                 local isEffective = false
                 for npcID in pairs(self.activeNPCs) do
-                    local effectiveness = addon.DataProviders and addon.DataProviders.NPCs and 
-                        addon.DataProviders.NPCs:getNPCEffectiveness(npcID) or 
-                        addon.Config:GetNPCEffectiveness(npcID)
+                    local effectiveness = addon.Config:GetNPCEffectiveness(npcID)
                     if effectiveness and effectiveness[ccType] then
                         isEffective = true
                         break
@@ -648,17 +644,11 @@ function CCRotation:HasActiveEnabledNPCs()
         local effectiveness
         local usingDataProvider = false
         
-        -- Try data provider first
-        if addon.DataProviders and addon.DataProviders.NPCs and addon.DataProviders.NPCs.getNPCEffectiveness then
-            effectiveness = addon.DataProviders.NPCs:getNPCEffectiveness(npcID)
-            usingDataProvider = true
+        -- Check disabled state first
+        if addon.Config.db.inactiveNPCs[npcID] then
+            effectiveness = nil
         else
-            -- Fallback to config but manually check disabled state
-            if addon.Config.db.inactiveNPCs[npcID] then
-                effectiveness = nil
-            else
-                effectiveness = addon.Config:GetNPCEffectiveness(npcID)
-            end
+            effectiveness = addon.Config:GetNPCEffectiveness(npcID)
         end
         
         

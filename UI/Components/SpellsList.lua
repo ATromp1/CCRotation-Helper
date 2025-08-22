@@ -51,6 +51,10 @@ local function createSpellIcon(AceGUI, spellID, size)
     return icon
 end
 
+-- AddSpellForm Component
+local AddSpellForm = {}
+setmetatable(AddSpellForm, {__index = BaseComponent})
+
 -- Cleanup method for AddSpellForm
 function AddSpellForm:Cleanup()
     -- Clean up container
@@ -71,10 +75,6 @@ local function createPriorityInput(AceGUI, width, defaultValue, callback)
     
     return input
 end
-
--- AddSpellForm Component
-local AddSpellForm = {}
-setmetatable(AddSpellForm, {__index = BaseComponent})
 
 function AddSpellForm:new(container, callbacks, dataProvider)
     local instance = BaseComponent:new(container, callbacks, dataProvider)
@@ -547,7 +547,7 @@ function TrackedSpellsList:buildUI()
         else
             upButton:SetCallback("OnClick", function()
                 -- Use data provider for spell operations
-                self.dataProvider:moveSpellPriority(spell.spellID, spell.data, "up", sortedSpells, i)
+                self.dataProvider:moveSpellPriority(spell.spellID, "up")
                 
                 -- Trigger callbacks
                 self:triggerCallback('onSpellMoved', spell.spellID, "up")
@@ -564,7 +564,7 @@ function TrackedSpellsList:buildUI()
         else
             downButton:SetCallback("OnClick", function()
                 -- Use data provider for spell operations
-                self.dataProvider:moveSpellPriority(spell.spellID, spell.data, "down", sortedSpells, i)
+                self.dataProvider:moveSpellPriority(spell.spellID, "down")
                 
                 -- Trigger callbacks
                 self:triggerCallback('onSpellMoved', spell.spellID, "down")
@@ -585,7 +585,7 @@ function TrackedSpellsList:buildUI()
             if newName ~= "" then
                 -- Use data provider for spell operations
                 if self.dataProvider then
-                    self.dataProvider:updateSpell(spell.spellID, spell.data, 'name', newName)
+                    self.dataProvider:updateSpell(spell.spellID, 'name', newName)
                 else
                     -- Fallback to direct access
                     if addon.Config.db.spells[spell.spellID] then
@@ -622,7 +622,7 @@ function TrackedSpellsList:buildUI()
         ccTypeDropdown:SetCallback("OnValueChanged", function(widget, event, value)
             -- Use data provider for spell operations
             if self.dataProvider then
-                self.dataProvider:updateSpell(spell.spellID, spell.data, 'ccType', value)
+                self.dataProvider:updateSpell(spell.spellID, 'ccType', value)
             else
                 -- Fallback to direct access
                 if addon.Config.db.spells[spell.spellID] then
@@ -643,7 +643,7 @@ function TrackedSpellsList:buildUI()
         disableButton:SetCallback("OnClick", function()
             -- Use data provider for spell operations
             if self.dataProvider then
-                self.dataProvider:disableSpell(spell.spellID, spell.data)
+                self.dataProvider:disableSpell(spell.spellID)
             else
                 -- Fallback to direct access
                 if addon.Config.db.spells[spell.spellID] then

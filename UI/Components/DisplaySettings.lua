@@ -9,7 +9,7 @@ local DisplaySettings = {}
 setmetatable(DisplaySettings, {__index = BaseComponent})
 
 function DisplaySettings:new(container, callbacks)
-    local instance = BaseComponent:new(container, callbacks, addon.DataProviders.Config)
+    local instance = BaseComponent:new(container, callbacks, addon.Components.DataManager)
     setmetatable(instance, {__index = self})
     self:validateImplementation("DisplaySettings")
     return instance
@@ -34,7 +34,9 @@ function DisplaySettings:buildUI()
         "enabled",
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:updateVisibility()
+                if addon.UI and addon.UI.UpdateVisibility then
+                    addon.UI:UpdateVisibility()
+                end
             end
         }
     )
@@ -48,11 +50,15 @@ function DisplaySettings:buildUI()
         {
             onValueChanged = function(configKey, value)
                 -- Rebuild queue first in case visibility affects queue logic
-                self.dataProvider:rebuildQueue()
+                self.dataProvider.config:rebuildQueue()
                 -- Update visibility (this shows/hides the frame)
-                self.dataProvider:updateVisibility()
+                if addon.UI and addon.UI.UpdateVisibility then
+                    addon.UI:UpdateVisibility()
+                end
                 -- Force display refresh to show the rebuilt queue
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
             end
         }
     )
@@ -65,9 +71,13 @@ function DisplaySettings:buildUI()
         "onlyInDungeons",
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:rebuildQueue()
-                self.dataProvider:updateVisibility()
-                self.dataProvider:refreshDisplay()
+                self.dataProvider.config:rebuildQueue()
+                if addon.UI and addon.UI.UpdateVisibility then
+                    addon.UI:UpdateVisibility()
+                end
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
             end
         }
     )
@@ -80,7 +90,9 @@ function DisplaySettings:buildUI()
         "showSpellName",
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
             end
         }
     )
@@ -93,7 +105,9 @@ function DisplaySettings:buildUI()
         "showPlayerName",
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
             end
         }
     )
@@ -106,7 +120,9 @@ function DisplaySettings:buildUI()
         "showCooldownText",
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
             end
         }
     )
@@ -119,7 +135,9 @@ function DisplaySettings:buildUI()
         "desaturateOnCooldown",
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
             end
         }
     )
@@ -132,7 +150,9 @@ function DisplaySettings:buildUI()
         "desaturateWhenNoTrackedNPCs",
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
             end
         }
     )
@@ -146,7 +166,9 @@ function DisplaySettings:buildUI()
         {
             onValueChanged = function(configKey, value)
                 -- Update mouse settings to enable/disable click-through
-                self.dataProvider:updateMouseSettings()
+                if addon.UI and addon.UI.UpdateMouseSettings then
+                    addon.UI:UpdateMouseSettings()
+                end
             end
         }
     )
@@ -159,7 +181,9 @@ function DisplaySettings:buildUI()
         "highlightNext",
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
             end
         }
     )
@@ -238,7 +262,9 @@ function DisplaySettings:buildUI()
         0, 10, 1,
         {
             onValueChanged = function(configKey, value)
-                self.dataProvider:refreshDisplay()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
             end
         }
     )
@@ -252,7 +278,9 @@ function DisplaySettings:buildUI()
         {
             onValueChanged = function(configKey, value)
                 -- Update mouse settings to enable/disable click-through
-                self.dataProvider:updateMouseSettings()
+                if addon.UI and addon.UI.UpdateMouseSettings then
+                    addon.UI:UpdateMouseSettings()
+                end
             end
         }
     )

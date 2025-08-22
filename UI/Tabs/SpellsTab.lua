@@ -88,7 +88,7 @@ function SpellsTab.create(container)
         onSpellIDChanged = function(oldSpellID, newSpellID, spellData)
             -- Use data provider to handle spell ID change
             if dataProvider and dataProvider.changeSpellID then
-                local success, errorMsg = dataProvider:changeSpellID(oldSpellID, newSpellID, spellData)
+                local success, errorMsg = dataProvider:changeSpellID(oldSpellID, newSpellID)
                 if success then
                     -- Spell ID changes are complex, require full tab refresh
                     container:ReleaseChildren()
