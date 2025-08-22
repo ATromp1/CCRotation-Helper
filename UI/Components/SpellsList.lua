@@ -51,6 +51,14 @@ local function createSpellIcon(AceGUI, spellID, size)
     return icon
 end
 
+-- Cleanup method for AddSpellForm
+function AddSpellForm:Cleanup()
+    -- Clean up container
+    if self.container then
+        self.container:ReleaseChildren()
+    end
+end
+
 local function createPriorityInput(AceGUI, width, defaultValue, callback)
     local input = AceGUI:Create("EditBox")
     input:SetLabel("Priority (1-50)")
@@ -172,9 +180,24 @@ function DisabledSpellsList:Initialize()
     end)
 end
 
+-- Cleanup method for DisabledSpellsList
+function DisabledSpellsList:Cleanup()
+    -- Cancel any pending refresh
+    self.isRefreshing = false
+    
+    -- Clean up container
+    if self.container then
+        self.container:ReleaseChildren()
+    end
+end
+
 -- Add refreshUI method for DisabledSpellsList
 function DisabledSpellsList:refreshUI()
     if not self.container then return end
+    
+    -- Prevent multiple concurrent refreshes
+    if self.isRefreshing then return end
+    self.isRefreshing = true
     
     -- Simple delayed refresh to avoid conflicts
     C_Timer.After(0.1, function()
@@ -182,6 +205,7 @@ function DisabledSpellsList:refreshUI()
             self.container:ReleaseChildren()
             self:buildUI()
         end
+        self.isRefreshing = false
     end)
 end
 
@@ -374,6 +398,22 @@ function TrackedSpellsList:OnGroupChanged()
     end)
 end
 
+-- Cleanup method for TrackedSpellsList
+function TrackedSpellsList:Cleanup()
+    -- Cancel any pending refresh
+    self.isRefreshing = false
+    
+    -- Unregister events
+    if self.UnregisterAllEvents then
+        self:UnregisterAllEvents()
+    end
+    
+    -- Clean up container
+    if self.container then
+        self.container:ReleaseChildren()
+    end
+end
+
 function TrackedSpellsList:applyProfileData(profileData)
     if not profileData then return end
     
@@ -402,6 +442,10 @@ function TrackedSpellsList:refreshUI()
         return
     end
     
+    -- Prevent multiple concurrent refreshes
+    if self.isRefreshing then return end
+    self.isRefreshing = true
+    
     -- Delay refresh slightly to avoid race conditions with other components
     C_Timer.After(0.1, function()
         if self.container and addon.UI and addon.UI:IsConfigTabActive("spells") then
@@ -417,6 +461,7 @@ function TrackedSpellsList:refreshUI()
                 self:buildUI()
             end
         end
+        self.isRefreshing = false
     end)
 end
 
@@ -802,6 +847,20 @@ function QueueDisplayComponent:refreshQueueDisplay()
             
             iconRow:AddChild(spellIcon)
         end
+    end
+end
+
+-- Cleanup method for QueueDisplayComponent
+function QueueDisplayComponent:Cleanup()
+    -- Clean up container
+    if self.container then
+        self.container:ReleaseChildren()
+    end
+    
+    -- Clean up queue group
+    if self.queueGroup then
+        self.queueGroup:ReleaseChildren()
+        self.queueGroup = nil
     end
 end
 

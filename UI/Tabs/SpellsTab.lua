@@ -6,11 +6,24 @@ local SpellsTab = {}
 
 -- Create Spells tab content using component-based architecture
 function SpellsTab.create(container)
+    -- Clean up any existing components to prevent duplicates
+    if container.spellsTabComponents then
+        for _, component in pairs(container.spellsTabComponents) do
+            if component.Cleanup then
+                component:Cleanup()
+            end
+        end
+        container.spellsTabComponents = nil
+    end
+    
     local scroll = AceGUI:Create("ScrollFrame")
     scroll:SetFullWidth(true)
     scroll:SetFullHeight(true)
     scroll:SetLayout("Flow")
     container:AddChild(scroll)
+    
+    -- Initialize component tracking
+    container.spellsTabComponents = {}
     
     -- Create data provider for components
     local dataProvider = addon.DataProviders and addon.DataProviders.Spells
@@ -33,6 +46,9 @@ function SpellsTab.create(container)
     end
     
     local queueDisplayComponent = addon.Components.QueueDisplayComponent:new(queueDisplayGroup, {}, dataProvider)
+    
+    -- Store component reference for cleanup
+    container.spellsTabComponents.queueDisplayComponent = queueDisplayComponent
     
     -- Initialize the component
     queueDisplayComponent:buildUI()
@@ -93,11 +109,19 @@ function SpellsTab.create(container)
         end
     }, dataProvider)
     
+    -- Store component reference for cleanup
+    container.spellsTabComponents.trackedSpellsList = trackedSpellsList
+    
     -- Initialize the component
     trackedSpellsList:buildUI()
     
     -- Add the management sections (add/inactive spells) and get disabledSpellsList reference
     local disabledSpellsList = SpellsTab.createManagementSections(scroll, container, trackedSpellsList, refreshQueueDisplay)
+    
+    -- Store additional components for cleanup
+    if disabledSpellsList then
+        container.spellsTabComponents.disabledSpellsList = disabledSpellsList
+    end
     
     -- Now update the TrackedSpellsList callback to also refresh DisabledSpellsList
     -- Note: We need to update the callback after both components are created
@@ -148,6 +172,9 @@ function SpellsTab.createManagementSections(scroll, container, trackedSpellsList
             end
         end
     }, dataProvider)
+    
+    -- Store component reference for cleanup
+    container.spellsTabComponents.addSpellForm = addSpellForm
     
     -- Initialize the component
     addSpellForm:buildUI()

@@ -13,6 +13,13 @@ function UI:Initialize()
         return 
     end
     
+    -- Prevent recursive initialization during sync events
+    if self.initializing then
+        addon.Config:DebugPrint("Already initializing, skipping")
+        return
+    end
+    self.initializing = true
+    
     addon.Config:DebugPrint("Initializing UI system")
     
     -- Initialize components
@@ -55,11 +62,20 @@ function UI:Initialize()
         self:UpdateVisibility()
     end)
     
+    -- Clear initialization flag
+    self.initializing = false
+    
     addon.Config:DebugPrint("UI initialization complete")
 end
 
 -- Create main frame with error handling
 function UI:createMainFrame()
+    -- Always destroy existing frame first to prevent conflicts
+    if _G["CCRotationMainFrame"] then
+        _G["CCRotationMainFrame"]:Hide()
+        _G["CCRotationMainFrame"] = nil
+    end
+    
     local success = pcall(function()
         self.mainFrame = CreateFrame("Frame", "CCRotationMainFrame", UIParent, "CCRotationTemplate")
     end)
@@ -68,6 +84,12 @@ function UI:createMainFrame()
         addon.Config:DebugPrint("Failed to create mainFrame with template, creating basic frame")
         self:createBasicFrame()
     end
+    
+    -- Ensure frame is properly parented
+    if self.mainFrame and self.mainFrame:GetParent() ~= UIParent then
+        addon.Config:DebugPrint("Frame created with wrong parent, fixing immediately")
+        self.mainFrame:SetParent(UIParent)
+    end
 
     -- Setup main frame properties
     self:setupMainFrame()
@@ -75,8 +97,19 @@ end
 
 -- Create basic frame fallback
 function UI:createBasicFrame()
+    -- Ensure no conflicting frame exists
+    if _G["CCRotationMainFrame"] then
+        _G["CCRotationMainFrame"]:Hide()
+        _G["CCRotationMainFrame"] = nil
+    end
+    
     self.mainFrame = CreateFrame("Frame", "CCRotationMainFrame", UIParent)
     self.mainFrame:SetSize(200, 64)
+    
+    -- Ensure proper parenting
+    if self.mainFrame:GetParent() ~= UIParent then
+        self.mainFrame:SetParent(UIParent)
+    end
     
     -- Create basic container
     self.mainFrame.container = CreateFrame("Frame", nil, self.mainFrame)
@@ -650,10 +683,18 @@ function UI:validateFrameState()
         return self.mainFrame ~= nil
     end
     
-    -- Ensure frame has proper parent
-    if self.mainFrame:GetParent() ~= UIParent then
-        addon.Config:DebugPrint("MainFrame has wrong parent, fixing")
+    -- Only fix parent if it's actually wrong (not just different)
+    local currentParent = self.mainFrame:GetParent()
+    if currentParent and currentParent ~= UIParent then
+        addon.Config:DebugPrint("MainFrame has wrong parent (" .. tostring(currentParent:GetName()) .. "), fixing to UIParent")
+        -- Store position before reparenting
+        local point, relativeTo, relativePoint, xOfs, yOfs = self.mainFrame:GetPoint()
+        self.mainFrame:ClearAllPoints()
         self.mainFrame:SetParent(UIParent)
+        -- Restore position if we had one
+        if point then
+            self.mainFrame:SetPoint(point, UIParent, relativePoint, xOfs, yOfs)
+        end
     end
     
     -- Ensure containers exist
