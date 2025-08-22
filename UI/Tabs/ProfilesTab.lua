@@ -12,10 +12,9 @@ function ProfilesTab.create(container)
     scroll:SetLayout("Flow")
     container:AddChild(scroll)
     
-    -- Create data provider for components
-    local dataProvider = addon.DataProviders and addon.DataProviders.Profiles
-    if not dataProvider then
-        error("ProfilesDataProvider not loaded. Make sure UI/Components/ProfilesDataProvider.lua is loaded first.")
+    -- Validate DataManager is available
+    if not addon.Components or not addon.Components.DataManager then
+        error("DataManager not loaded. Make sure UI/Components/DataManager.lua is loaded first.")
     end
     
     -- Load profile components

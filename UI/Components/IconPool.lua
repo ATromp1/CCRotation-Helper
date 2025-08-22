@@ -5,7 +5,7 @@ local addonName, addon = ...
 
 local IconPool = {}
 
-function IconPool:new()
+function IconPool:new(dataManager)
     local instance = {
         -- Main icon pools
         mainIconPool = {},
@@ -15,7 +15,10 @@ function IconPool:new()
         -- Unavailable icon pools
         unavailableIconPool = {},
         activeUnavailableIcons = {},
-        numUnavailableIconsCreated = 0
+        numUnavailableIconsCreated = 0,
+        
+        -- Dependencies
+        dataManager = dataManager or addon.Components.DataManager
     }
     
     setmetatable(instance, {__index = self})
@@ -165,10 +168,13 @@ end
 -- Setup event handlers for main icons
 function IconPool:setupMainIconEvents(icon)
     -- Only enable mouse if tooltips are enabled
-    icon:EnableMouse(addon.Config:Get("showTooltips"))
+    icon:EnableMouse(self.dataManager.config:get("showTooltips"))
+    
+    -- Capture pool instance for event handlers
+    local poolInstance = self
     
     icon:SetScript("OnEnter", function(self)
-        if addon.Config:Get("showTooltips") and self.spellInfo and self.unit then
+        if poolInstance.dataManager.config:get("showTooltips") and self.spellInfo and self.unit then
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetSpellByID(self.spellInfo.spellID)
             GameTooltip:AddLine(" ")
@@ -178,7 +184,7 @@ function IconPool:setupMainIconEvents(icon)
     end)
     
     icon:SetScript("OnLeave", function(self)
-        if addon.Config:Get("showTooltips") then
+        if poolInstance.dataManager.config:get("showTooltips") then
             GameTooltip:Hide()
         end
     end)
@@ -186,7 +192,7 @@ function IconPool:setupMainIconEvents(icon)
     -- Pass through drag events to main frame
     icon:RegisterForDrag("LeftButton")
     icon:SetScript("OnDragStart", function(self)
-        if IsShiftKeyDown() and not addon.Config:Get("anchorLocked") then
+        if IsShiftKeyDown() and not poolInstance.dataManager.config:get("anchorLocked") then
             -- Pass drag to main frame: icon -> container -> mainFrame
             local mainFrame = self:GetParent():GetParent()
             if mainFrame then
@@ -207,10 +213,13 @@ end
 -- Setup event handlers for unavailable icons
 function IconPool:setupUnavailableIconEvents(icon)
     -- Only enable mouse if tooltips are enabled
-    icon:EnableMouse(addon.Config:Get("showTooltips"))
+    icon:EnableMouse(self.dataManager.config:get("showTooltips"))
+    
+    -- Capture pool instance for event handlers
+    local poolInstance = self
     
     icon:SetScript("OnEnter", function(self)
-        if addon.Config:Get("showTooltips") and self.spellInfo and self.unit then
+        if poolInstance.dataManager.config:get("showTooltips") and self.spellInfo and self.unit then
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetSpellByID(self.spellInfo.spellID)
             GameTooltip:AddLine(" ")
@@ -225,7 +234,7 @@ function IconPool:setupUnavailableIconEvents(icon)
     end)
     
     icon:SetScript("OnLeave", function(self)
-        if addon.Config:Get("showTooltips") then
+        if poolInstance.dataManager.config:get("showTooltips") then
             GameTooltip:Hide()
         end
     end)
@@ -233,7 +242,7 @@ function IconPool:setupUnavailableIconEvents(icon)
     -- Pass through drag events - handle both main frame and unavailable container
     icon:RegisterForDrag("LeftButton")
     icon:SetScript("OnDragStart", function(self)
-        if IsShiftKeyDown() and not addon.Config:Get("anchorLocked") then
+        if IsShiftKeyDown() and not poolInstance.dataManager.config:get("anchorLocked") then
             local config = addon.Config
             local container = self:GetParent() -- unavailableContainer
             local mainFrame = container:GetParent() -- mainFrame
@@ -423,7 +432,7 @@ end
 
 -- Update mouse settings for all active icons
 function IconPool:updateMouseSettings()
-    local showTooltips = addon.Config:Get("showTooltips")
+    local showTooltips = self.dataManager.config:get("showTooltips")
     
     -- Update active main icon mouse settings
     for _, icon in ipairs(self.activeMainIcons) do

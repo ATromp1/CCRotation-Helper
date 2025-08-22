@@ -9,7 +9,7 @@ local TextSettings = {}
 setmetatable(TextSettings, {__index = BaseComponent})
 
 function TextSettings:new(container, callbacks)
-    local instance = BaseComponent:new(container, callbacks, addon.DataProviders.Config)
+    local instance = BaseComponent:new(container, callbacks, addon.Components.DataManager)
     setmetatable(instance, {__index = self})
     self:validateImplementation("TextSettings")
     return instance

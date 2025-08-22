@@ -55,7 +55,7 @@ function PriorityPlayersList:refreshDisplay()
     self.playersContainer:ReleaseChildren()
     
     -- Get priority players from data provider
-    local priorityPlayers = self.dataProvider and self.dataProvider:getPriorityPlayersArray() or {}
+    local priorityPlayers = self.dataProvider and self.dataProvider.players:getPriorityPlayersArray() or {}
     
     -- Fallback to direct access if no data provider
     if not self.dataProvider then
@@ -95,7 +95,7 @@ function PriorityPlayersList:refreshDisplay()
             -- Use data provider for player operations
             local success = false
             if self.dataProvider then
-                success = self.dataProvider:removePriorityPlayer(playerName)
+                success = self.dataProvider.players:removePriorityPlayer(playerName)
             else
                 -- Fallback to direct access
                 addon.Config:RemovePriorityPlayer(playerName)
@@ -136,7 +136,7 @@ function AddPlayerForm:buildUI()
             -- Use data provider for player operations
             local success = false
             if self.dataProvider then
-                success = self.dataProvider:addPriorityPlayer(name)
+                success = self.dataProvider.players:addPriorityPlayer(name)
             else
                 -- Fallback to direct access
                 addon.Config:AddPriorityPlayer(name)
@@ -185,7 +185,7 @@ function RemovePlayerForm:buildUI()
             -- Use data provider for player operations
             local success = false
             if self.dataProvider then
-                success = self.dataProvider:removePriorityPlayer(name)
+                success = self.dataProvider.players:removePriorityPlayer(name)
             else
                 -- Fallback to direct access
                 addon.Config:RemovePriorityPlayer(name)

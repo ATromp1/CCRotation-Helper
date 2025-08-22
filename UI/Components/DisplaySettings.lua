@@ -224,9 +224,9 @@ function DisplaySettings:buildUI()
         ["PARTY"] = "Party",
         ["YELL"] = "Yell"
     })
-    pugChannelDropdown:SetValue(addon.Config:Get("pugAnnouncerChannel") or "SAY")
+    pugChannelDropdown:SetValue(self.dataProvider.config:get("pugAnnouncerChannel", "SAY"))
     pugChannelDropdown:SetCallback("OnValueChanged", function(widget, event, value)
-        addon.Config:Set("pugAnnouncerChannel", value)
+        self.dataProvider.config:set("pugAnnouncerChannel", value)
     end)
     internalGroup:AddChild(pugChannelDropdown)
     
@@ -234,9 +234,9 @@ function DisplaySettings:buildUI()
     local turnNotificationTextEdit = self.AceGUI:Create("EditBox")
     turnNotificationTextEdit:SetLabel("Turn notification text")
     turnNotificationTextEdit:SetWidth(200)
-    turnNotificationTextEdit:SetText(addon.Config:Get("turnNotificationText") or "Next")
+    turnNotificationTextEdit:SetText(self.dataProvider.config:get("turnNotificationText", "Next"))
     turnNotificationTextEdit:SetCallback("OnEnterPressed", function(widget, event, text)
-        addon.Config:Set("turnNotificationText", text)
+        self.dataProvider.config:set("turnNotificationText", text)
     end)
     internalGroup:AddChild(turnNotificationTextEdit)
     

@@ -164,7 +164,7 @@ function DungeonNPCListComponent:buildUI()
     
     -- Get NPCs grouped by dungeon from data provider
     local sortedDungeons = self.dataProvider and 
-        self.dataProvider:getNPCsByDungeon(self.filterToDungeon) or {}
+        self.dataProvider.npcs:getNPCsByDungeon(self.filterToDungeon) or {}
     
     local ccTypes = getCCTypeHeaders()
     
@@ -279,7 +279,7 @@ function DungeonNPCListComponent:createNPCRow(dungeonGroup, npcID, npcData, dung
     enabledCheck:SetValue(npcData.enabled)
     enabledCheck:SetCallback("OnValueChanged", function(widget, event, value)
         if self.dataProvider then
-            self.dataProvider:setNPCEnabled(npcID, value)
+            self.dataProvider.npcs:setNPCEnabled(npcID, value)
             npcData.enabled = value
             -- Trigger callback to parent
             self:triggerCallback('onNPCChanged', npcID)
@@ -294,7 +294,7 @@ function DungeonNPCListComponent:createNPCRow(dungeonGroup, npcID, npcData, dung
     mobNameEdit:SetCallback("OnEnterPressed", function(widget, event, text)
         local newMobName = text:trim()
         if newMobName ~= "" and self.dataProvider then
-            self.dataProvider:updateNPCName(npcID, npcData, newMobName, dungeonName, dungeonData.abbreviation)
+            self.dataProvider.npcs:updateNPCName(npcID, npcData, newMobName, dungeonName, dungeonData.abbreviation)
             -- Trigger callback to parent
             self:triggerCallback('onNPCChanged', npcID)
         end
@@ -312,14 +312,14 @@ function DungeonNPCListComponent:createNPCRow(dungeonGroup, npcID, npcData, dung
     dungeonDropdown:SetWidth(100)
     
     -- Get dungeon list from data provider
-    local dungeonList = self.dataProvider and self.dataProvider:getDungeonList() or {}
+    local dungeonList = self.dataProvider and self.dataProvider.npcs:getDungeonList() or {}
     dungeonDropdown:SetList(dungeonList)
     dungeonDropdown:SetValue(dungeonName)
     
     if npcData.source == "custom" then
         dungeonDropdown:SetCallback("OnValueChanged", function(widget, event, value)
             if self.dataProvider then
-                self.dataProvider:updateNPCDungeon(npcID, npcData, value)
+                self.dataProvider.npcs:updateNPCDungeon(npcID, npcData, value)
                 -- Trigger callback to parent to refresh (regroup)
                 self:triggerCallback('onNPCDungeonChanged', npcID)
             end
@@ -336,7 +336,7 @@ function DungeonNPCListComponent:createNPCRow(dungeonGroup, npcID, npcData, dung
         ccCheck:SetValue(npcData.cc[i])
         ccCheck:SetCallback("OnValueChanged", function(widget, event, value)
             if self.dataProvider then
-                self.dataProvider:updateNPCCC(npcID, npcData, i, value, dungeonName)
+                self.dataProvider.npcs:updateNPCCC(npcID, npcData, i, value, dungeonName)
                 -- Trigger callback to parent
                 self:triggerCallback('onNPCChanged', npcID)
             end
@@ -351,7 +351,7 @@ function DungeonNPCListComponent:createNPCRow(dungeonGroup, npcID, npcData, dung
         resetButton:SetWidth(80)
         resetButton:SetCallback("OnClick", function()
             if self.dataProvider then
-                self.dataProvider:resetNPC(npcID)
+                self.dataProvider.npcs:resetNPC(npcID)
                 -- Trigger callback to parent to refresh
                 self:triggerCallback('onNPCChanged', npcID)
             end
@@ -364,7 +364,7 @@ function DungeonNPCListComponent:createNPCRow(dungeonGroup, npcID, npcData, dung
         deleteButton:SetWidth(80)
         deleteButton:SetCallback("OnClick", function()
             if self.dataProvider then
-                self.dataProvider:deleteCustomNPC(npcID)
+                self.dataProvider.npcs:deleteCustomNPC(npcID)
                 -- Trigger callback to parent to refresh
                 self:triggerCallback('onNPCChanged', npcID)
             end
@@ -532,7 +532,7 @@ function AddNPCComponent:buildUI()
     local newNPCDungeonDropdown = self.AceGUI:Create("Dropdown")
     newNPCDungeonDropdown:SetLabel("Dungeon")
     newNPCDungeonDropdown:SetWidth(150)
-    local dungeonList = self.dataProvider and self.dataProvider:getDungeonList() or {}
+    local dungeonList = self.dataProvider and self.dataProvider.npcs:getDungeonList() or {}
     newNPCDungeonDropdown:SetList(dungeonList)
     
     -- Auto-select current dungeon if we're in one
@@ -732,7 +732,7 @@ function AddNPCComponent:addNPC()
     -- Add NPC via data provider
     local fullName = ""
     if self.dataProvider then
-        fullName = self.dataProvider:addCustomNPC(npcID, npcName, selectedDungeon, self.newNPCCC)
+        fullName = self.dataProvider.npcs:addCustomNPC(npcID, npcName, selectedDungeon, self.newNPCCC)
     end
     
     self.statusLabel:SetText("|cff00ff00Successfully added " .. fullName .. " (ID: " .. npcID .. ")|r")

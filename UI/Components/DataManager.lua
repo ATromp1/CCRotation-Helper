@@ -8,18 +8,22 @@ local DataManager = {}
 
 DataManager.config = {}
 
--- Get configuration value
-function DataManager.config:get(key)
+-- Get configuration value with defaults
+function DataManager.config:get(key, defaultValue)
     local value = addon.Config:Get(key)
-    if key == "cooldownFontSizePercent" and value == nil then
-        return 25
+    if value == nil then
+        if key == "cooldownFontSizePercent" then
+            return 25
+        end
+        return defaultValue
     end
     return value
 end
 
--- Set configuration value
+-- Set configuration value and notify
 function DataManager.config:set(key, value)
     addon.Config:Set(key, value)
+    addon.Config:FireEvent("CONFIG_UPDATED", key, value)
 end
 
 -- Rebuild queue (for settings that affect rotation logic)
@@ -46,29 +50,31 @@ function DataManager.players:getPriorityPlayersArray()
     return players
 end
 
--- Add priority player
+-- Add priority player with validation
 function DataManager.players:addPriorityPlayer(playerName)
     if not playerName or playerName:trim() == "" then
         return false
     end
     
     addon.Config:AddPriorityPlayer(playerName)
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "priorityPlayers")
     return true
 end
 
--- Remove priority player
+-- Remove priority player with validation
 function DataManager.players:removePriorityPlayer(playerName)
     if not playerName or playerName:trim() == "" then
         return false
     end
     
     addon.Config:RemovePriorityPlayer(playerName)
+    addon.Config:FireEvent("PROFILE_DATA_CHANGED", "priorityPlayers")
     return true
 end
 
 -- Check if player is priority
 function DataManager.players:isPlayerPriority(playerName)
-    return addon.Config.db.priorityPlayers[playerName] ~= nil
+    return addon.Config.db.priorityPlayers and addon.Config.db.priorityPlayers[playerName] ~= nil
 end
 
 -- =============================================================================
@@ -337,8 +343,12 @@ DataManager.npcs = {}
 function DataManager.npcs:getNPCsByDungeon(filterToDungeon)
     local dungeonGroups = {}
     
+    -- Ensure config tables exist
+    local inactiveNPCs = (addon.Config.db and addon.Config.db.inactiveNPCs) or {}
+    local customNPCs = (addon.Config.db and addon.Config.db.customNPCs) or {}
+    
     -- Process database NPCs
-    for npcID, data in pairs(addon.Database.defaultNPCs) do
+    for npcID, data in pairs(addon.Database.defaultNPCs or {}) do
         local dungeonName = data.dungeon or "Other"
         
         -- Apply filter if active
@@ -354,13 +364,13 @@ function DataManager.npcs:getNPCsByDungeon(filterToDungeon)
                 cc = data.cc,
                 source = "database",
                 dungeon = data.dungeon,
-                enabled = not addon.Config.db.inactiveNPCs[npcID]
+                enabled = not inactiveNPCs[npcID]
             }
         end
     end
     
     -- Override with custom NPCs
-    for npcID, data in pairs(addon.Config.db.customNPCs) do
+    for npcID, data in pairs(customNPCs) do
         local dungeonName = data.dungeon or "Other"
         
         -- Apply filter if active
@@ -376,7 +386,7 @@ function DataManager.npcs:getNPCsByDungeon(filterToDungeon)
                 cc = data.cc,
                 source = "custom",
                 dungeon = data.dungeon,
-                enabled = not addon.Config.db.inactiveNPCs[npcID]
+                enabled = not inactiveNPCs[npcID]
             }
         end
     end
@@ -396,14 +406,15 @@ function DataManager.npcs:getDungeonList()
     local dungeonList = {["Other"] = "Other"}
     
     -- Get dungeon names from existing NPCs
-    for npcID, data in pairs(addon.Database.defaultNPCs) do
+    for npcID, data in pairs(addon.Database.defaultNPCs or {}) do
         if data.dungeon then
             dungeonList[data.dungeon] = data.dungeon
         end
     end
     
     -- Add custom dungeon names
-    for npcID, data in pairs(addon.Config.db.customNPCs) do
+    local customNPCs = (addon.Config.db and addon.Config.db.customNPCs) or {}
+    for npcID, data in pairs(customNPCs) do
         if data.dungeon then
             dungeonList[data.dungeon] = data.dungeon
         end
@@ -511,7 +522,8 @@ end
 
 -- Check if NPC is enabled
 function DataManager.npcs:isNPCEnabled(npcID)
-    return not addon.Config.db.inactiveNPCs[npcID]
+    local inactiveNPCs = (addon.Config.db and addon.Config.db.inactiveNPCs) or {}
+    return not inactiveNPCs[npcID]
 end
 
 
@@ -531,23 +543,29 @@ end
 
 
 -- =============================================================================
--- Registration and Initialization
+-- =============================================================================
+-- Initialization and Validation
 -- =============================================================================
 
--- Register in addon namespace (maintain backward compatibility)
+-- Initialize DataManager with validation
+function DataManager:Initialize()
+    -- Validate required dependencies
+    if not addon.Config then
+        error("DataManager requires addon.Config to be initialized first")
+    end
+    if not addon.Database then
+        error("DataManager requires addon.Database to be initialized first")
+    end
+end
+
+-- =============================================================================
+-- Registration
+-- =============================================================================
+
+-- Register in addon namespace
 if not addon.Components then
     addon.Components = {}
 end
 addon.Components.DataManager = DataManager
-
--- Also register individual providers for backward compatibility
-if not addon.DataProviders then
-    addon.DataProviders = {}
-end
-addon.DataProviders.Config = DataManager.config
-addon.DataProviders.Players = DataManager.players
-addon.DataProviders.Spells = DataManager.spells
-addon.DataProviders.NPCs = DataManager.npcs
-addon.DataProviders.Profiles = DataManager.profiles
 
 return DataManager

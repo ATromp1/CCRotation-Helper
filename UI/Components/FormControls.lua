@@ -9,7 +9,7 @@ local CheckboxControl = {}
 setmetatable(CheckboxControl, {__index = BaseComponent})
 
 function CheckboxControl:new(container, label, configKey, callbacks)
-    local instance = BaseComponent:new(container, callbacks, addon.DataProviders.Config)
+    local instance = BaseComponent:new(container, callbacks, addon.Components.DataManager)
     instance.label = label
     instance.configKey = configKey
     setmetatable(instance, {__index = self})
@@ -20,9 +20,9 @@ end
 function CheckboxControl:buildUI()
     local checkbox = self.AceGUI:Create("CheckBox")
     checkbox:SetLabel(self.label)
-    checkbox:SetValue(self.dataProvider:get(self.configKey))
+    checkbox:SetValue(self.dataProvider.config:get(self.configKey))
     checkbox:SetCallback("OnValueChanged", function(widget, event, value)
-        self.dataProvider:set(self.configKey, value)
+        self.dataProvider.config:set(self.configKey, value)
         self:triggerCallback("onValueChanged", self.configKey, value)
     end)
     checkbox:SetFullWidth(true)
@@ -34,7 +34,7 @@ local SliderControl = {}
 setmetatable(SliderControl, {__index = BaseComponent})
 
 function SliderControl:new(container, label, configKey, min, max, step, callbacks)
-    local instance = BaseComponent:new(container, callbacks, addon.DataProviders.Config)
+    local instance = BaseComponent:new(container, callbacks, addon.Components.DataManager)
     instance.label = label
     instance.configKey = configKey
     instance.min = min or 0
@@ -49,14 +49,14 @@ function SliderControl:buildUI()
     local slider = self.AceGUI:Create("Slider")
     slider:SetLabel(self.label)
     slider:SetSliderValues(self.min, self.max, self.step)
-    local currentValue = self.dataProvider:get(self.configKey)
+    local currentValue = self.dataProvider.config:get(self.configKey)
     -- Ensure we always pass a valid number to SetValue
     if currentValue == nil then
         currentValue = self.min -- Use minimum value as fallback
     end
     slider:SetValue(currentValue)
     slider:SetCallback("OnValueChanged", function(widget, event, value)
-        self.dataProvider:set(self.configKey, value)
+        self.dataProvider.config:set(self.configKey, value)
         self:triggerCallback("onValueChanged", self.configKey, value)
     end)
     slider:SetFullWidth(true)

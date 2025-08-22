@@ -5,10 +5,11 @@ local addonName, addon = ...
 
 local IconRenderer = {}
 
-function IconRenderer:new(iconPool, glowManager)
+function IconRenderer:new(iconPool, glowManager, dataManager)
     local instance = {
         iconPool = iconPool,
         glowManager = glowManager,
+        dataManager = dataManager or addon.Components.DataManager,
         shouldShowSecondary = false -- Hidden by default, controlled by events
     }
     setmetatable(instance, {__index = self})
@@ -440,7 +441,7 @@ function IconRenderer:updateStatusIndicators(icon, cooldownData, now)
     -- Desaturate icon if any status indicator is shown OR if not effective OR on cooldown OR (optionally) no fighting NPCs
     local isOnCooldown = (cooldownData.charges or 0) == 0 or (cooldownData.expirationTime and cooldownData.expirationTime > now)
     local hasActiveEnabledNPCs = addon.CCRotation and addon.CCRotation:HasActiveEnabledNPCs() or false
-    local shouldDesaturateForNPCs = addon.Config:Get("desaturateWhenNoTrackedNPCs") and not hasActiveEnabledNPCs
+    local shouldDesaturateForNPCs = self.dataManager.config:get("desaturateWhenNoTrackedNPCs") and not hasActiveEnabledNPCs
     local shouldDesaturate = hasStatusIndicator or (not cooldownData.isEffective) or isOnCooldown or shouldDesaturateForNPCs
     icon.displayTexture:SetDesaturated(shouldDesaturate)
 end
@@ -462,7 +463,7 @@ end
 function IconRenderer:formatTime(seconds)
     if seconds <= 0 then
         return ""
-    elseif seconds < addon.Config:Get("cooldownDecimalThreshold") then
+    elseif seconds < self.dataManager.config:get("cooldownDecimalThreshold") then
         return string.format("%.1f", seconds)
     elseif seconds < 60 then
         return string.format("%.0f", seconds)

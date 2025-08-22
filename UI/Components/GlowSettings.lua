@@ -9,7 +9,7 @@ local GlowSettings = {}
 setmetatable(GlowSettings, {__index = BaseComponent})
 
 function GlowSettings:new(container, callbacks)
-    local instance = BaseComponent:new(container, callbacks, addon.DataProviders.Config)
+    local instance = BaseComponent:new(container, callbacks, addon.Components.DataManager)
     setmetatable(instance, {__index = self})
     
     -- Container for dynamic controls
@@ -63,7 +63,7 @@ function GlowSettings:buildUI()
         ACShine = "Autocast Shine",
         Proc = "Proc Glow"
     })
-    glowTypeDropdown:SetValue(self.dataProvider:get("glowType"))
+    glowTypeDropdown:SetValue(self.dataProvider.config:get("glowType"))
     self.container:AddChild(glowTypeDropdown)
     
     -- Container for dynamic controls
@@ -73,11 +73,11 @@ function GlowSettings:buildUI()
     self.container:AddChild(self.dynamicContainer)
     
     -- Build initial dynamic controls
-    self:rebuildGlowControls(self.dataProvider:get("glowType"))
+    self:rebuildGlowControls(self.dataProvider.config:get("glowType"))
     
     -- Update dropdown callback to rebuild controls
     glowTypeDropdown:SetCallback("OnValueChanged", function(widget, event, value)
-        self.dataProvider:set("glowType", value)
+        self.dataProvider.config:set("glowType", value)
         self:rebuildGlowControls(value)
         if addon.UI and addon.UI.RefreshDisplay then
             addon.UI:RefreshDisplay()
@@ -94,10 +94,10 @@ function GlowSettings:rebuildGlowControls(glowType)
     if glowType ~= "Proc" then
         local glowColorPicker = AceGUI:Create("ColorPicker")
         glowColorPicker:SetLabel("Glow Color")
-        local currentColor = self.dataProvider:get("glowColor")
+        local currentColor = self.dataProvider.config:get("glowColor")
         glowColorPicker:SetColor(currentColor[1], currentColor[2], currentColor[3], currentColor[4])
         glowColorPicker:SetCallback("OnValueChanged", function(widget, event, r, g, b, a)
-            self.dataProvider:set("glowColor", {r, g, b, a})
+            self.dataProvider.config:set("glowColor", {r, g, b, a})
             if addon.UI and addon.UI.RefreshDisplay then
             addon.UI:RefreshDisplay()
         end
@@ -120,9 +120,9 @@ function GlowSettings:createPixelGlowControls()
     local glowFrequencySlider = AceGUI:Create("Slider")
     glowFrequencySlider:SetLabel("Frequency/Speed")
     glowFrequencySlider:SetSliderValues(-2, 2, 0.05)
-    glowFrequencySlider:SetValue(self.dataProvider:get("glowFrequency"))
+    glowFrequencySlider:SetValue(self.dataProvider.config:get("glowFrequency"))
     glowFrequencySlider:SetCallback("OnValueChanged", function(widget, event, value)
-        self.dataProvider:set("glowFrequency", value)
+        self.dataProvider.config:set("glowFrequency", value)
         if addon.UI and addon.UI.RefreshDisplay then
             addon.UI:RefreshDisplay()
         end
@@ -143,9 +143,9 @@ function GlowSettings:createPixelGlowControls()
         local slider = AceGUI:Create("Slider")
         slider:SetLabel(controlData.label)
         slider:SetSliderValues(controlData.min, controlData.max, controlData.step)
-        slider:SetValue(self.dataProvider:get(controlData.key))
+        slider:SetValue(self.dataProvider.config:get(controlData.key))
         slider:SetCallback("OnValueChanged", function(widget, event, value)
-            self.dataProvider:set(controlData.key, value)
+            self.dataProvider.config:set(controlData.key, value)
             if addon.UI and addon.UI.RefreshDisplay then
             addon.UI:RefreshDisplay()
         end
@@ -157,9 +157,9 @@ function GlowSettings:createPixelGlowControls()
     -- Border checkbox
     local glowBorderCheck = AceGUI:Create("CheckBox")
     glowBorderCheck:SetLabel("Add Border")
-    glowBorderCheck:SetValue(self.dataProvider:get("glowBorder"))
+    glowBorderCheck:SetValue(self.dataProvider.config:get("glowBorder"))
     glowBorderCheck:SetCallback("OnValueChanged", function(widget, event, value)
-        self.dataProvider:set("glowBorder", value)
+        self.dataProvider.config:set("glowBorder", value)
         if addon.UI and addon.UI.RefreshDisplay then
             addon.UI:RefreshDisplay()
         end
@@ -181,9 +181,9 @@ function GlowSettings:createACShineControls()
         local slider = AceGUI:Create("Slider")
         slider:SetLabel(controlData.label)
         slider:SetSliderValues(controlData.min, controlData.max, controlData.step)
-        slider:SetValue(self.dataProvider:get(controlData.key))
+        slider:SetValue(self.dataProvider.config:get(controlData.key))
         slider:SetCallback("OnValueChanged", function(widget, event, value)
-            self.dataProvider:set(controlData.key, value)
+            self.dataProvider.config:set(controlData.key, value)
             if addon.UI and addon.UI.RefreshDisplay then
             addon.UI:RefreshDisplay()
         end

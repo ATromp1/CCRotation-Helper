@@ -9,7 +9,7 @@ local IconSettings = {}
 setmetatable(IconSettings, {__index = BaseComponent})
 
 function IconSettings:new(container, callbacks)
-    local instance = BaseComponent:new(container, callbacks, addon.DataProviders.Config)
+    local instance = BaseComponent:new(container, callbacks, addon.Components.DataManager)
     setmetatable(instance, {__index = self})
     
     -- Store references to AceGUI widgets for show/hide logic
@@ -39,7 +39,7 @@ function IconSettings:buildUI()
     local maxIconsSlider = AceGUI:Create("Slider")
     maxIconsSlider:SetLabel("Max Icons")
     maxIconsSlider:SetSliderValues(1, 5, 1)
-    maxIconsSlider:SetValue(self.dataProvider:get("maxIcons") or 2)
+    maxIconsSlider:SetValue(self.dataProvider.config:get("maxIcons") or 2)
     maxIconsSlider:SetFullWidth(true)
     self.container:AddChild(maxIconsSlider)
     
@@ -48,13 +48,13 @@ function IconSettings:buildUI()
         local iconSlider = self.AceGUI:Create("Slider")
         iconSlider:SetLabel("Icon " .. i .. " Size")
         iconSlider:SetSliderValues(16, 128, 1)
-        local iconSizeValue = self.dataProvider:get("iconSize" .. i) or 64
+        local iconSizeValue = self.dataProvider.config:get("iconSize" .. i) or 64
         iconSlider:SetValue(iconSizeValue)
         
         -- Fix closure issue - capture i in local scope
         local iconIndex = i
         iconSlider:SetCallback("OnValueChanged", function(widget, event, value)
-            self.dataProvider:set("iconSize" .. iconIndex, value)
+            self.dataProvider.config:set("iconSize" .. iconIndex, value)
             if addon.UI and addon.UI.RefreshDisplay then
             addon.UI:RefreshDisplay()
         end
@@ -65,14 +65,14 @@ function IconSettings:buildUI()
         self.iconSizeWidgets[i] = iconSlider
         
         -- Initially hide controls beyond maxIcons
-        if i > self.dataProvider:get("maxIcons") then
+        if i > self.dataProvider.config:get("maxIcons") then
             iconSlider.frame:Hide()
         end
     end
     
     -- Set max icons callback after creating individual controls
     maxIconsSlider:SetCallback("OnValueChanged", function(widget, event, value)
-        self.dataProvider:set("maxIcons", value)
+        self.dataProvider.config:set("maxIcons", value)
         
         -- Show/hide icon controls based on maxIcons
         for i = 1, 5 do
@@ -123,9 +123,9 @@ function IconSettings:buildUI()
         ["relative"] = "Relative to main queue",
         ["independent"] = "Independent positioning"
     })
-    positioningModeDropdown:SetValue(self.dataProvider:get("unavailableQueuePositioning"))
+    positioningModeDropdown:SetValue(self.dataProvider.config:get("unavailableQueuePositioning"))
     positioningModeDropdown:SetCallback("OnValueChanged", function(widget, event, value)
-        self.dataProvider:set("unavailableQueuePositioning", value)
+        self.dataProvider.config:set("unavailableQueuePositioning", value)
         if addon.UI and addon.UI.RefreshDisplay then
             addon.UI:RefreshDisplay()
         end
@@ -181,10 +181,10 @@ function IconSettings:buildUI()
     resetUnavailableBtn:SetText("Reset Position")
     resetUnavailableBtn:SetWidth(150)
     resetUnavailableBtn:SetCallback("OnClick", function()
-        self.dataProvider:set("unavailableQueueX", 0)
-        self.dataProvider:set("unavailableQueueY", -30)
-        self.dataProvider:set("unavailableQueueAnchorPoint", "TOP")
-        self.dataProvider:set("unavailableQueueRelativePoint", "BOTTOM")
+        self.dataProvider.config:set("unavailableQueueX", 0)
+        self.dataProvider.config:set("unavailableQueueY", -30)
+        self.dataProvider.config:set("unavailableQueueAnchorPoint", "TOP")
+        self.dataProvider.config:set("unavailableQueueRelativePoint", "BOTTOM")
         if addon.UI and addon.UI.RefreshDisplay then
             addon.UI:RefreshDisplay()
         end

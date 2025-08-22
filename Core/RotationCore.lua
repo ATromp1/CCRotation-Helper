@@ -96,9 +96,13 @@ function CCRotation:RegisterLibOpenRaidCallbacks()
         CooldownUpdate = function(...)
             self:OnCooldownUpdate(...)
         end,
+        TalentUpdate = function(...)
+            self:OnTalentUpdate(...)
+        end,
     }
     
     lib.RegisterCallback(callbacks, "CooldownUpdate", "CooldownUpdate")
+    lib.RegisterCallback(callbacks, "TalentUpdate", "TalentUpdate")
 end
 
 -- Register for WoW events
@@ -114,6 +118,8 @@ function CCRotation:RegisterEvents()
     frame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
     frame:RegisterEvent("PLAYER_ALIVE")
     frame:RegisterEvent("PLAYER_UNGHOST")
+    frame:RegisterEvent("TRAIT_CONFIG_UPDATED")
+    frame:RegisterEvent("PLAYER_TALENT_UPDATE")
     
     frame:SetScript("OnEvent", function(self, event, ...)
         CCRotation:OnEvent(event, ...)
@@ -142,12 +148,27 @@ function CCRotation:OnEvent(event, ...)
     elseif event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then
         -- Player has been resurrected, immediately rebuild queue to move abilities back to available
         self:RebuildQueue()
+    elseif event == "TRAIT_CONFIG_UPDATED" or event == "PLAYER_TALENT_UPDATE" then
+        -- Player changed talents, refresh tracked spells after a brief delay
+        C_Timer.After(0.5, function()
+            self:OnTalentUpdate()
+        end)
     end
 end
 
 -- Handle LibOpenRaid cooldown updates
 function CCRotation:OnCooldownUpdate(...)
     -- Only rebuild queue, it will handle UI updates if needed
+    self:RebuildQueue()
+end
+
+-- Handle LibOpenRaid talent updates
+function CCRotation:OnTalentUpdate(...)
+    -- Refresh our tracked cooldowns list
+    self.trackedCooldowns = addon.Config:GetTrackedSpells()
+    
+    -- Clear cached cooldown data and rebuild queue
+    self.spellCooldowns = {}
     self:RebuildQueue()
 end
 

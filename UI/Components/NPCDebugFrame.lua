@@ -139,9 +139,9 @@ function NPCDebugFrame:getActiveNPCInfo()
             local npcID = self:getNPCIDFromGUID(guid)
             if npcID then
                 -- Use data provider to check if NPC exists and is enabled
-                if addon.DataProviders and addon.DataProviders.NPCs then
-                    local effectiveness = addon.DataProviders.NPCs:getNPCEffectiveness(npcID)
-                    if effectiveness then -- Only enabled NPCs return effectiveness
+                if addon.Components and addon.Components.DataManager then
+                    local isEnabled = addon.Components.DataManager.npcs:isNPCEnabled(npcID)
+                    if isEnabled then -- Only enabled NPCs are counted
                         local npcName = self:getNPCName(npcID)
                         if npcName then
                             npcCounts[npcName] = (npcCounts[npcName] or 0) + 1
@@ -171,8 +171,8 @@ end
 
 function NPCDebugFrame:getNPCName(npcID)
     -- Try data provider first
-    if addon.DataProviders and addon.DataProviders.NPCs then
-        local dungeonGroups = addon.DataProviders.NPCs:getNPCsByDungeon()
+    if addon.Components and addon.Components.DataManager then
+        local dungeonGroups = addon.Components.DataManager.npcs:getNPCsByDungeon()
         for _, dungeonGroup in ipairs(dungeonGroups) do
             for id, npcData in pairs(dungeonGroup.data.npcs) do
                 if tonumber(id) == tonumber(npcID) then

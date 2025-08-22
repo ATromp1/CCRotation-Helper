@@ -205,9 +205,9 @@ end
 
 -- Group status management
 function addon.PartySync:UpdateGroupStatus()
-    if self:IsInGroup() and self:IsGroupLeader() then
+    if self:IsInGroup() and UnitIsGroupLeader("player") then
         self:StartBroadcasting()
-    elseif self:IsInGroup() and not self:IsGroupLeader() then
+    elseif self:IsInGroup() and not UnitIsGroupLeader("player") then
         self:RequestSync()
     else
         self:StopBroadcasting()
@@ -307,7 +307,7 @@ end
 
 -- Request sync from leader
 function addon.PartySync:RequestSync()
-    if not self:IsInGroup() or self:IsGroupLeader() then
+    if not self:IsInGroup() or UnitIsGroupLeader("player") then
         return
     end
     
@@ -334,7 +334,7 @@ function addon.PartySync:OnRequestReceived(prefix, message, distribution, sender
         return
     end
     
-    if not self:IsGroupLeader() then
+    if not UnitIsGroupLeader("player") then
         return
     end
     
@@ -531,7 +531,7 @@ end
 function addon.PartySync:GetStatus()
     if not self:IsInGroup() then
         return "Not in group"
-    elseif self:IsGroupLeader() then
+    elseif UnitIsGroupLeader("player") then
         return "Broadcasting (Leader)"
     else
         return "Receiving"
@@ -539,7 +539,7 @@ function addon.PartySync:GetStatus()
 end
 
 function addon.PartySync:IsInPartySync()
-    return self:IsInGroup() and not self:IsGroupLeader() and syncedData.spells ~= nil
+    return self:IsInGroup() and not UnitIsGroupLeader("player") and syncedData.spells ~= nil
 end
 
 -- User profile choice tracking (legacy compatibility)

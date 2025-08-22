@@ -12,8 +12,11 @@ function PlayersTab.create(container)
     scroll:SetLayout("Flow")
     container:AddChild(scroll)
     
-    -- Create data provider for components
-    local dataProvider = addon.DataProviders and addon.DataProviders.Players
+    -- Validate DataManager is available
+    if not addon.Components or not addon.Components.DataManager then
+        error("DataManager not loaded. Make sure UI/Components/DataManager.lua is loaded first.")
+    end
+    local dataProvider = addon.Components.DataManager
     
     -- Help text
     local helpText = AceGUI:Create("Label")

@@ -32,7 +32,7 @@ local ProfileManagement = {}
 setmetatable(ProfileManagement, {__index = BaseComponent})
 
 function ProfileManagement:new(container, callbacks)
-    local instance = BaseComponent:new(container, callbacks, addon.DataProviders.Profiles)
+    local instance = BaseComponent:new(container, callbacks, addon.Components.DataManager)
     setmetatable(instance, {__index = self})
     self:validateImplementation("ProfileManagement")
     
@@ -109,7 +109,7 @@ end
 
 function ProfileManagement:buildInternalUI()
     
-    local currentProfile = self.dataProvider:getCurrentProfileInfo()
+    local currentProfile = self.dataProvider.profiles:getCurrentProfileInfo()
     local partySyncStatus = addon.Config:GetPartySyncStatus()
     
     -- Current profile display (or party sync status)
@@ -259,7 +259,7 @@ local AddonUsersList = {}
 setmetatable(AddonUsersList, {__index = BaseComponent})
 
 function AddonUsersList:new(container, callbacks)
-    local instance = BaseComponent:new(container, callbacks, addon.DataProviders.Profiles)
+    local instance = BaseComponent:new(container, callbacks, addon.Components.DataManager)
     setmetatable(instance, {__index = self})
     self:validateImplementation("AddonUsersList")
     

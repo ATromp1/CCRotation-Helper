@@ -23,9 +23,10 @@ function UI:Initialize()
     addon.Config:DebugPrint("Initializing UI system")
     
     -- Initialize components
-    self.iconPool = addon.Components.IconPool:new()
+    self.dataManager = addon.Components.DataManager
+    self.iconPool = addon.Components.IconPool:new(self.dataManager)
     self.glowManager = addon.Components.GlowManager:new()
-    self.iconRenderer = addon.Components.IconRenderer:new(self.iconPool, self.glowManager)
+    self.iconRenderer = addon.Components.IconRenderer:new(self.iconPool, self.glowManager, self.dataManager)
     self.npcDebugFrame = addon.Components.NPCDebugFrame:new()
     
     -- Create main frame

@@ -113,7 +113,7 @@ function AddSpellForm:buildUI()
         if spellID and spellName ~= "" and ccType and priority then
             -- Use data provider for spell operations
             if self.dataProvider then
-                self.dataProvider:addCustomSpell(spellID, spellName, ccType, priority)
+                self.dataProvider.spells:addCustomSpell(spellID, spellName, ccType, priority)
             else
                 -- Fallback to direct access if no data provider
                 addon.Config.db.spells[spellID] = {
@@ -461,8 +461,8 @@ function UnifiedSpellsList:buildUI()
     
     -- Get all spells (both active and disabled) from data provider
     local allSpells = {}
-    local activeSpells = self.dataProvider and self.dataProvider:getActiveSpells() or {}
-    local disabledSpells = self.dataProvider and self.dataProvider:getDisabledSpells() or {}
+    local activeSpells = self.dataProvider and self.dataProvider.spells:getActiveSpells() or {}
+    local disabledSpells = self.dataProvider and self.dataProvider.spells:getDisabledSpells() or {}
     
     -- Combine active and disabled spells
     for spellID, spell in pairs(activeSpells) do
@@ -561,7 +561,7 @@ function UnifiedSpellsList:buildUI()
         else
             upButton:SetCallback("OnClick", function()
                 -- Use data provider for spell operations
-                self.dataProvider:moveSpellPriority(spell.spellID, "up")
+                self.dataProvider.spells:moveSpellPriority(spell.spellID, "up")
                 
                 -- Trigger callbacks
                 self:triggerCallback('onSpellMoved', spell.spellID, "up")
@@ -578,7 +578,7 @@ function UnifiedSpellsList:buildUI()
         else
             downButton:SetCallback("OnClick", function()
                 -- Use data provider for spell operations
-                self.dataProvider:moveSpellPriority(spell.spellID, "down")
+                self.dataProvider.spells:moveSpellPriority(spell.spellID, "down")
                 
                 -- Trigger callbacks
                 self:triggerCallback('onSpellMoved', spell.spellID, "down")
@@ -607,7 +607,7 @@ function UnifiedSpellsList:buildUI()
             if newName ~= "" then
                 -- Use data provider for spell operations
                 if self.dataProvider then
-                    self.dataProvider:updateSpell(spell.spellID, 'name', newName)
+                    self.dataProvider.spells:updateSpell(spell.spellID, 'name', newName)
                 else
                     -- Fallback to direct access
                     if addon.Config.db.spells[spell.spellID] then
@@ -650,7 +650,7 @@ function UnifiedSpellsList:buildUI()
         ccTypeDropdown:SetCallback("OnValueChanged", function(widget, event, value)
             -- Use data provider for spell operations
             if self.dataProvider then
-                self.dataProvider:updateSpell(spell.spellID, 'ccType', value)
+                self.dataProvider.spells:updateSpell(spell.spellID, 'ccType', value)
             else
                 -- Fallback to direct access
                 if addon.Config.db.spells[spell.spellID] then
@@ -673,7 +673,7 @@ function UnifiedSpellsList:buildUI()
             disableButton:SetCallback("OnClick", function()
                 -- Use data provider for spell operations
                 if self.dataProvider then
-                    self.dataProvider:disableSpell(spell.spellID)
+                    self.dataProvider.spells:disableSpell(spell.spellID)
                 else
                     -- Fallback to direct access
                     if addon.Config.db.spells[spell.spellID] then
@@ -694,7 +694,7 @@ function UnifiedSpellsList:buildUI()
             enableButton:SetCallback("OnClick", function()
                 -- Use data provider for spell operations
                 if self.dataProvider then
-                    self.dataProvider:enableSpell(spell.spellID)
+                    self.dataProvider.spells:enableSpell(spell.spellID)
                 else
                     -- Fallback to direct access
                     if addon.Config.db.spells[spell.spellID] then
@@ -717,7 +717,7 @@ function UnifiedSpellsList:buildUI()
                 deleteButton:SetCallback("OnClick", function()
                     -- Use data provider for spell operations
                     if self.dataProvider then
-                        self.dataProvider:deleteCustomSpell(spell.spellID)
+                        self.dataProvider.spells:deleteCustomSpell(spell.spellID)
                     else
                         -- Fallback to direct access
                         addon.Config.db.spells[spell.spellID] = nil
