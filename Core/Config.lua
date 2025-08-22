@@ -211,6 +211,9 @@ function addon.Config:EnsureCharacterProfile()
         -- Update references after profile change
         self.db = self.database.profile
         
+        -- Initialize spells for the new character profile
+        self:InitializeSpells()
+        
         self:DebugPrint("Created profile for " .. characterName)
     end
     
@@ -421,6 +424,10 @@ function addon.Config:CreateProfile(profileName)
     
     -- Create new profile (AceDB handles the creation)
     self.database:SetProfile(profileName)
+    
+    -- Initialize spells for the new profile
+    self:InitializeSpells()
+    
     return true, "Profile created successfully"
 end
 
