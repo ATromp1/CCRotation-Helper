@@ -39,7 +39,7 @@ addon.Database.spellIDMappings = {
     [61391] = 132469,   -- Typhoon cast → Typhoon base
     
     -- Mage - Gravity Lapse (cast as 449700, track as 157980, use 449700's cooldown)
-    [449700] = 157980,  -- Gravity Lapse cast → Supernova base (40s cooldown from 449700 entry)
+    --[449700] = 157980,  -- Gravity Lapse cast → Supernova base (40s cooldown from 449700 entry)
 }
 
 -- Default NPC configurations for Season 1 Mythic+
@@ -142,7 +142,7 @@ addon.Database.defaultSpells = {
 
     -- Mage
     [157980] = { name = "Supernova", ccType = "knock", priority = 9, active = true, source = "database", class = "MAGE", baseCooldown = 45, talent = 157980 },
-    [449700] = { name = "Gravity lapse", ccType = "knock", priority = 10, active = false, source = "database", class = "MAGE", baseCooldown = 40 },
+    [449700] = { name = "Gravity lapse", ccType = "knock", priority = 10, active = true, source = "database", class = "MAGE", baseCooldown = 40, talent = 449700 },
     [31661] = { name = "DB", ccType = "disorient", priority = 11, active = true, source = "database", class = "MAGE", baseCooldown = 45, talent = 31661 },
     [157981] = { name = "Blastwave", ccType = "knock", priority = 12, active = true, source = "database", class = "MAGE", baseCooldown = 30 },
 

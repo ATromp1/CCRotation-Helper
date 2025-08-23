@@ -117,19 +117,6 @@ SlashCmdList["CCROTATION"] = function(msg)
         else
             print("|cff00ff00CC Rotation Helper|r: UI not initialized")
         end
-    elseif command == "partysync" then
-        -- Toggle party sync debug frame
-        if addon.DebugFrame then
-            addon.DebugFrame:ShowFrame("PartySync", "Party Sync Debug")
-            -- Test the debug system
-            addon.DebugFrame:Print("PartySync", "DEBUG", "=== DEBUG FRAME TEST ===")
-            addon.DebugFrame:Print("PartySync", "DEBUG", "If you see this, the debug system is working")
-            addon.DebugFrame:Print("PartySync", "INIT", "Test INIT category")
-            addon.DebugFrame:Print("PartySync", "GROUP", "Test GROUP category")
-            addon.DebugFrame:Print("PartySync", "COMM", "Test COMM category")
-        else
-            print("|cff00ff00CC Rotation Helper|r: DebugFrame not initialized")
-        end
     elseif command == "resetdebug" then
         -- Reset NPC debug frame position  
         if addon.UI then

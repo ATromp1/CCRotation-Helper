@@ -161,8 +161,15 @@ end
 -- Handle CooldownTracker cooldown updates
 function CCRotation:OnCooldownUpdate(...)
     local spellID, srcGUID, expirationTime, duration = ...
-    addon.DebugSystem.Print("OnCooldownUpdate called - spell " .. spellID .. " expires at " .. string.format("%.1f", expirationTime), "RotationCore")
     
+    addon.DebugSystem.Print("OnCooldownUpdate called - spell " .. spellID .. " expires at " .. expirationTime, "RotationCore")
+    
+    -- Extra debug for Intimidating Roar
+    if spellID == 99 then
+        local inCombat = InCombatLockdown() and "IN COMBAT" or "OUT OF COMBAT"
+        addon.DebugSystem.Print("*** ROAR COOLDOWN UPDATE - triggering immediate queue rebuild [" .. inCombat .. "] ***", "RotationCore")
+    end
+
     -- Schedule queue rebuild for when this cooldown expires
     self:ScheduleCooldownExpiration(spellID, expirationTime)
     
@@ -205,7 +212,6 @@ function CCRotation:ClearStaleSpellCooldowns()
             -- If player doesn't have this spell available, remove it
             if not playerInfo.availableSpells[spellID] then
                 self.spellCooldowns[key] = nil
-                addon.DebugSystem.Print("Removed stale spell from queue: " .. spellID .. " for " .. GUID, "RotationCore")
             end
         end
     end
@@ -213,8 +219,7 @@ end
 
 -- Public method for UI to notify of configuration changes
 function CCRotation:NotifyConfigChanged()
-    addon.DebugSystem.Print("Configuration changed - scheduling debounced rebuild", "RotationCore")
-    
+
     -- Cancel any previous config update timer
     if self._configUpdateTimer then
         self._configUpdateTimer:Cancel()
@@ -224,7 +229,6 @@ function CCRotation:NotifyConfigChanged()
     -- Schedule a debounced config update after rapid changes settle
     self._configUpdateTimer = C_Timer.After(0.5, function()
         self._configUpdateTimer = nil
-        addon.DebugSystem.Print("Debounced config update - rebuilding queue", "RotationCore")
         -- Refresh tracked cooldowns and rebuild queue
         self.trackedCooldowns = addon.Config:GetTrackedSpells()
         self:RebuildQueue()
@@ -250,8 +254,7 @@ end
 -- Update individual spell cooldown data
 function CCRotation:UpdateSpellCooldown(unit, spellID, cooldownInfo)
     if not (unit and spellID and cooldownInfo) then 
-        addon.DebugSystem.Print("UpdateSpellCooldown - Missing parameters: unit=" .. tostring(unit) .. " spellID=" .. tostring(spellID) .. " cooldownInfo=" .. tostring(cooldownInfo), "RotationCore")
-        return 
+        return
     end
     
     -- Get spell info from CooldownTracker's database instead of config
@@ -267,14 +270,20 @@ function CCRotation:UpdateSpellCooldown(unit, spellID, cooldownInfo)
     local cooldownTracker = addon.CooldownTracker
     if cooldownTracker and cooldownTracker.groupInfo and cooldownTracker.groupInfo[GUID] then
         local playerInfo = cooldownTracker.groupInfo[GUID]
-        if playerInfo.availableSpells and not playerInfo.availableSpells[spellID] then
-            -- Player doesn't have this spell due to talents/spec, remove from queue if it exists
-            local key = GUID .. ":" .. spellID
-            if self.spellCooldowns[key] then
-                self.spellCooldowns[key] = nil
-                return true -- Signal that something changed so queue gets rebuilt
+        if playerInfo.availableSpells then
+            local hasSpell = playerInfo.availableSpells[spellID]
+            addon.DebugSystem.Print(string.format("UpdateSpellCooldown - spell %d talent check: hasSpell=%s", spellID, tostring(hasSpell)), "RotationCore")
+            
+            if not hasSpell then
+                -- Player doesn't have this spell due to talents/spec, remove from queue if it exists
+                local key = GUID .. ":" .. spellID
+                if self.spellCooldowns[key] then
+                    addon.DebugSystem.Print(string.format("UpdateSpellCooldown - removing untalented spell %d from queue", spellID), "RotationCore")
+                    self.spellCooldowns[key] = nil
+                    return true -- Signal that something changed so queue gets rebuilt
+                end
+                return false
             end
-            return false
         end
     end
     
@@ -296,10 +305,7 @@ function CCRotation:UpdateSpellCooldown(unit, spellID, cooldownInfo)
     local wasOnCooldown = existingData and (existingData.expirationTime > existingData.lastUpdate)
     local isOnCooldown = (timeLeft > 0)
     local readinessChanged = wasOnCooldown ~= isOnCooldown
-    
-    addon.DebugSystem.Print(string.format("UpdateSpellCooldown - spell %d: wasOnCooldown=%s isOnCooldown=%s readinessChanged=%s", 
-        spellID, tostring(wasOnCooldown), tostring(isOnCooldown), tostring(readinessChanged)), "RotationCore")
-    
+
     -- Only update if this is a new spell, readiness state changed, cooldown changed significantly (more than 0.2 seconds), or charges changed
     if not existingData or 
        readinessChanged or
@@ -317,11 +323,9 @@ function CCRotation:UpdateSpellCooldown(unit, spellID, cooldownInfo)
             -- Preserve isEffective if it was previously set, will be recalculated in RecalculateQueue
             isEffective = existingData and existingData.isEffective
         }
-        addon.DebugSystem.Print(string.format("UpdateSpellCooldown - spell %d: SIGNIFICANT CHANGE detected, returning true", spellID), "RotationCore")
         return true
     end
     
-    addon.DebugSystem.Print(string.format("UpdateSpellCooldown - spell %d: no significant change, returning false", spellID), "RotationCore")
     return false -- No significant change
 end
 
@@ -329,18 +333,23 @@ end
 function CCRotation:RebuildQueue()
     -- Cancel any previous scheduled rebuild
     if self._rebuildTimer then
-        addon.DebugSystem.Print("Canceling previous rebuild timer", "RotationCore")
         self._rebuildTimer:Cancel()
         self._rebuildTimer = nil
     end
     
-    addon.DebugSystem.Print("Scheduling queue rebuild in 0.1s", "RotationCore")
-    -- Schedule a new rebuild after a short delay
-    self._rebuildTimer = C_Timer.After(0.1, function()
-        addon.DebugSystem.Print("Executing scheduled queue rebuild", "RotationCore")
-        self._rebuildTimer = nil
+    -- During combat, rebuild immediately for better responsiveness
+    if InCombatLockdown() then
+        addon.DebugSystem.Print("In combat - executing immediate queue rebuild", "RotationCore")
         self:DoRebuildQueue()
-    end)
+    else
+        addon.DebugSystem.Print("Scheduling queue rebuild in 0.1s", "RotationCore")
+        -- Schedule a new rebuild after a short delay
+        self._rebuildTimer = C_Timer.After(0.1, function()
+            addon.DebugSystem.Print("Executing scheduled queue rebuild", "RotationCore")
+            self._rebuildTimer = nil
+            self:DoRebuildQueue()
+        end)
+    end
 end
 
 -- Schedule queue rebuild for when specific cooldowns expire
@@ -350,7 +359,6 @@ function CCRotation:ScheduleCooldownExpiration(spellID, expirationTime)
     
     if delay > 0 then
         C_Timer.After(delay, function()
-            addon.DebugSystem.Print("Cooldown expired for spell " .. spellID .. " - rebuilding queue", "RotationCore")
             self:RebuildQueue()
         end)
     end
@@ -366,7 +374,6 @@ end
 
 -- Actual queue rebuild implementation
 function CCRotation:DoRebuildQueue()
-    addon.DebugSystem.Print("DoRebuildQueue started", "RotationCore")
     -- Store old GUID mapping to detect group changes
     local oldGUIDToUnit = {}
     for guid, unit in pairs(self.GUIDToUnit) do
@@ -423,6 +430,9 @@ function CCRotation:DoRebuildQueue()
         self:CleanupStaleSpellCooldowns()
     end
     
+    -- Also clean up untalented spells for all players
+    self:CleanupUntalonedSpells()
+    
     -- Recalculate if there were cooldown changes OR group composition changed
     if hasChanges or groupChanged then
         self:RecalculateQueue()
@@ -436,6 +446,77 @@ function CCRotation:CleanupStaleSpellCooldowns()
         if not self.GUIDToUnit[guid] then
             -- This GUID is no longer in our group, remove its cooldown data
             self.spellCooldowns[key] = nil
+        end
+    end
+end
+
+-- Clean up spells that players no longer have due to talent changes
+function CCRotation:CleanupUntalonedSpells()
+    local cooldownTracker = addon.CooldownTracker
+    if not (cooldownTracker and cooldownTracker.groupInfo) then
+        return
+    end
+    
+    for key, spellData in pairs(self.spellCooldowns) do
+        local guid = spellData.GUID
+        local spellID = spellData.spellID
+        
+        -- Check if this player still has this spell available
+        local playerInfo = cooldownTracker.groupInfo[guid]
+        if playerInfo and playerInfo.availableSpells then
+            if not playerInfo.availableSpells[spellID] then
+                addon.DebugSystem.Print(string.format("CleanupUntalonedSpells - removing spell %d for player %s", spellID, guid), "RotationCore")
+                self.spellCooldowns[key] = nil
+            end
+        end
+    end
+    
+    -- Handle hero talent exclusions (enhanced spells replace base spells)
+    self:CleanupHeroTalentConflicts()
+end
+
+-- Clean up base spells when enhanced versions are available (hero talents)
+function CCRotation:CleanupHeroTalentConflicts()
+    local cooldownTracker = addon.CooldownTracker
+    if not (cooldownTracker and cooldownTracker.groupInfo) then
+        addon.DebugSystem.Print("CleanupHeroTalentConflicts - no cooldownTracker or groupInfo", "RotationCore")
+        return
+    end
+    
+    -- Define hero talent exclusions: if enhanced spell is available, remove base spell
+    local heroTalentExclusions = {
+        [449700] = 157980,  -- If Gravity Lapse (449700) is available, remove Supernova (157980)
+    }
+    
+    addon.DebugSystem.Print("CleanupHeroTalentConflicts - checking hero talent conflicts", "RotationCore")
+    
+    for enhancedSpellID, baseSpellID in pairs(heroTalentExclusions) do
+        addon.DebugSystem.Print(string.format("Checking exclusion: enhanced=%d base=%d", enhancedSpellID, baseSpellID), "RotationCore")
+        
+        for guid, playerInfo in pairs(cooldownTracker.groupInfo) do
+            if playerInfo.availableSpells then
+                local hasEnhanced = playerInfo.availableSpells[enhancedSpellID]
+                local hasBase = playerInfo.availableSpells[baseSpellID]
+                local playerName = playerInfo.name or "Unknown"
+                
+                addon.DebugSystem.Print(string.format("Player %s: hasEnhanced(%d)=%s hasBase(%d)=%s", 
+                    playerName, enhancedSpellID, tostring(hasEnhanced), baseSpellID, tostring(hasBase)), "RotationCore")
+                
+                -- If player has both enhanced and base spell, remove the base spell
+                if hasEnhanced and hasBase then
+                    local baseKey = guid .. ":" .. baseSpellID
+                    if self.spellCooldowns[baseKey] then
+                        addon.DebugSystem.Print(string.format("CleanupHeroTalentConflicts - removing base spell %d for %s, enhanced spell %d available", baseSpellID, playerName, enhancedSpellID), "RotationCore")
+                        self.spellCooldowns[baseKey] = nil
+                    else
+                        addon.DebugSystem.Print(string.format("CleanupHeroTalentConflicts - base spell %d not in spellCooldowns for %s", baseSpellID, playerName), "RotationCore")
+                    end
+                elseif hasEnhanced then
+                    addon.DebugSystem.Print(string.format("Player %s has enhanced spell %d but not base spell %d", playerName, enhancedSpellID, baseSpellID), "RotationCore")
+                elseif hasBase then
+                    addon.DebugSystem.Print(string.format("Player %s has base spell %d but not enhanced spell %d", playerName, baseSpellID, enhancedSpellID), "RotationCore")
+                end
+            end
         end
     end
 end
@@ -502,12 +583,9 @@ function CCRotation:RecalculateQueue()
     end
     
     -- Sort and separate queues
-    addon.DebugSystem.Print("About to sort and separate queues", "RotationCore")
     self:SortAndSeparateQueues()
-    addon.DebugSystem.Print("Sorting complete, about to fire events", "RotationCore")
-    
+
     -- Always fire UI update events - cooldown states matter even if queue order is the same
-    addon.DebugSystem.Print("Queue rebuild complete - firing QUEUE_UPDATED event", "RotationCore")
     self:FireEvent("QUEUE_UPDATED", self.cooldownQueue, self.unavailableQueue)
     
     -- Check if secondary queue should be shown (first ability on cooldown)
@@ -520,12 +598,10 @@ end
 
 -- Sort the cooldown queue and separate available from unavailable
 function CCRotation:SortAndSeparateQueues()
-    addon.DebugSystem.Print("SortAndSeparateQueues - Starting", "RotationCore")
     local now = GetTime()
     local availableQueue = {}
     local unavailableQueue = {}
     
-    addon.DebugSystem.Print("SortAndSeparateQueues - Separating into available/unavailable", "RotationCore")
     -- Add status information and separate into available/unavailable
     for _, cooldownData in ipairs(self.cooldownQueue) do
         local unit = self.GUIDToUnit[cooldownData.GUID]
@@ -550,7 +626,6 @@ function CCRotation:SortAndSeparateQueues()
         end
     end
     
-    addon.DebugSystem.Print("SortAndSeparateQueues - About to sort available queue (size: " .. #availableQueue .. ")", "RotationCore")
     -- Sort available queue
     local success = pcall(function()
         table.sort(availableQueue, function(a, b)
@@ -585,11 +660,9 @@ function CCRotation:SortAndSeparateQueues()
     end)
     
     if not success then
-        addon.DebugSystem.Print("SortAndSeparateQueues - ERROR: Available queue sort failed!", "RotationCore")
         return -- Exit early if sorting fails
     end
     
-    addon.DebugSystem.Print("SortAndSeparateQueues - Available queue sorted, about to sort unavailable queue (size: " .. #unavailableQueue .. ")", "RotationCore")
     -- Sort unavailable queue by what their priority WOULD be if available
     local success2 = pcall(function()
         table.sort(unavailableQueue, function(a, b)
@@ -618,24 +691,19 @@ function CCRotation:SortAndSeparateQueues()
     end)
     
     if not success2 then
-        addon.DebugSystem.Print("SortAndSeparateQueues - ERROR: Unavailable queue sort failed!", "RotationCore")
         return -- Exit early if sorting fails
     end
     
-    addon.DebugSystem.Print("SortAndSeparateQueues - Both queues sorted, updating main queue", "RotationCore")
     -- Update the main queue and store unavailable queue
     self.cooldownQueue = availableQueue
     self.unavailableQueue = unavailableQueue
     
-    addon.DebugSystem.Print("SortAndSeparateQueues - About to check pug announcements", "RotationCore")
     -- Check for pug announcements
     self:CheckPugAnnouncement()
     
-    addon.DebugSystem.Print("SortAndSeparateQueues - About to check player turn status", "RotationCore")
     -- Check if player is next in queue and fire event for sound notification
     self:CheckPlayerTurnStatus()
     
-    addon.DebugSystem.Print("SortAndSeparateQueues - Completed successfully", "RotationCore")
 end
 
 -- Check if player is next in queue and fire notification event
@@ -717,7 +785,9 @@ function CCRotation:CheckPugAnnouncement()
                 local isReady = firstInQueue.charges > 0 or firstInQueue.expirationTime <= now
                 
                 if isReady then
-                    local spellName = firstInQueue.name
+                    -- Get spell name from database since it's not stored in queue data
+                    local spellInfo = addon.Database.defaultSpells[firstInQueue.spellID]
+                    local spellName = spellInfo and spellInfo.name or ("Spell " .. tostring(firstInQueue.spellID))
                     local announceKey = playerName .. ":" .. spellName
                     
                     -- Throttle announcements: minimum 5 seconds between announcements
@@ -894,7 +964,6 @@ function CCRotation:HasQueueChanged()
         
         
         if wasReady ~= isReady then
-            addon.DebugSystem.Print("Ready state changed for spell " .. cd.spellID .. ": wasReady=" .. tostring(wasReady) .. " -> isReady=" .. tostring(isReady), "RotationCore")
             hasSignificantChange = true
             break
         end

@@ -306,8 +306,6 @@ function CooldownTracker:OnLibGroupInSpecTUpdate(event, guid, unit, info)
     wipe(playerInfo.availableSpells)
     self:BuildAvailableSpells(playerInfo)
     
-    addon.DebugSystem.Print("LibGroupInSpecT updated player: " .. (info.name or "Unknown") .. " (" .. guid .. ")", "CooldownTracker")
-    
     -- Notify rotation system of changes
     if addon.CCRotation then
         C_Timer.After(0.1, function()
@@ -329,7 +327,6 @@ function CooldownTracker:OnLibGroupInSpecTRemove(event, guid)
     -- Clean up our tracking data
     if self.groupInfo[guid] then
         self.groupInfo[guid] = nil
-        addon.DebugSystem.Print("LibGroupInSpecT removed player: " .. guid, "CooldownTracker")
     end
     
     -- Clean up cooldowns for this player
@@ -749,9 +746,7 @@ function CooldownTracker:BuildAvailableSpells(playerInfo)
 
         -- Check spec requirement
         if spellData.spec then
-            if playerInfo.spec ~= spellData.spec then
-                print("CCRotationHelper: SKIP", spellData.name, "- wrong spec")
-            else
+            if playerInfo.spec == spellData.spec then
                 -- Check talent requirement
                 if spellData.talent then
                     if not playerInfo.talentData[spellData.talent] then
@@ -772,7 +767,6 @@ function CooldownTracker:BuildAvailableSpells(playerInfo)
                 if not playerInfo.talentData[spellData.talent] then
                     print("CCRotationHelper: SKIP", spellData.name, "- talent", spellData.talent, "not found")
                 else
-                    print("CCRotationHelper: TALENT OK", spellData.name)
                     isAvailable = self:CheckSpellAvailability(playerInfo, spellID, spellData)
                 end
             else
@@ -896,6 +890,10 @@ function CooldownTracker:COMBAT_LOG_EVENT_UNFILTERED()
         if spellID == 61391 or spellID == 132469 then
             DebugPrint("*** TYPHOON DETECTED in combat log! (ID: " .. spellID .. ") ***")
         end
+        -- Special debug for Intimidating Roar
+        if spellID == 99 then
+            DebugPrint("*** INTIMIDATING ROAR DETECTED in combat log! (ID: " .. spellID .. ") ***")
+        end
     end
     
     -- Only process relevant events and group members
@@ -966,6 +964,12 @@ function CooldownTracker:COMBAT_LOG_EVENT_UNFILTERED()
     local cooldownSource = (castSpellCooldown and castSpellCooldown ~= availableSpell.actualCooldown) 
         and ("cast spell: " .. castSpellCooldown) or ("available: " .. availableSpell.actualCooldown)
     DebugPrint("Recording cooldown for " .. spellData.name .. " duration " .. tostring(actualDuration) .. " (" .. cooldownSource .. ")")
+    
+    -- Extra debug for Intimidating Roar
+    if baseSpellID == 99 then
+        DebugPrint("*** ROAR COOLDOWN RECORDED - firing COOLDOWN_STARTED event immediately ***")
+    end
+    
     self:FireEvent("COOLDOWN_STARTED", baseSpellID, srcGUID, expirationTime, actualDuration)
 end
 
@@ -983,9 +987,7 @@ function CooldownTracker:GetAllCooldowns()
         for spellID, spellInfo in pairs(playerInfo.availableSpells) do
             -- Check if this spell is currently on cooldown
             local cooldownData = nil
-            addon.DebugSystem.Print("Looking for cooldown: spellID=" .. spellID .. " guid=" .. guid, "CooldownTracker")
             for key, cd in pairs(self.activeCooldowns) do
-                addon.DebugSystem.Print("  Checking activeCooldown: key=" .. key .. " cd.spellID=" .. cd.spellID .. " cd.guid=" .. cd.guid, "CooldownTracker")
                 if cd.guid == guid and cd.spellID == spellID then
                     local remaining = cd.expirationTime - currentTime
                     if remaining > 0 then

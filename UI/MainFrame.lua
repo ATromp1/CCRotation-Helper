@@ -243,7 +243,6 @@ function UI:UpdateDisplay(queue, unavailableQueue)
         if i <= 2 then -- Only show first 2
             local remaining = spell.expirationTime - now
             local isReady = (spell.charges > 0) and (spell.expirationTime <= now)
-            addon.DebugSystem.Print("  Sending to IconRenderer[" .. i .. "]: spell " .. tostring(spell.spellID) .. " remaining=" .. string.format("%.1f", remaining) .. " ready=" .. tostring(isReady), "MainFrame")
         end
     end
 
