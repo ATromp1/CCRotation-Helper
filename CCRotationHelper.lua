@@ -19,6 +19,11 @@ AceComm:Embed(addon)
 function CCRotationHelper:OnAddonLoaded(loadedAddonName)
     if loadedAddonName ~= addonName then return end
     
+    -- Clear debug output on reload
+    if addon.DebugSystem and addon.DebugSystem.Clear then
+        addon.DebugSystem.Clear()
+    end
+    
     -- Initialize configuration
     addon.Config:Initialize()
     
@@ -111,19 +116,6 @@ SlashCmdList["CCROTATION"] = function(msg)
         else
             print("|cff00ff00CC Rotation Helper|r: UI not initialized")
         end
-    elseif command == "partysync" then
-        -- Toggle party sync debug frame
-        if addon.DebugFrame then
-            addon.DebugFrame:ShowFrame("PartySync", "Party Sync Debug")
-            -- Test the debug system
-            addon.DebugFrame:Print("PartySync", "DEBUG", "=== DEBUG FRAME TEST ===")
-            addon.DebugFrame:Print("PartySync", "DEBUG", "If you see this, the debug system is working")
-            addon.DebugFrame:Print("PartySync", "INIT", "Test INIT category")
-            addon.DebugFrame:Print("PartySync", "GROUP", "Test GROUP category")
-            addon.DebugFrame:Print("PartySync", "COMM", "Test COMM category")
-        else
-            print("|cff00ff00CC Rotation Helper|r: DebugFrame not initialized")
-        end
     elseif command == "resetdebug" then
         -- Reset NPC debug frame position  
         if addon.UI then
@@ -149,6 +141,15 @@ SlashCmdList["CCROTATION"] = function(msg)
         addon.Config:Set("debugMode", not currentDebug)
         local newState = addon.Config:Get("debugMode") and "enabled" or "disabled"
         print("|cff00ff00CC Rotation Helper|r: Debug mode " .. newState)
+    elseif command == "debugframe" or command == "debugwindow" then
+        -- Toggle debug frame
+        if addon.DebugSystem then
+            local isVisible = addon.DebugSystem.Toggle()
+            local state = isVisible and "shown" or "hidden"
+            print("|cff00ff00CC Rotation Helper|r: Debug frame " .. state)
+        else
+            print("|cff00ff00CC Rotation Helper|r: Debug system not available")
+        end
     elseif command == "party" then
         -- Debug party information in party sync frame
         local function DebugPrint(...)
@@ -497,6 +498,7 @@ SlashCmdList["CCROTATION"] = function(msg)
         print("  /ccr reset - Reset position to default")
         print("  /ccr status - Show party sync status")
         print("  /ccr debug - Toggle debug mode")
+        print("  /ccr debugframe - Toggle debug frame window")
         print("  /ccr preview - Toggle config positioning preview")
         print("  /ccr pugtest - Test pug announcer functionality")
         print("|cffFFFF00Party Sync Commands:|r")

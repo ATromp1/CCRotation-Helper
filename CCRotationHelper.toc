@@ -20,12 +20,13 @@ Libs\Ace3\AceComm-3.0\AceComm-3.0.xml
 Libs\Ace3\AceSerializer-3.0\AceSerializer-3.0.xml
 Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
 Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
-Libs\LibOpenRaid\LibOpenRaid.lua
 Libs\LibCustomGlow\LibCustomGlow-1.0.xml
+Libs\LibGroupInSpecT-1.1\lib.xml
 
 # Core files
 Core\Database.lua
-Core\Config.lua  
+Core\Config.lua
+Core\CooldownTracker.lua
 Core\RotationCore.lua
 Core\SoundManager.lua
 Core\DebugFrame.lua

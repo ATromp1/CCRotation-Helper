@@ -87,7 +87,6 @@ local defaults = {
         showPlayerName = true,
         showCooldownText = true,
         desaturateOnCooldown = true,
-        desaturateWhenNoTrackedNPCs = false,
         showTooltips = false,
         highlightNext = true,
         glowOnlyInCombat = false,

@@ -143,21 +143,6 @@ function DisplaySettings:buildUI()
     )
     desaturateIconControl:buildUI()
     
-    -- Desaturate icon when no tracked NPCs are in combat
-    local desaturateNoNPCsControl = addon.Components.CheckboxControl:new(
-        internalGroup,
-        "Desaturate when no tracked NPCs are fighting us",
-        "desaturateWhenNoTrackedNPCs",
-        {
-            onValueChanged = function(configKey, value)
-                if addon.UI and addon.UI.RefreshDisplay then
-                    addon.UI:RefreshDisplay()
-                end
-            end
-        }
-    )
-    desaturateNoNPCsControl:buildUI()
-    
     -- Show tooltips on hover
     local tooltipControl = addon.Components.CheckboxControl:new(
         internalGroup,

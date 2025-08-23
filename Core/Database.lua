@@ -30,7 +30,17 @@ addon.Database.ccTypeDisplayNames = {
 -- CC Type order for UI consistency
 addon.Database.ccTypeOrder = {"stun", "disorient", "fear", "knock", "incapacitate"}
 
-
+-- Spell ID mappings for alternative cast IDs
+-- Maps cast spell IDs to their base tracking IDs
+-- The cooldown will be taken from the cast spell's database entry
+-- Format: [castSpellID] = baseSpellID
+addon.Database.spellIDMappings = {
+    -- Druid - Typhoon (cast ID maps to base ID)
+    [61391] = 132469,   -- Typhoon cast → Typhoon base
+    
+    -- Mage - Gravity Lapse (cast as 449700, track as 157980, use 449700's cooldown)
+    --[449700] = 157980,  -- Gravity Lapse cast → Supernova base (40s cooldown from 449700 entry)
+}
 
 -- Default NPC configurations for Season 1 Mythic+
 addon.Database.defaultNPCs = {
@@ -89,57 +99,76 @@ addon.Database.defaultNPCs = {
     [180431] = { name = "Focused Ritualist", dungeon = "Tazavesh Gambit", cc = {true, true, true, true, true} },
 }
 
+-- Resolve spell ID using mappings (returns base spell ID for tracking)
+function addon.Database:ResolveSpellID(castSpellID)
+    return self.spellIDMappings[castSpellID] or castSpellID
+end
+
+-- Get spell data for combat log processing
+-- Returns: baseSpellData (for validation), baseSpellID (for tracking), castSpellCooldown (for duration)
+function addon.Database:GetSpellData(castSpellID)
+    local baseSpellID = self:ResolveSpellID(castSpellID)
+    local baseSpellData = self.defaultSpells[baseSpellID]
+    local castSpellData = self.defaultSpells[castSpellID]
+    
+    -- Use the cast spell's cooldown if available (e.g., Gravity Lapse = 40s), otherwise use base spell's cooldown
+    local castSpellCooldown = castSpellData and castSpellData.baseCooldown or (baseSpellData and baseSpellData.baseCooldown)
+    
+    return baseSpellData, baseSpellID, castSpellCooldown
+end
+
 -- Default spell configurations - unified format
 addon.Database.defaultSpells = {
     -- Demon Hunter
-    [179057] = { name = "Chaos nova", ccType = "stun", priority = 1, active = true, source = "database" },
-    [207684] = { name = "Misery", ccType = "fear", priority = 16, active = true, source = "database" },
-    [202138] = { name = "Chains", ccType = "knock", priority = 17, active = true, source = "database" },
+    [179057] = { name = "Chaos nova", ccType = "stun", priority = 1, active = true, source = "database", class = "DEMONHUNTER", baseCooldown = 45 },
+    [207684] = { name = "Misery", ccType = "fear", priority = 16, active = true, source = "database", class = "DEMONHUNTER", baseCooldown = 120 },
+    [202138] = { name = "Chains", ccType = "knock", priority = 17, active = true, source = "database", class = "DEMONHUNTER", baseCooldown = 60 },
 
     -- Death Knight
-    [207167] = { name = "Sleet", ccType = "disorient", priority = 8, active = true, source = "database" },
+    [207167] = { name = "Sleet", ccType = "disorient", priority = 8, active = true, source = "database", class = "DEATHKNIGHT", baseCooldown = 60 },
 
     -- Druid
-    [99] = { name = "Roar", ccType = "incapacitate", priority = 14, active = true, source = "database" },
-    [132469] = { name = "Typhoon", ccType = "knock", priority = 15, active = true, source = "database" },
+    [99] = { name = "Roar", ccType = "incapacitate", priority = 10, active = true, source = "database", class = "DRUID", baseCooldown = 30 },
+    [132469] = { name = "Typhoon", ccType = "knock", priority = 15, active = true, source = "database", class = "DRUID", baseCooldown = 30 },
+    [61391] = { name = "Typhoon", ccType = "knock", priority = 15, active = true, source = "database", class = "DRUID", baseCooldown = 30 }, -- Alternative ID
 
     -- Evoker
-    [368970] = { name = "Tail swipe", ccType = "knock", priority = 5, active = true, source = "database" },
-    [357214] = { name = "Wing buffet", ccType = "knock", priority = 24, active = true, source = "database" },
+    [368970] = { name = "Tail swipe", ccType = "knock", priority = 5, active = true, source = "database", class = "EVOKER", baseCooldown = 180 },
+    [357214] = { name = "Wing buffet", ccType = "knock", priority = 24, active = true, source = "database", class = "EVOKER", baseCooldown = 180 },
 
     -- Hunter
-    [462031] = { name = "Explosive trap", ccType = "knock", priority = 22, active = true, source = "database" },
-    [186387] = { name = "Bursting shot", ccType = "knock", priority = 23, active = true, source = "database" },
+    [462031] = { name = "Explosive trap", ccType = "knock", priority = 22, active = true, source = "database", class = "HUNTER", baseCooldown = 60 },
+    [186387] = { name = "Bursting shot", ccType = "knock", priority = 23, active = true, source = "database", class = "HUNTER", baseCooldown = 30 },
 
     -- Mage
-    [157980] = { name = "Supernova", ccType = "knock", priority = 9, active = true, source = "database" },
-    [449700] = { name = "Gravity lapse", ccType = "knock", priority = 10, active = true, source = "database" },
-    [31661] = { name = "DB", ccType = "disorient", priority = 11, active = true, source = "database" },
-    [157981] = { name = "Blastwave", ccType = "knock", priority = 12, active = true, source = "database" },
+    [157980] = { name = "Supernova", ccType = "knock", priority = 9, active = true, source = "database", class = "MAGE", baseCooldown = 45, talent = 157980 },
+    [449700] = { name = "Gravity lapse", ccType = "knock", priority = 10, active = true, source = "database", class = "MAGE", baseCooldown = 40, talent = 458513 },
+    [31661] = { name = "DB", ccType = "disorient", priority = 11, active = true, source = "database", class = "MAGE", baseCooldown = 45, talent = 31661 },
+    [157981] = { name = "Blastwave", ccType = "knock", priority = 12, active = true, source = "database", class = "MAGE", baseCooldown = 30 },
 
     -- Monk
-    [119381] = { name = "Sweep", ccType = "stun", priority = 4, active = true, source = "database" },
-    [116844] = { name = "Ring of peace", ccType = "knock", priority = 18, active = true, source = "database" },
+    [119381] = { name = "Sweep", ccType = "stun", priority = 4, active = true, source = "database", class = "MONK", baseCooldown = 60 },
+    [116844] = { name = "Ring of peace", ccType = "knock", priority = 18, active = true, source = "database", class = "MONK", baseCooldown = 45 },
 
     -- Paladin
-    [115750] = { name = "Blinding light", ccType = "disorient", priority = 13, active = true, source = "database" },
+    [115750] = { name = "Blinding light", ccType = "disorient", priority = 13, active = true, source = "database", class = "PALADIN", baseCooldown = 90 },
 
     -- Priest
-    [8122] = { name = "Fear", ccType = "fear", priority = 7, active = true, source = "database" },
+    [8122] = { name = "Fear", ccType = "fear", priority = 7, active = true, source = "database", class = "PRIEST", baseCooldown = 45 },
 
     -- Rogue
-    [2094] = { name = "Blind", ccType = "disorient", priority = 21, active = true, source = "database" },
+    [2094] = { name = "Blind", ccType = "disorient", priority = 21, active = true, source = "database", class = "ROGUE", baseCooldown = 60 },
 
     -- Shaman
-    [51490] = { name = "Thunderstorm", ccType = "knock", priority = 2, active = true, source = "database" },
-    [192058] = { name = "Incap", ccType = "stun", priority = 3, active = true, source = "database" },
+    [51490] = { name = "Thunderstorm", ccType = "knock", priority = 2, active = true, source = "database", class = "SHAMAN", baseCooldown = 30 },
+    [192058] = { name = "Incap", ccType = "stun", priority = 3, active = true, source = "database", class = "SHAMAN", baseCooldown = 60 },
 
     -- Warlock
-    [30283] = { name = "Shadowfury", ccType = "stun", priority = 20, active = true, source = "database" },
+    [30283] = { name = "Shadowfury", ccType = "stun", priority = 20, active = true, source = "database", class = "WARLOCK", baseCooldown = 60 },
 
     -- Warrior
-    [46968] = { name = "Shockwave", ccType = "stun", priority = 6, active = true, source = "database" },
-    [5246] = { name = "Fear", ccType = "fear", priority = 19, active = true, source = "database" },
+    [46968] = { name = "Shockwave", ccType = "stun", priority = 6, active = true, source = "database", class = "WARRIOR", baseCooldown = 40 },
+    [5246] = { name = "Fear", ccType = "fear", priority = 19, active = true, source = "database", class = "WARRIOR", baseCooldown = 90, talent = 5246 }, -- Intimidating Shout talent
 }
 
 -- Convert CC array to effectiveness map
@@ -270,21 +299,56 @@ function addon.Database:GetNPCInfo(npcID)
     return nil
 end
 
+-- Normalize dungeon name for flexible matching
+local function normalizeDungeonName(name)
+    if not name then return nil end
+    
+    -- Remove common punctuation variations and normalize spacing
+    local normalized = name:gsub(":", ""):gsub("%s+", " "):trim()
+    return normalized
+end
+
 -- Get current dungeon/instance information
 function addon.Database:GetCurrentDungeonInfo()
     local name, instanceType, difficultyID, difficultyName, maxPlayers = GetInstanceInfo()
     
     -- Only consider party dungeons and raids
     if instanceType ~= "party" and instanceType ~= "raid" then
-        return nil, instanceType
+        return nil, instanceType, false
     end
     
     if not name or name == "" then
-        return nil, instanceType
+        return nil, instanceType, false
     end
     
-    -- Return dungeon name and instance type
-    return name, instanceType
+    -- Check if this is a known dungeon by matching against our database
+    local normalizedCurrentName = normalizeDungeonName(name)
+    local matchedDungeonName = nil
+    local isKnownDungeon = false
+    
+    -- First, try exact match
+    for npcID, data in pairs(self.defaultNPCs) do
+        if data.dungeon == name then
+            matchedDungeonName = data.dungeon
+            isKnownDungeon = true
+            break
+        end
+    end
+    
+    -- If no exact match, try normalized matching
+    if not isKnownDungeon and normalizedCurrentName then
+        for npcID, data in pairs(self.defaultNPCs) do
+            local normalizedDbName = normalizeDungeonName(data.dungeon)
+            if normalizedDbName and normalizedCurrentName == normalizedDbName then
+                matchedDungeonName = data.dungeon
+                isKnownDungeon = true
+                break
+            end
+        end
+    end
+    
+    -- Return the matched database name (or original if no match), instance type, and whether it's known
+    return matchedDungeonName or name, instanceType, isKnownDungeon
 end
 
 -- Get NPCs that belong to the current dungeon
