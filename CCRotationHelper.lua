@@ -37,7 +37,6 @@ end
 
 -- Player login handler  
 function CCRotationHelper:OnPlayerLogin()
-    print("CCRotationHelper: OnPlayerLogin called")
     -- Initialize core rotation system
     addon.CCRotation:Initialize()
     
@@ -142,6 +141,15 @@ SlashCmdList["CCROTATION"] = function(msg)
         addon.Config:Set("debugMode", not currentDebug)
         local newState = addon.Config:Get("debugMode") and "enabled" or "disabled"
         print("|cff00ff00CC Rotation Helper|r: Debug mode " .. newState)
+    elseif command == "debugframe" or command == "debugwindow" then
+        -- Toggle debug frame
+        if addon.DebugSystem then
+            local isVisible = addon.DebugSystem.Toggle()
+            local state = isVisible and "shown" or "hidden"
+            print("|cff00ff00CC Rotation Helper|r: Debug frame " .. state)
+        else
+            print("|cff00ff00CC Rotation Helper|r: Debug system not available")
+        end
     elseif command == "party" then
         -- Debug party information in party sync frame
         local function DebugPrint(...)
@@ -490,6 +498,7 @@ SlashCmdList["CCROTATION"] = function(msg)
         print("  /ccr reset - Reset position to default")
         print("  /ccr status - Show party sync status")
         print("  /ccr debug - Toggle debug mode")
+        print("  /ccr debugframe - Toggle debug frame window")
         print("  /ccr preview - Toggle config positioning preview")
         print("  /ccr pugtest - Test pug announcer functionality")
         print("|cffFFFF00Party Sync Commands:|r")

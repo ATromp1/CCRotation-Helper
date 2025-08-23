@@ -36,7 +36,6 @@ function CCRotation:Initialize()
     if self:CountKeys(self.trackedCooldowns) > 0 then
         local count = 0
         for spellID, info in pairs(self.trackedCooldowns) do
-            print("  -", spellID, info.name)
             count = count + 1
             if count >= 3 then break end
         end
@@ -277,6 +276,7 @@ function CCRotation:UpdateSpellCooldown(unit, spellID, cooldownInfo)
             if not hasSpell then
                 -- Player doesn't have this spell due to talents/spec, remove from queue if it exists
                 local key = GUID .. ":" .. spellID
+                addon.DebugSystem.Print(string.format("UpdateSpellCooldown - spell %d NOT AVAILABLE for player %s (talent check failed)", spellID, UnitName(unit) or "Unknown"), "RotationCore")
                 if self.spellCooldowns[key] then
                     addon.DebugSystem.Print(string.format("UpdateSpellCooldown - removing untalented spell %d from queue", spellID), "RotationCore")
                     self.spellCooldowns[key] = nil
@@ -430,7 +430,7 @@ function CCRotation:DoRebuildQueue()
         self:CleanupStaleSpellCooldowns()
     end
     
-    -- Also clean up untalented spells for all players
+    -- Clean up untalented spells for all players (OmniCD-style negative talents handle hero talent exclusions automatically)
     self:CleanupUntalonedSpells()
     
     -- Recalculate if there were cooldown changes OR group composition changed
@@ -471,7 +471,7 @@ function CCRotation:CleanupUntalonedSpells()
         end
     end
     
-    -- Handle hero talent exclusions (enhanced spells replace base spells)
+    -- Handle hero talent exclusions: enhanced spells replace base spells
     self:CleanupHeroTalentConflicts()
 end
 
@@ -479,7 +479,6 @@ end
 function CCRotation:CleanupHeroTalentConflicts()
     local cooldownTracker = addon.CooldownTracker
     if not (cooldownTracker and cooldownTracker.groupInfo) then
-        addon.DebugSystem.Print("CleanupHeroTalentConflicts - no cooldownTracker or groupInfo", "RotationCore")
         return
     end
     
@@ -488,33 +487,19 @@ function CCRotation:CleanupHeroTalentConflicts()
         [449700] = 157980,  -- If Gravity Lapse (449700) is available, remove Supernova (157980)
     }
     
-    addon.DebugSystem.Print("CleanupHeroTalentConflicts - checking hero talent conflicts", "RotationCore")
-    
     for enhancedSpellID, baseSpellID in pairs(heroTalentExclusions) do
-        addon.DebugSystem.Print(string.format("Checking exclusion: enhanced=%d base=%d", enhancedSpellID, baseSpellID), "RotationCore")
-        
         for guid, playerInfo in pairs(cooldownTracker.groupInfo) do
             if playerInfo.availableSpells then
                 local hasEnhanced = playerInfo.availableSpells[enhancedSpellID]
                 local hasBase = playerInfo.availableSpells[baseSpellID]
-                local playerName = playerInfo.name or "Unknown"
-                
-                addon.DebugSystem.Print(string.format("Player %s: hasEnhanced(%d)=%s hasBase(%d)=%s", 
-                    playerName, enhancedSpellID, tostring(hasEnhanced), baseSpellID, tostring(hasBase)), "RotationCore")
                 
                 -- If player has both enhanced and base spell, remove the base spell
                 if hasEnhanced and hasBase then
                     local baseKey = guid .. ":" .. baseSpellID
                     if self.spellCooldowns[baseKey] then
-                        addon.DebugSystem.Print(string.format("CleanupHeroTalentConflicts - removing base spell %d for %s, enhanced spell %d available", baseSpellID, playerName, enhancedSpellID), "RotationCore")
+                        addon.DebugSystem.Print(string.format("CleanupHeroTalentConflicts - removing base spell %d, enhanced spell %d available", baseSpellID, enhancedSpellID), "RotationCore")
                         self.spellCooldowns[baseKey] = nil
-                    else
-                        addon.DebugSystem.Print(string.format("CleanupHeroTalentConflicts - base spell %d not in spellCooldowns for %s", baseSpellID, playerName), "RotationCore")
                     end
-                elseif hasEnhanced then
-                    addon.DebugSystem.Print(string.format("Player %s has enhanced spell %d but not base spell %d", playerName, enhancedSpellID, baseSpellID), "RotationCore")
-                elseif hasBase then
-                    addon.DebugSystem.Print(string.format("Player %s has base spell %d but not enhanced spell %d", playerName, baseSpellID, enhancedSpellID), "RotationCore")
                 end
             end
         end
@@ -524,6 +509,20 @@ end
 -- Recalculate queue order from individual spell cooldowns
 function CCRotation:RecalculateQueue()
     self.cooldownQueue = {}
+    
+    -- Debug: Show what's currently in spellCooldowns
+    local spellsInQueue = {}
+    for key, spellData in pairs(self.spellCooldowns) do
+        local spellInfo = addon.Database.defaultSpells[spellData.spellID]
+        local spellName = spellInfo and spellInfo.name or ("Spell_" .. spellData.spellID)
+        table.insert(spellsInQueue, spellName .. "(" .. spellData.spellID .. ")")
+    end
+    if #spellsInQueue > 0 then
+        table.sort(spellsInQueue)
+        addon.DebugSystem.Print("RecalculateQueue - Spells in cooldowns: " .. table.concat(spellsInQueue, ", "), "RotationCore")
+    else
+        addon.DebugSystem.Print("RecalculateQueue - No spells in cooldowns", "RotationCore")
+    end
     
     -- Convert spell cooldowns to queue format
     for key, spellData in pairs(self.spellCooldowns) do
@@ -586,6 +585,18 @@ function CCRotation:RecalculateQueue()
     self:SortAndSeparateQueues()
 
     -- Always fire UI update events - cooldown states matter even if queue order is the same
+    
+    -- Sync verification: log final queue state for comparison across clients
+    if addon.Config and addon.Config:Get("debugMode") and #self.cooldownQueue > 0 then
+        local queueState = {}
+        for i, cd in ipairs(self.cooldownQueue) do
+            local playerName = (addon.CooldownTracker.groupInfo[cd.GUID] and addon.CooldownTracker.groupInfo[cd.GUID].name) or "Unknown"
+            local spellName = addon.Database.defaultSpells[cd.spellID] and addon.Database.defaultSpells[cd.spellID].name or ("Spell_" .. cd.spellID)
+            table.insert(queueState, string.format("%d:%s(%s)", i, spellName, playerName))
+        end
+        addon.DebugSystem.Print("QUEUE_SYNC: " .. table.concat(queueState, ", "), "RotationCore")
+    end
+    
     self:FireEvent("QUEUE_UPDATED", self.cooldownQueue, self.unavailableQueue)
     
     -- Check if secondary queue should be shown (first ability on cooldown)
@@ -605,6 +616,9 @@ function CCRotation:SortAndSeparateQueues()
     -- Add status information and separate into available/unavailable
     for _, cooldownData in ipairs(self.cooldownQueue) do
         local unit = self.GUIDToUnit[cooldownData.GUID]
+        local spellInfo = addon.Database.defaultSpells[cooldownData.spellID]
+        local spellName = spellInfo and spellInfo.name or ("Spell_" .. cooldownData.spellID)
+        
         if unit then
             cooldownData.isDead = UnitIsDeadOrGhost(unit)
             
@@ -618,11 +632,17 @@ function CCRotation:SortAndSeparateQueues()
                 cooldownData.inRange = false
             end
             
+            local queueType = (cooldownData.isDead or not cooldownData.inRange) and "unavailable" or "available"
+            addon.DebugSystem.Print(string.format("SortQueues - %s: unit=%s isDead=%s inRange=%s -> %s", 
+                spellName, unit or "nil", tostring(cooldownData.isDead), tostring(cooldownData.inRange), queueType), "RotationCore")
+            
             if cooldownData.isDead or not cooldownData.inRange then
                 table.insert(unavailableQueue, cooldownData)
             else
                 table.insert(availableQueue, cooldownData)
             end
+        else
+            addon.DebugSystem.Print(string.format("SortQueues - %s: No unit found for GUID %s", spellName, cooldownData.GUID or "nil"), "RotationCore")
         end
     end
     
@@ -650,12 +670,25 @@ function CCRotation:SortAndSeparateQueues()
                 return isPriorityA
             end
             
-            -- 3. Finally, fallback on configured priority (or soonest available cooldown)
-            if readyA then
-                return (a.priority or 0) < (b.priority or 0)
-            else
-                return (a.expirationTime or 0) < (b.expirationTime or 0)
+            -- 3. Among same readiness state, use spell priority
+            local priorityA, priorityB = (a.priority or 0), (b.priority or 0)
+            if priorityA ~= priorityB then
+                return priorityA < priorityB
             end
+            
+            -- 4. Same priority, use expiration time (ready spells first by priority, cooldown spells by soonest)
+            local expirationA, expirationB = (a.expirationTime or 0), (b.expirationTime or 0)
+            if math.abs(expirationA - expirationB) > 0.1 then -- Only if difference > 0.1s to avoid float precision issues
+                return expirationA < expirationB
+            end
+            
+            -- 5. Same timing, deterministic tiebreaker by spell ID
+            if a.spellID ~= b.spellID then
+                return a.spellID < b.spellID
+            end
+            
+            -- 6. Final tiebreaker by player GUID (ensures consistent ordering across clients)
+            return (a.GUID or "") < (b.GUID or "")
         end)
     end)
     
@@ -677,16 +710,30 @@ function CCRotation:SortAndSeparateQueues()
             local readyA = (a.charges and a.charges > 0) or (not a.expirationTime or a.expirationTime <= now)
             local readyB = (b.charges and b.charges > 0) or (not b.expirationTime or b.expirationTime <= now)
             
-            -- Same sorting as available queue to show proper priority
+            -- Same deterministic sorting as available queue
             if readyA ~= readyB then return readyA end
             if readyA and readyB and (isPriorityA ~= isPriorityB) then
                 return isPriorityA
             end
-            if readyA then
-                return (a.priority or 0) < (b.priority or 0)
-            else
-                return (a.expirationTime or 0) < (b.expirationTime or 0)
+            
+            -- Same priority, use spell priority
+            local priorityA, priorityB = (a.priority or 0), (b.priority or 0)
+            if priorityA ~= priorityB then
+                return priorityA < priorityB
             end
+            
+            -- Same priority, use expiration time with tolerance
+            local expirationA, expirationB = (a.expirationTime or 0), (b.expirationTime or 0)
+            if math.abs(expirationA - expirationB) > 0.1 then
+                return expirationA < expirationB
+            end
+            
+            -- Deterministic tiebreakers
+            if a.spellID ~= b.spellID then
+                return a.spellID < b.spellID
+            end
+            
+            return (a.GUID or "") < (b.GUID or "")
         end)
     end)
     
@@ -1008,6 +1055,9 @@ function CCRotation:ShouldShowSecondaryQueue()
             local spellInfo = C_Spell.GetSpellInfo(firstAbility.spellID)
             local spellName = spellInfo and spellInfo.name or "Unknown"
         end
+        
+        addon.DebugSystem.Print(string.format("ShouldShowSecondaryQueue - First ability ready=%s, charges=%d, returning %s", 
+            tostring(isReady), charges, tostring(not isReady)), "RotationCore")
         
         return not isReady -- Show secondary if first ability is NOT ready
     end

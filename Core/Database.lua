@@ -142,7 +142,7 @@ addon.Database.defaultSpells = {
 
     -- Mage
     [157980] = { name = "Supernova", ccType = "knock", priority = 9, active = true, source = "database", class = "MAGE", baseCooldown = 45, talent = 157980 },
-    [449700] = { name = "Gravity lapse", ccType = "knock", priority = 10, active = true, source = "database", class = "MAGE", baseCooldown = 40, talent = 449700 },
+    [449700] = { name = "Gravity lapse", ccType = "knock", priority = 10, active = true, source = "database", class = "MAGE", baseCooldown = 40, talent = 458513 },
     [31661] = { name = "DB", ccType = "disorient", priority = 11, active = true, source = "database", class = "MAGE", baseCooldown = 45, talent = 31661 },
     [157981] = { name = "Blastwave", ccType = "knock", priority = 12, active = true, source = "database", class = "MAGE", baseCooldown = 30 },
 
@@ -168,7 +168,7 @@ addon.Database.defaultSpells = {
 
     -- Warrior
     [46968] = { name = "Shockwave", ccType = "stun", priority = 6, active = true, source = "database", class = "WARRIOR", baseCooldown = 40 },
-    [5246] = { name = "Fear", ccType = "fear", priority = 19, active = true, source = "database", class = "WARRIOR", baseCooldown = 90 },
+    [5246] = { name = "Fear", ccType = "fear", priority = 19, active = true, source = "database", class = "WARRIOR", baseCooldown = 90, talent = 5246 }, -- Intimidating Shout talent
 }
 
 -- Convert CC array to effectiveness map

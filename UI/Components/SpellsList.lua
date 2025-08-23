@@ -261,43 +261,64 @@ function QueueDisplayComponent:refreshQueueDisplay()
         return
     end
     
-    -- Get the full unfiltered queue by rebuilding it manually
+    -- Get the actual queue from CCRotation (same as what's displayed in-game)
     local fullQueue = {}
     
-    if addon.CCRotation and addon.CCRotation.GUIDToUnit then
-        local cooldownTracker = addon.CooldownTracker
-        if cooldownTracker then
-            local allUnits = cooldownTracker:GetAllCooldowns()
-            if allUnits then
-                for guid, cds in pairs(allUnits) do
-                    -- Convert GUID to unit for display purposes
-                    local unit = addon.CCRotation.GUIDToUnit[guid]
-                    if unit then
-                        for spellID, info in pairs(cds) do
-                            if addon.CCRotation.trackedCooldowns and addon.CCRotation.trackedCooldowns[spellID] then
-                                local spellInfo = addon.CCRotation.trackedCooldowns[spellID]
-                                local ccType = spellInfo.type -- This contains string values like "stun", "disorient", etc.
-                                                                
-                                -- Apply CC type filter
-                                if not ccType or self.ccTypeFilters[ccType] then
-                                    local _, _, timeLeft, charges, _, _, _, duration = cooldownTracker:GetCooldownStatusFromCooldownInfo(info)
-                                    local currentTime = GetTime()
-                                    
-                                    table.insert(fullQueue, {
-                                        GUID = guid,
-                                        unit = unit,
-                                        spellID = spellID,
-                                        priority = spellInfo.priority,
-                                        expirationTime = timeLeft + currentTime,
-                                        duration = duration,
-                                        charges = charges,
-                                        ccType = ccType
-                                    })
-                                end
-                            end
-                        end
-                    end
-                end
+    if addon.CCRotation then
+        -- Use the actual queue that CCRotation has already built with all filtering applied
+        local actualQueue = addon.CCRotation.cooldownQueue or {}
+        local unavailableQueue = addon.CCRotation.unavailableQueue or {}
+        
+        -- Combine both queues but mark unavailable ones
+        for _, spellData in ipairs(actualQueue) do
+            -- Apply CC type filter to preview
+            local spellInfo = addon.Database.defaultSpells[spellData.spellID]
+            local ccType = spellInfo and spellInfo.ccType
+            local ccTypeString = ccType == 1 and "stun" or 
+                               ccType == 2 and "disorient" or
+                               ccType == 3 and "incapacitate" or
+                               ccType == 4 and "silence" or
+                               ccType == 5 and "root" or
+                               "unknown"
+            
+            if not ccType or self.ccTypeFilters[ccTypeString] then
+                table.insert(fullQueue, {
+                    GUID = spellData.GUID,
+                    unit = addon.CCRotation.GUIDToUnit[spellData.GUID],
+                    spellID = spellData.spellID,
+                    priority = spellData.priority or (spellInfo and spellInfo.priority) or 5,
+                    expirationTime = spellData.expirationTime,
+                    duration = spellData.duration,
+                    charges = spellData.charges or 1,
+                    ccType = ccTypeString,
+                    isAvailable = true
+                })
+            end
+        end
+        
+        -- Add unavailable spells if configured to show them
+        for _, spellData in ipairs(unavailableQueue) do
+            local spellInfo = addon.Database.defaultSpells[spellData.spellID]
+            local ccType = spellInfo and spellInfo.ccType
+            local ccTypeString = ccType == 1 and "stun" or 
+                               ccType == 2 and "disorient" or
+                               ccType == 3 and "incapacitate" or
+                               ccType == 4 and "silence" or
+                               ccType == 5 and "root" or
+                               "unknown"
+            
+            if not ccType or self.ccTypeFilters[ccTypeString] then
+                table.insert(fullQueue, {
+                    GUID = spellData.GUID,
+                    unit = addon.CCRotation.GUIDToUnit[spellData.GUID],
+                    spellID = spellData.spellID,
+                    priority = spellData.priority or (spellInfo and spellInfo.priority) or 5,
+                    expirationTime = spellData.expirationTime,
+                    duration = spellData.duration,
+                    charges = spellData.charges or 1,
+                    ccType = ccTypeString,
+                    isAvailable = false
+                })
             end
         end
     end
@@ -341,6 +362,29 @@ function QueueDisplayComponent:refreshQueueDisplay()
                 spellIcon:SetImage(spellInfo.iconID)
             else
                 spellIcon:SetImage("Interface\\\\Icons\\\\INV_Misc_QuestionMark")
+            end
+            
+            -- Show availability status
+            local playerInfo = addon.CooldownTracker.groupInfo[entry.GUID]
+            local playerName = playerInfo and playerInfo.name or "Unknown"
+            local currentTime = GetTime()
+            local remaining = math.max(0, entry.expirationTime - currentTime)
+            local statusText = entry.isAvailable and "Available" or "Unavailable"
+            
+            -- Set tooltip with spell info
+            local tooltipText = string.format("%s\\n%s\\nPlayer: %s\\nCooldown: %.1fs\\nStatus: %s", 
+                spellInfo and spellInfo.name or ("Spell " .. entry.spellID),
+                entry.ccType or "unknown",
+                playerName,
+                remaining,
+                statusText
+            )
+            spellIcon:SetLabel(tooltipText)
+            
+            -- Dim unavailable spells
+            if not entry.isAvailable then
+                spellIcon:SetImageSize(24, 24) -- Make smaller
+                -- TODO: Could add desaturation if AceGUI supports it
             end
             
             iconRow:AddChild(spellIcon)

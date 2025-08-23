@@ -14,6 +14,7 @@ if not addon.DebugSystem then
     local debugFrame = nil
     local debugLines = {}
     local MAX_DEBUG_LINES = 40
+    local isDebugFrameVisible = false
 
     local function CreateDebugFrame()
         if debugFrame then return end
@@ -106,7 +107,8 @@ if not addon.DebugSystem then
         debugFrame.text:SetJustifyV("TOP")
         debugFrame.text:SetText("Debug output will appear here...")
         
-        debugFrame:Show()
+        -- Initially hidden
+        debugFrame:Hide()
     end
 
     function addon.DebugSystem.Print(msg, source)
@@ -124,31 +126,148 @@ if not addon.DebugSystem then
             table.remove(debugLines, 1)
         end
         
-        -- Update display
-        local displayText = table.concat(debugLines, "\n")
-        debugFrame.text:SetText(displayText)
-        
-        -- Adjust content height based on text
-        local textHeight = debugFrame.text:GetStringHeight()
-        debugFrame.content:SetHeight(math.max(textHeight + 20, debugFrame.scrollFrame:GetHeight()))
-        
-        -- Auto-scroll to bottom
-        C_Timer.After(0, function()
-            debugFrame.scrollFrame:SetVerticalScroll(debugFrame.scrollFrame:GetVerticalScrollRange())
-        end)
+        -- Update display only if frame is visible
+        if debugFrame and debugFrame:IsVisible() then
+            local displayText = table.concat(debugLines, "\n")
+            debugFrame.text:SetText(displayText)
+            
+            -- Adjust content height based on text
+            local textHeight = debugFrame.text:GetStringHeight()
+            debugFrame.content:SetHeight(math.max(textHeight + 20, debugFrame.scrollFrame:GetHeight()))
+            
+            -- Auto-scroll to bottom
+            C_Timer.After(0, function()
+                debugFrame.scrollFrame:SetVerticalScroll(debugFrame.scrollFrame:GetVerticalScrollRange())
+            end)
+        end
     end
     
     function addon.DebugSystem.Clear()
         debugLines = {}
-        if debugFrame then
+        if debugFrame and debugFrame:IsVisible() then
             debugFrame.text:SetText("Debug output will appear here...")
         end
+    end
+    
+    function addon.DebugSystem.Toggle()
+        CreateDebugFrame()
+        
+        if debugFrame:IsVisible() then
+            debugFrame:Hide()
+            isDebugFrameVisible = false
+        else
+            debugFrame:Show()
+            isDebugFrameVisible = true
+            
+            -- Update display when showing
+            local displayText = table.concat(debugLines, "\n")
+            debugFrame.text:SetText(displayText)
+            
+            -- Adjust content height based on text
+            local textHeight = debugFrame.text:GetStringHeight()
+            debugFrame.content:SetHeight(math.max(textHeight + 20, debugFrame.scrollFrame:GetHeight()))
+            
+            -- Auto-scroll to bottom
+            C_Timer.After(0, function()
+                debugFrame.scrollFrame:SetVerticalScroll(debugFrame.scrollFrame:GetVerticalScrollRange())
+            end)
+        end
+        
+        return debugFrame:IsVisible()
+    end
+    
+    function addon.DebugSystem.Show()
+        CreateDebugFrame()
+        if not debugFrame:IsVisible() then
+            addon.DebugSystem.Toggle()
+        end
+    end
+    
+    function addon.DebugSystem.Hide()
+        CreateDebugFrame()
+        if debugFrame:IsVisible() then
+            addon.DebugSystem.Toggle()
+        end
+    end
+    
+    function addon.DebugSystem.IsVisible()
+        return debugFrame and debugFrame:IsVisible() or false
     end
 end
 
 -- Local convenience function
 local function DebugPrint(msg)
     addon.DebugSystem.Print(msg, "CooldownTracker")
+end
+
+-- Table pooling functions for memory efficiency
+function CooldownTracker:GetCooldownTable()
+    if not self.tablePool or not self.tablePool.cooldownTables then
+        DebugPrint("GetCooldownTable: tablePool not initialized, creating new table")
+        return {}
+    end
+    
+    local pool = self.tablePool.cooldownTables
+    local table = table.remove(pool)
+    if not table then
+        table = {}
+    end
+    return table
+end
+
+function CooldownTracker:ReleaseCooldownTable(t)
+    if not t then
+        return -- Nothing to release
+    end
+    
+    if type(t) ~= "table" then
+        DebugPrint("ReleaseCooldownTable: Attempting to release non-table object")
+        return
+    end
+    
+    if not self.tablePool or not self.tablePool.cooldownTables then
+        DebugPrint("ReleaseCooldownTable: tablePool not initialized, discarding table")
+        return
+    end
+    
+    wipe(t)
+    table.insert(self.tablePool.cooldownTables, t)
+end
+
+function CooldownTracker:GetPlayerTable()
+    if not self.tablePool or not self.tablePool.playerTables then
+        DebugPrint("GetPlayerTable: tablePool not initialized, creating new table")
+        return {}
+    end
+    
+    local pool = self.tablePool.playerTables
+    local table = table.remove(pool)
+    if not table then
+        table = {}
+    end
+    return table
+end
+
+function CooldownTracker:ReleasePlayerTable(t)
+    if not t or type(t) ~= "table" then
+        return
+    end
+    
+    if not self.tablePool or not self.tablePool.playerTables then
+        return
+    end
+    
+    wipe(t)
+    table.insert(self.tablePool.playerTables, t)
+end
+
+function CooldownTracker:GetResultTable()
+    if not self.tablePool.resultTable then
+        self.tablePool.resultTable = {}
+    else
+        wipe(self.tablePool.resultTable)
+    end
+    return self.tablePool.resultTable
 end
 
 -- OmniCD's GetSpellLevelLearned implementation
@@ -164,6 +283,13 @@ CooldownTracker.eventListeners = {}      -- Event callback system
 CooldownTracker.inspectQueue = {}        -- Queue for inspecting party members
 CooldownTracker.isEnabled = false        -- Tracking state
 
+-- Table pools for memory efficiency
+CooldownTracker.tablePool = {
+    cooldownTables = {},     -- Pool for spell cooldown data tables
+    playerTables = {},       -- Pool for player result tables
+    resultTable = nil        -- Reused main result table
+}
+
 -- Combat log event frame
 local CombatLogFrame = CreateFrame("Frame")
 
@@ -175,6 +301,21 @@ local currentInspectTarget = nil
 
 -- Event system for decoupled communication
 function CooldownTracker:RegisterEventListener(event, callback)
+    -- Parameter validation
+    if not event or type(event) ~= "string" or event == "" then
+        error("CooldownTracker:RegisterEventListener - event must be a non-empty string", 2)
+    end
+    
+    if not callback or type(callback) ~= "function" then
+        error("CooldownTracker:RegisterEventListener - callback must be a function", 2)
+    end
+    
+    -- Null safety check
+    if not self.eventListeners then
+        DebugPrint("RegisterEventListener: eventListeners not initialized, creating...")
+        self.eventListeners = {}
+    end
+    
     if not self.eventListeners[event] then
         self.eventListeners[event] = {}
     end
@@ -182,9 +323,31 @@ function CooldownTracker:RegisterEventListener(event, callback)
 end
 
 function CooldownTracker:FireEvent(event, ...)
-    if self.eventListeners[event] then
-        for _, callback in ipairs(self.eventListeners[event]) do
-            callback(...)
+    -- Parameter validation
+    if not event or type(event) ~= "string" or event == "" then
+        DebugPrint("FireEvent: Invalid event parameter")
+        return
+    end
+    
+    -- Null safety checks
+    if not self.eventListeners then
+        return -- No listeners registered
+    end
+    
+    local listeners = self.eventListeners[event]
+    if not listeners then
+        return -- No listeners for this event
+    end
+    
+    -- Fire events with error protection
+    for i, callback in ipairs(listeners) do
+        if type(callback) == "function" then
+            local success, err = pcall(callback, ...)
+            if not success then
+                DebugPrint("FireEvent: Error in callback " .. i .. " for event '" .. event .. "': " .. tostring(err))
+            end
+        else
+            DebugPrint("FireEvent: Invalid callback function at index " .. i .. " for event '" .. event .. "'")
         end
     end
 end
@@ -201,7 +364,6 @@ function CooldownTracker:Initialize()
     self:RefreshGroupMembers()
     
     self.isEnabled = true
-    print("CCRotationHelper: CooldownTracker initialized")
 end
 
 -- Shutdown the cooldown tracker
@@ -211,9 +373,20 @@ function CooldownTracker:Shutdown()
     end
     
     self:UnregisterEvents()
+    
+    -- Return all active cooldown tables to pool before clearing
+    for key, cooldownData in pairs(self.activeCooldowns) do
+        self:ReleaseCooldownTable(cooldownData)
+    end
+    
     wipe(self.groupInfo)
     wipe(self.activeCooldowns)
     wipe(self.inspectQueue)
+    
+    -- Clear table pools
+    wipe(self.tablePool.cooldownTables)
+    wipe(self.tablePool.playerTables)
+    self.tablePool.resultTable = nil
     
     self.isEnabled = false
 end
@@ -295,16 +468,18 @@ function CooldownTracker:OnLibGroupInSpecTUpdate(event, guid, unit, info)
     -- Convert LibGroupInSpecT talent format to our format
     if info.talents then
         wipe(playerInfo.talentData)
+        local talentCount = 0
         for talentId, talentInfo in pairs(info.talents) do
             if talentInfo.spell_id then
                 playerInfo.talentData[talentInfo.spell_id] = true
+                talentCount = talentCount + 1
+                
             end
         end
     end
     
     -- Force rebuild of available spells since talents changed
-    wipe(playerInfo.availableSpells)
-    self:BuildAvailableSpells(playerInfo)
+    self:BuildAvailableSpells(playerInfo, true)
     
     -- Notify rotation system of changes
     if addon.CCRotation then
@@ -387,35 +562,53 @@ end
 
 -- Refresh group member information
 function CooldownTracker:RefreshGroupMembers()
+    -- Store old group info before any modifications
     local oldGroupInfo = {}
-    for guid, info in pairs(self.groupInfo) do
+    for guid, info in pairs(self.groupInfo or {}) do
         oldGroupInfo[guid] = info
-        if info.availableSpells then
-        end
     end
     
-    wipe(self.groupInfo)
-    
-    -- Add player
-    local playerGUID = UnitGUID("player")
-    if playerGUID then
-        self:AddGroupMember("player", playerGUID)
-    end
-    
-    -- Add party/raid members (only if we're in a group)
-    if IsInGroup() then
-        local groupType = IsInRaid() and "raid" or "party"
-        local maxMembers = IsInRaid() and 40 or 4
+    local success, err = pcall(function()
+        wipe(self.groupInfo)
         
-        for i = 1, maxMembers do
-            local unit = groupType .. i
-            if UnitExists(unit) then
-                local guid = UnitGUID(unit)
-                if guid then
-                    self:AddGroupMember(unit, guid)
+        -- Add player with error protection
+        local playerGUID = UnitGUID("player")
+        if playerGUID then
+            local addSuccess = self:AddGroupMember("player", playerGUID)
+            if not addSuccess then
+                DebugPrint("RefreshGroupMembers: Failed to add player to group")
+            end
+        else
+            DebugPrint("RefreshGroupMembers: Unable to get player GUID")
+        end
+        
+        -- Add party/raid members (only if we're in a group) with error protection
+        if IsInGroup() then
+            local groupType = IsInRaid() and "raid" or "party"
+            local maxMembers = IsInRaid() and 40 or 4
+            
+            for i = 1, maxMembers do
+                local unit = groupType .. i
+                if UnitExists(unit) then
+                    local guid = UnitGUID(unit)
+                    if guid then
+                        local addSuccess = self:AddGroupMember(unit, guid)
+                        if not addSuccess then
+                            DebugPrint("RefreshGroupMembers: Failed to add " .. unit .. " to group")
+                        end
+                    end
                 end
             end
         end
+    end)
+    
+    if not success then
+        DebugPrint("RefreshGroupMembers: Critical error - " .. tostring(err))
+        -- Ensure we have a valid groupInfo even after error
+        if not self.groupInfo then
+            self.groupInfo = {}
+        end
+        return
     end
     
     -- Queue inspection for new members, but preserve existing inspection data
@@ -450,9 +643,40 @@ end
 
 -- Add a group member to tracking
 function CooldownTracker:AddGroupMember(unit, guid)
+    -- Parameter validation
+    if not unit or type(unit) ~= "string" or unit == "" then
+        DebugPrint("AddGroupMember: Invalid unit parameter")
+        return false
+    end
+    
+    if not guid or type(guid) ~= "string" or guid == "" then
+        DebugPrint("AddGroupMember: Invalid GUID parameter")
+        return false
+    end
+    
+    -- WoW API null safety
     local name = UnitName(unit)
+    if not name or name == "" then
+        DebugPrint("AddGroupMember: Unable to get name for unit " .. unit)
+        return false
+    end
+    
     local class, classFilename = UnitClass(unit)
-    local level = UnitLevel(unit)
+    if not classFilename or classFilename == "" then
+        DebugPrint("AddGroupMember: Unable to get class for unit " .. unit)
+        return false
+    end
+    
+    local level = UnitLevel(unit) or 0
+    if level < 0 then -- UnitLevel can return -1 for unknown level
+        level = 80 -- Assume max level for unknown
+    end
+
+    -- Null safety check for groupInfo
+    if not self.groupInfo then
+        DebugPrint("AddGroupMember: groupInfo not initialized, creating...")
+        self.groupInfo = {}
+    end
 
     self.groupInfo[guid] = {
         guid = guid,
@@ -466,6 +690,8 @@ function CooldownTracker:AddGroupMember(unit, guid)
         availableSpells = {},    -- CC spells this player can use
         lastInspected = 0        -- Timestamp of last inspection
     }
+    
+    return true
 end
 
 -- Queue a player for inspection
@@ -530,41 +756,76 @@ end
 
 -- Handle INSPECT_READY event
 function CooldownTracker:INSPECT_READY(guid)
-    if guid ~= currentInspectTarget then
-        return
+    local success, err = pcall(function()
+        if not guid or guid ~= currentInspectTarget then
+            return
+        end
+        
+        if not self.groupInfo then
+            DebugPrint("INSPECT_READY: groupInfo not initialized")
+            return
+        end
+        
+        local info = self.groupInfo[guid]
+        if not info then
+            DebugPrint("INSPECT_READY: No player info found for " .. tostring(guid))
+            return
+        end
+
+        -- Get specialization with error protection
+        local specIndex = GetInspectSpecialization and GetInspectSpecialization(info.unit)
+        if specIndex and specIndex > 0 then
+            local specID, specName = GetSpecializationInfo(specIndex)
+            if specID then
+                info.spec = specID
+
+                -- Get talent data with error protection
+                local talentSuccess, talentData = pcall(self.GetInspectTalentData, self, info.unit)
+                if talentSuccess and talentData then
+                    info.talentData = talentData
+                else
+                    DebugPrint("INSPECT_READY: Failed to get talent data for " .. tostring(info.unit))
+                    info.talentData = {}
+                end
+
+                -- Get equipment data with error protection
+                local equipSuccess, equipData = pcall(self.GetInspectEquipmentData, self, info.unit)
+                if equipSuccess and equipData then
+                    info.itemData = equipData
+                else
+                    DebugPrint("INSPECT_READY: Failed to get equipment data for " .. tostring(info.unit))
+                    info.itemData = {}
+                end
+                
+                -- Build available spells for this player (force rebuild since inspection data changed)
+                local spellSuccess, spellErr = pcall(self.BuildAvailableSpells, self, info, true)
+                if not spellSuccess then
+                    DebugPrint("INSPECT_READY: Failed to build available spells - " .. tostring(spellErr))
+                end
+                
+                info.lastInspected = GetTime()
+                
+                -- Fire inspection complete event
+                self:FireEvent("PLAYER_INSPECTED", guid, info)
+            else
+                DebugPrint("INSPECT_READY: Invalid specialization ID for " .. tostring(info.unit))
+                self:BuildBasicSpellsForPlayer(info)
+            end
+        else
+            DebugPrint("INSPECT_READY: No specialization found for " .. tostring(info.unit))
+            -- Fallback to basic spells if inspection failed
+            self:BuildBasicSpellsForPlayer(info)
+        end
+    end)
+    
+    if not success then
+        DebugPrint("INSPECT_READY: Critical error - " .. tostring(err))
     end
     
-    local info = self.groupInfo[guid]
-    if not info then
-        return
+    -- Always clear inspection target, even on error
+    if ClearInspectPlayer then
+        ClearInspectPlayer()
     end
-
-    -- Get specialization
-    local specIndex = GetInspectSpecialization and GetInspectSpecialization(info.unit)
-    if specIndex and specIndex > 0 then
-        local specID, specName = GetSpecializationInfo(specIndex)
-        info.spec = specID
-
-        -- Get talent data
-        info.talentData = self:GetInspectTalentData(info.unit)
-
-        -- Get equipment data
-        info.itemData = self:GetInspectEquipmentData(info.unit)
-        
-        -- Build available spells for this player
-        self:BuildAvailableSpells(info)
-        
-        info.lastInspected = GetTime()
-        
-        -- Fire inspection complete event
-        self:FireEvent("PLAYER_INSPECTED", guid, info)
-    else
-        -- Fallback to basic spells if inspection failed
-        self:BuildBasicSpellsForPlayer(info)
-    end
-    
-    -- Clear inspection target
-    ClearInspectPlayer()
     currentInspectTarget = nil
 end
 
@@ -590,7 +851,7 @@ function CooldownTracker:InspectPlayer()
         info.itemData = self:GetPlayerEquipmentData()
         
         -- Build our available spells
-        self:BuildAvailableSpells(info)
+        self:BuildAvailableSpells(info, true)
         
         info.lastInspected = GetTime()
         
@@ -607,6 +868,18 @@ end
 function CooldownTracker:GetInspectTalentData(unit)
     local talents = {}
     
+    -- Parameter validation
+    if not unit or type(unit) ~= "string" then
+        DebugPrint("GetInspectTalentData: Invalid unit parameter")
+        return talents
+    end
+    
+    -- Check if GetTalentInfo exists
+    if not GetTalentInfo then
+        DebugPrint("GetInspectTalentData: GetTalentInfo API not available")
+        return talents
+    end
+    
     -- Use OmniCD's method: GetTalentInfo with isInspect=true
     local MAX_TALENT_TIERS = 7
     local NUM_TALENT_COLUMNS = 3
@@ -615,8 +888,8 @@ function CooldownTracker:GetInspectTalentData(unit)
     
     for tier = 1, MAX_TALENT_TIERS do
         for column = 1, NUM_TALENT_COLUMNS do
-            local _,_,_, selected, _, spellID = GetTalentInfo(tier, column, specGroupIndex, isInspect, unit)
-            if selected and spellID then
+            local success, _, _, _, selected, _, spellID = pcall(GetTalentInfo, tier, column, specGroupIndex, isInspect, unit)
+            if success and selected and spellID and spellID > 0 then
                 talents[spellID] = true
                 break
             end
@@ -630,12 +903,24 @@ end
 function CooldownTracker:GetInspectEquipmentData(unit)
     local equipment = {}
     
+    -- Parameter validation
+    if not unit or type(unit) ~= "string" then
+        DebugPrint("GetInspectEquipmentData: Invalid unit parameter")
+        return equipment
+    end
+    
+    -- Check if required APIs exist
+    if not GetInventoryItemLink then
+        DebugPrint("GetInspectEquipmentData: GetInventoryItemLink API not available")
+        return equipment
+    end
+    
     -- Check for relevant trinkets and gear (simplified)
     for slot = 1, 19 do
-        local itemLink = GetInventoryItemLink(unit, slot)
-        if itemLink then
-            local itemID = GetItemInfoFromHyperlink(itemLink)
-            if itemID then
+        local success, itemLink = pcall(GetInventoryItemLink, unit, slot)
+        if success and itemLink and itemLink ~= "" then
+            local itemSuccess, itemID = pcall(GetItemInfoFromHyperlink, itemLink)
+            if itemSuccess and itemID and itemID > 0 then
                 equipment[itemID] = true
             end
         end
@@ -648,6 +933,12 @@ end
 function CooldownTracker:GetPlayerTalentData()
     local talents = {}
     
+    -- Check if GetTalentInfo exists
+    if not GetTalentInfo then
+        DebugPrint("GetPlayerTalentData: GetTalentInfo API not available")
+        return talents
+    end
+    
     -- Use OmniCD's method: GetTalentInfo but for our own player (no isInspect needed)
     local MAX_TALENT_TIERS = 7
     local NUM_TALENT_COLUMNS = 3
@@ -655,8 +946,8 @@ function CooldownTracker:GetPlayerTalentData()
     
     for tier = 1, MAX_TALENT_TIERS do
         for column = 1, NUM_TALENT_COLUMNS do
-            local _,_,_, selected, _, spellID = GetTalentInfo(tier, column, specGroupIndex)
-            if selected and spellID then
+            local success, _, _, _, selected, _, spellID = pcall(GetTalentInfo, tier, column, specGroupIndex)
+            if success and selected and spellID and spellID > 0 then
                 talents[spellID] = true
                 break
             end
@@ -670,12 +961,18 @@ end
 function CooldownTracker:GetPlayerEquipmentData()
     local equipment = {}
     
+    -- Check if required APIs exist
+    if not GetInventoryItemLink then
+        DebugPrint("GetPlayerEquipmentData: GetInventoryItemLink API not available")
+        return equipment
+    end
+    
     -- Check our equipped items
     for slot = 1, 19 do
-        local itemLink = GetInventoryItemLink("player", slot)
-        if itemLink then
-            local itemID = GetItemInfoFromHyperlink(itemLink)
-            if itemID then
+        local success, itemLink = pcall(GetInventoryItemLink, "player", slot)
+        if success and itemLink and itemLink ~= "" then
+            local itemSuccess, itemID = pcall(GetItemInfoFromHyperlink, itemLink)
+            if itemSuccess and itemID and itemID > 0 then
                 equipment[itemID] = true
             end
         end
@@ -685,19 +982,30 @@ function CooldownTracker:GetPlayerEquipmentData()
 end
 
 -- Build basic spell list for players we can't inspect properly
-function CooldownTracker:BuildBasicSpellsForPlayer(playerInfo)
+function CooldownTracker:BuildBasicSpellsForPlayer(playerInfo, forceRebuild)
+    -- Parameter validation
+    if not playerInfo then
+        DebugPrint("BuildBasicSpellsForPlayer: Invalid playerInfo parameter")
+        return false
+    end
     
-    -- Don't overwrite if we already have spells from full inspection
+    -- Initialize availableSpells if it doesn't exist
+    if not playerInfo.availableSpells then
+        playerInfo.availableSpells = {}
+    end
+    
+    -- Don't overwrite if we already have spells from full inspection (unless forced)
     local currentCount = self:CountKeys(playerInfo.availableSpells)
-    if currentCount > 0 then
-        return
+    if currentCount > 0 and not forceRebuild then
+        return true -- Already have spells
     end
     
     wipe(playerInfo.availableSpells)
 
     local classSpells = self.spellsByClass[playerInfo.class]
     if not classSpells then
-        return
+        DebugPrint("BuildBasicSpellsForPlayer: No spells found for class " .. tostring(playerInfo.class))
+        return false
     end
 
     -- Add basic class spells without spec/talent requirements
@@ -721,23 +1029,35 @@ function CooldownTracker:BuildBasicSpellsForPlayer(playerInfo)
         end
     end
     
+    DebugPrint("BuildBasicSpellsForPlayer: Added " .. basicSpellsCount .. " basic spells for " .. tostring(playerInfo.name))
+    return true
 end
 
 -- Build list of available CC spells for a player
-function CooldownTracker:BuildAvailableSpells(playerInfo)
+function CooldownTracker:BuildAvailableSpells(playerInfo, forceRebuild)
+    -- Parameter validation
+    if not playerInfo then
+        DebugPrint("BuildAvailableSpells: Invalid playerInfo parameter")
+        return false
+    end
+    
+    -- Initialize availableSpells if it doesn't exist
+    if not playerInfo.availableSpells then
+        playerInfo.availableSpells = {}
+    end
     
     -- If we already have spells, don't rebuild unless forced
     local currentSpellCount = self:CountKeys(playerInfo.availableSpells)
-    if currentSpellCount > 0 then
-        return
-    else
+    if currentSpellCount > 0 and not forceRebuild then
+        return true -- Already have spells
     end
     
     wipe(playerInfo.availableSpells)
 
     local classSpells = self.spellsByClass[playerInfo.class]
     if not classSpells then
-        return
+        DebugPrint("BuildAvailableSpells: No spells found for class " .. tostring(playerInfo.class))
+        return false
     end
 
 
@@ -747,14 +1067,28 @@ function CooldownTracker:BuildAvailableSpells(playerInfo)
         -- Check spec requirement
         if spellData.spec then
             if playerInfo.spec == spellData.spec then
-                -- Check talent requirement
+                -- Check talent requirement (supporting OmniCD's negative talent system)
                 if spellData.talent then
-                    if not playerInfo.talentData[spellData.talent] then
-                        print("CCRotationHelper CooldownTracker: Skipping", spellData.name, "- talent", spellData.talent, "not found for", playerInfo.name)
+                    local talentID = spellData.talent
+                    local isNegativeTalent = talentID < 0
+                    local actualTalentID = isNegativeTalent and -talentID or talentID
+                    local hasTalent = playerInfo.talentData[actualTalentID] ~= nil
+                    
+                    
+                    if isNegativeTalent then
+                        -- Negative talent: spell available when talent is NOT present
+                        if hasTalent then
+                            -- Skip - negative talent is present
+                        else
+                            isAvailable = self:CheckSpellAvailability(playerInfo, spellID, spellData)
+                        end
                     else
-                        print("CCRotationHelper CooldownTracker: Talent", spellData.talent, "found for", spellData.name, "on", playerInfo.name)
-                        -- Continue with spell availability check
-                        isAvailable = self:CheckSpellAvailability(playerInfo, spellID, spellData)
+                        -- Positive talent: spell available when talent IS present
+                        if hasTalent then
+                            isAvailable = self:CheckSpellAvailability(playerInfo, spellID, spellData)
+                        else
+                            DebugPrint("BuildAvailableSpells: " .. tostring(playerInfo.name) .. " missing required talent " .. actualTalentID .. " for spell " .. spellID .. " (" .. (spellData.name or "Unknown") .. ")")
+                        end
                     end
                 else
                     -- No talent requirement, continue with spell availability check
@@ -762,12 +1096,26 @@ function CooldownTracker:BuildAvailableSpells(playerInfo)
                 end
             end
         else
-            -- No spec requirement, check talent requirement
+            -- No spec requirement, check talent requirement (supporting OmniCD's negative talent system)
             if spellData.talent then
-                if not playerInfo.talentData[spellData.talent] then
-                    print("CCRotationHelper: SKIP", spellData.name, "- talent", spellData.talent, "not found")
+                local talentID = spellData.talent
+                local isNegativeTalent = talentID < 0
+                local actualTalentID = isNegativeTalent and -talentID or talentID
+                local hasTalent = playerInfo.talentData[actualTalentID] ~= nil
+                
+                
+                if isNegativeTalent then
+                    -- Negative talent: spell available when talent is NOT present
+                    if not hasTalent then
+                        isAvailable = self:CheckSpellAvailability(playerInfo, spellID, spellData)
+                    end
                 else
-                    isAvailable = self:CheckSpellAvailability(playerInfo, spellID, spellData)
+                    -- Positive talent: spell available when talent IS present
+                    if hasTalent then
+                        isAvailable = self:CheckSpellAvailability(playerInfo, spellID, spellData)
+                    else
+                        DebugPrint("BuildAvailableSpells: " .. tostring(playerInfo.name) .. " missing required talent " .. actualTalentID .. " for spell " .. spellID .. " (" .. (spellData.name or "Unknown") .. ")")
+                    end
                 end
             else
                 isAvailable = self:CheckSpellAvailability(playerInfo, spellID, spellData)
@@ -794,25 +1142,82 @@ function CooldownTracker:BuildAvailableSpells(playerInfo)
         end
     end
     
+    local spellCount = self:CountKeys(playerInfo.availableSpells)
+    DebugPrint("BuildAvailableSpells: Built " .. spellCount .. " spells for " .. tostring(playerInfo.name))
+    
+    -- Debug: Show player's talents
+    if playerInfo.talentData and self:CountKeys(playerInfo.talentData) > 0 then
+        local talentList = {}
+        for talentID in pairs(playerInfo.talentData) do
+            table.insert(talentList, tostring(talentID))
+        end
+        table.sort(talentList)
+        DebugPrint("BuildAvailableSpells: " .. tostring(playerInfo.name) .. " has talents: " .. table.concat(talentList, ", "))
+    else
+        DebugPrint("BuildAvailableSpells: " .. tostring(playerInfo.name) .. " has no talent data")
+    end
+    
+    return true
 end
 
 -- Check if a spell is available for a player
 function CooldownTracker:CheckSpellAvailability(playerInfo, spellID, spellData)
+    -- Parameter validation
+    if not playerInfo or not spellID or not spellData then
+        return false
+    end
+    
+    if type(spellID) ~= "number" or spellID <= 0 then
+        return false
+    end
+    
     -- For inspecting other players, we can't use IsSpellKnown reliably
     -- Instead, we'll assume they have class spells and check other requirements
-    if playerInfo.guid == UnitGUID("player") then
+    local playerGUID = nil
+    local success, currentPlayerGUID = pcall(UnitGUID, "player")
+    if success then
+        playerGUID = currentPlayerGUID
+    end
+    
+    if playerInfo.guid == playerGUID then
         -- For our own player, we can check spell knowledge
-        if IsSpellKnown(spellID, false) or IsSpellKnown(spellID, true) then
-            local spellLevel = GetSpellLevelLearned(spellID)
-            if playerInfo.level >= spellLevel then
-                return true
+        if IsSpellKnown then
+            local hasSpell = false
+            local spellKnownSuccess, isKnown = pcall(IsSpellKnown, spellID, false)
+            if spellKnownSuccess and isKnown then
+                hasSpell = true
+            else
+                local petSpellSuccess, isPetSpell = pcall(IsSpellKnown, spellID, true)
+                if petSpellSuccess and isPetSpell then
+                    hasSpell = true
+                end
             end
+            
+            if hasSpell then
+                local levelSuccess, spellLevel = pcall(GetSpellLevelLearned, spellID)
+                if levelSuccess and spellLevel then
+                    return playerInfo.level >= spellLevel
+                else
+                    return true -- Assume available if we can't get level requirement
+                end
+            end
+        else
+            -- IsSpellKnown not available, assume available for own player
+            return true
         end
     else
         -- For other players, assume they have class spells if they meet level requirement
-        local spellLevel = GetSpellLevelLearned(spellID)
-        if spellLevel and playerInfo.level >= spellLevel then
-            return true
+        if GetSpellLevelLearned then
+            local levelSuccess, spellLevel = pcall(GetSpellLevelLearned, spellID)
+            if levelSuccess and spellLevel and playerInfo.level >= spellLevel then
+                return true
+            elseif not levelSuccess then
+                -- If we can't get spell level, assume they have it if high enough level
+                return playerInfo.level >= 10
+            end
+        else
+            -- GetSpellLevelLearned not available, assume they have class spells
+            return playerInfo.level >= 10
         end
     end
     
@@ -830,6 +1235,7 @@ function CooldownTracker:CleanupStaleData(oldGroupInfo)
     -- Remove cooldowns for players no longer in group
     for key, cooldownData in pairs(self.activeCooldowns) do
         if not self.groupInfo[cooldownData.guid] then
+            self:ReleaseCooldownTable(cooldownData)
             self.activeCooldowns[key] = nil
         end
     end
@@ -881,128 +1287,146 @@ end
 
 -- Combat log event processing (next step)
 function CooldownTracker:COMBAT_LOG_EVENT_UNFILTERED()
-    local timestamp, event, _, srcGUID, _, _, _, _, _, _, _, spellID = CombatLogGetCurrentEventInfo()
-    
-    -- Quick debug - print any spell cast success events
-    if event == "SPELL_CAST_SUCCESS" then
-        DebugPrint("SPELL_CAST_SUCCESS detected - spell " .. tostring(spellID))
-        -- Special debug for Typhoon
-        if spellID == 61391 or spellID == 132469 then
-            DebugPrint("*** TYPHOON DETECTED in combat log! (ID: " .. spellID .. ") ***")
+    local success, err = pcall(function()
+        local timestamp, event, _, srcGUID, _, _, _, _, _, _, _, spellID = CombatLogGetCurrentEventInfo()
+        
+        -- Validate combat log data
+        if not event or not srcGUID or not spellID then
+            return
         end
-        -- Special debug for Intimidating Roar
-        if spellID == 99 then
-            DebugPrint("*** INTIMIDATING ROAR DETECTED in combat log! (ID: " .. spellID .. ") ***")
+
+        -- Only process relevant events and group members
+        if event ~= "SPELL_CAST_SUCCESS" then
+            return
         end
+        
+        -- Null safety check for groupInfo
+        if not self.groupInfo then
+            return
+        end
+        
+        -- Cache playerInfo lookup to avoid repeated table access
+        local playerInfo = self.groupInfo[srcGUID]
+        if not playerInfo then
+            return
+        end
+
+        -- Use generic spell ID resolution system with error protection
+        if not addon.Database or not addon.Database.GetSpellData then
+            return
+        end
+        
+        local spellData, mappedSpellID, castSpellCooldown = addon.Database:GetSpellData(spellID)
+        if not spellData then
+            return
+        end
+        
+        -- Check if the spell is in our tracking database
+        if not self.ccSpellDatabase or not self.ccSpellDatabase[mappedSpellID] then
+            return
+        end
+
+        -- Cache availableSpells lookup with null safety
+        local availableSpells = playerInfo.availableSpells
+        if not availableSpells then
+            return
+        end
+        
+        local availableSpell = availableSpells[mappedSpellID]
+        if not availableSpell then
+            return
+        end
+        
+        -- Cache frequently used values
+        local baseSpellID = mappedSpellID
+        local currentTime = GetTime()
+        local playerName = playerInfo.name or "Unknown"
+        
+        local cooldownKey = baseSpellID .. ":" .. srcGUID
+        
+        -- Use the cast spell's cooldown (e.g., Gravity Lapse = 40s instead of Supernova = 45s)
+        local actualDuration = castSpellCooldown or availableSpell.actualCooldown
+        if not actualDuration or actualDuration <= 0 then
+            return -- Invalid cooldown duration
+        end
+        
+        local expirationTime = currentTime + actualDuration
+
+        -- Reuse existing cooldown table if available, or create new one
+        local cooldownTable = self.activeCooldowns[cooldownKey]
+        if not cooldownTable then
+            cooldownTable = self:GetCooldownTable()
+            if not self.activeCooldowns then
+                self.activeCooldowns = {}
+            end
+            self.activeCooldowns[cooldownKey] = cooldownTable
+        end
+        
+        -- Update cooldown data
+        cooldownTable.spellID = baseSpellID  -- Use base spell ID for consistency
+        cooldownTable.guid = srcGUID
+        cooldownTable.playerName = playerName
+        cooldownTable.expirationTime = expirationTime
+        cooldownTable.duration = actualDuration
+        cooldownTable.ccType = spellData.ccType
+        cooldownTable.timestamp = currentTime
+        
+        -- Fire cooldown update event using base spell ID
+        local cooldownSource = (castSpellCooldown and castSpellCooldown ~= availableSpell.actualCooldown) 
+            and ("cast spell: " .. castSpellCooldown) or ("available: " .. availableSpell.actualCooldown)
+        
+        self:FireEvent("COOLDOWN_STARTED", baseSpellID, srcGUID, expirationTime, actualDuration)
+    end)
+    
+    if not success then
+        DebugPrint("COMBAT_LOG_EVENT_UNFILTERED: Error processing combat log event - " .. tostring(err))
     end
-    
-    -- Only process relevant events and group members
-    if event ~= "SPELL_CAST_SUCCESS" then
-        return
-    end
-    
-    -- Only process events from tracked players
-    local playerInfo = self.groupInfo[srcGUID]
-    if not playerInfo then
-        DebugPrint("Player not found in groupInfo for GUID: " .. tostring(srcGUID))
-        return
-    end
-    DebugPrint("Found player: " .. playerInfo.name)
-    
-    -- Use generic spell ID resolution system
-    local spellData, mappedSpellID, castSpellCooldown = addon.Database:GetSpellData(spellID)
-    if not spellData then
-        DebugPrint("Spell " .. tostring(spellID) .. " not found in database (mapped to " .. tostring(mappedSpellID) .. ")")
-        return
-    end
-    
-    -- Check if the spell is in our tracking database
-    if not self.ccSpellDatabase[mappedSpellID] then
-        DebugPrint("Mapped spell " .. tostring(mappedSpellID) .. " not found in ccSpellDatabase")
-        return
-    end
-    
-    if spellID ~= mappedSpellID then
-        DebugPrint("Mapped cast spell " .. spellID .. " to base spell " .. mappedSpellID .. " (" .. spellData.name .. ")")
-    else
-        DebugPrint("Found spell data: " .. spellData.name)
-    end
-    
-    -- Check if this player actually has this spell available
-    local availableSpell = playerInfo.availableSpells[mappedSpellID]
-    if not availableSpell then
-        DebugPrint("Spell " .. tostring(mappedSpellID) .. " not in player's availableSpells")
-        return
-    else
-        DebugPrint("Player has spell available")
-    end
-    
-    -- Record the cooldown using the base spell ID (resolved from generic mapping system)
-    local baseSpellID = mappedSpellID
-    
-    local cooldownKey = baseSpellID .. ":" .. srcGUID
-    -- Use GetTime() instead of combat log timestamp for consistency with WoW APIs
-    local currentTime = GetTime()
-    
-    -- Use the cast spell's cooldown (e.g., Gravity Lapse = 40s instead of Supernova = 45s)
-    local actualDuration = castSpellCooldown or availableSpell.actualCooldown
-    local expirationTime = currentTime + actualDuration
-    
-    DebugPrint("Recording cooldown with baseSpellID " .. baseSpellID .. " (original: " .. spellID .. ")")
-    
-    self.activeCooldowns[cooldownKey] = {
-        spellID = baseSpellID,  -- Use base spell ID for consistency
-        guid = srcGUID,
-        playerName = playerInfo.name,
-        expirationTime = expirationTime,
-        duration = actualDuration,
-        ccType = spellData.ccType,
-        timestamp = currentTime
-    }
-    
-    -- Fire cooldown update event using base spell ID
-    local cooldownSource = (castSpellCooldown and castSpellCooldown ~= availableSpell.actualCooldown) 
-        and ("cast spell: " .. castSpellCooldown) or ("available: " .. availableSpell.actualCooldown)
-    DebugPrint("Recording cooldown for " .. spellData.name .. " duration " .. tostring(actualDuration) .. " (" .. cooldownSource .. ")")
-    
-    -- Extra debug for Intimidating Roar
-    if baseSpellID == 99 then
-        DebugPrint("*** ROAR COOLDOWN RECORDED - firing COOLDOWN_STARTED event immediately ***")
-    end
-    
-    self:FireEvent("COOLDOWN_STARTED", baseSpellID, srcGUID, expirationTime, actualDuration)
 end
 
 -- Get all current cooldowns (LibOpenRaid replacement)
 function CooldownTracker:GetAllCooldowns()
+    -- Null safety checks
+    if not self.groupInfo then
+        DebugPrint("GetAllCooldowns: groupInfo not initialized")
+        return {}
+    end
+    
+    if not self.activeCooldowns then
+        DebugPrint("GetAllCooldowns: activeCooldowns not initialized")
+        return {}
+    end
     
     local result = {}
     local currentTime = GetTime()
+    local groupInfo = self.groupInfo
+    local activeCooldowns = self.activeCooldowns
     
-    for guid, playerInfo in pairs(self.groupInfo) do
+    for guid, playerInfo in pairs(groupInfo) do
         result[guid] = {}
-        
+        local playerResult = result[guid]
+        local availableSpells = playerInfo.availableSpells
         
         -- Include all available spells for this player
-        for spellID, spellInfo in pairs(playerInfo.availableSpells) do
+        for spellID, spellInfo in pairs(availableSpells) do
             -- Check if this spell is currently on cooldown
             local cooldownData = nil
-            for key, cd in pairs(self.activeCooldowns) do
+            for key, cd in pairs(activeCooldowns) do
                 if cd.guid == guid and cd.spellID == spellID then
                     local remaining = cd.expirationTime - currentTime
                     if remaining > 0 then
                         cooldownData = cd
                     else
-                        -- Cooldown expired, remove it
-                        self.activeCooldowns[key] = nil
+                        -- Cooldown expired, return to pool and remove it
+                        self:ReleaseCooldownTable(cd)
+                        activeCooldowns[key] = nil
                     end
                     break
                 end
             end
             
             if cooldownData then
-                -- Spell is on cooldown
-                result[guid][spellID] = {
+                -- Spell is on cooldown - reuse cooldown data structure when possible
+                playerResult[spellID] = {
                     expirationTime = cooldownData.expirationTime,
                     duration = cooldownData.duration,
                     remaining = cooldownData.expirationTime - currentTime,
@@ -1010,8 +1434,8 @@ function CooldownTracker:GetAllCooldowns()
                     ccType = cooldownData.ccType
                 }
             else
-                -- Spell is ready (not on cooldown)
-                result[guid][spellID] = {
+                -- Spell is ready (not on cooldown) - use compact structure
+                playerResult[spellID] = {
                     expirationTime = currentTime, -- Ready now
                     duration = spellInfo.actualCooldown,
                     remaining = 0, -- No time remaining
@@ -1027,8 +1451,26 @@ end
 
 -- Get available spells for a specific player
 function CooldownTracker:GetPlayerSpells(guid)
+    -- Parameter validation
+    if not guid or type(guid) ~= "string" or guid == "" then
+        DebugPrint("GetPlayerSpells: Invalid GUID parameter")
+        return {}
+    end
+    
+    -- Null safety checks
+    if not self.groupInfo then
+        DebugPrint("GetPlayerSpells: groupInfo not initialized")
+        return {}
+    end
+    
     local playerInfo = self.groupInfo[guid]
     if not playerInfo then
+        return {}
+    end
+    
+    -- Ensure availableSpells exists
+    if not playerInfo.availableSpells then
+        DebugPrint("GetPlayerSpells: Player " .. guid .. " has no availableSpells table")
         return {}
     end
     
@@ -1037,11 +1479,33 @@ end
 
 -- Check if a player is in our group
 function CooldownTracker:IsPlayerInGroup(guid)
+    -- Parameter validation
+    if not guid or type(guid) ~= "string" or guid == "" then
+        return false
+    end
+    
+    -- Null safety check
+    if not self.groupInfo then
+        return false
+    end
+    
     return self.groupInfo[guid] ~= nil
 end
 
 -- Get player information
 function CooldownTracker:GetPlayerInfo(guid)
+    -- Parameter validation
+    if not guid or type(guid) ~= "string" or guid == "" then
+        DebugPrint("GetPlayerInfo: Invalid GUID parameter")
+        return nil
+    end
+    
+    -- Null safety check
+    if not self.groupInfo then
+        DebugPrint("GetPlayerInfo: groupInfo not initialized")
+        return nil
+    end
+    
     return self.groupInfo[guid]
 end
 
