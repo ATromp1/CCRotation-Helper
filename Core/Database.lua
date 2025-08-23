@@ -299,21 +299,56 @@ function addon.Database:GetNPCInfo(npcID)
     return nil
 end
 
+-- Normalize dungeon name for flexible matching
+local function normalizeDungeonName(name)
+    if not name then return nil end
+    
+    -- Remove common punctuation variations and normalize spacing
+    local normalized = name:gsub(":", ""):gsub("%s+", " "):trim()
+    return normalized
+end
+
 -- Get current dungeon/instance information
 function addon.Database:GetCurrentDungeonInfo()
     local name, instanceType, difficultyID, difficultyName, maxPlayers = GetInstanceInfo()
     
     -- Only consider party dungeons and raids
     if instanceType ~= "party" and instanceType ~= "raid" then
-        return nil, instanceType
+        return nil, instanceType, false
     end
     
     if not name or name == "" then
-        return nil, instanceType
+        return nil, instanceType, false
     end
     
-    -- Return dungeon name and instance type
-    return name, instanceType
+    -- Check if this is a known dungeon by matching against our database
+    local normalizedCurrentName = normalizeDungeonName(name)
+    local matchedDungeonName = nil
+    local isKnownDungeon = false
+    
+    -- First, try exact match
+    for npcID, data in pairs(self.defaultNPCs) do
+        if data.dungeon == name then
+            matchedDungeonName = data.dungeon
+            isKnownDungeon = true
+            break
+        end
+    end
+    
+    -- If no exact match, try normalized matching
+    if not isKnownDungeon and normalizedCurrentName then
+        for npcID, data in pairs(self.defaultNPCs) do
+            local normalizedDbName = normalizeDungeonName(data.dungeon)
+            if normalizedDbName and normalizedCurrentName == normalizedDbName then
+                matchedDungeonName = data.dungeon
+                isKnownDungeon = true
+                break
+            end
+        end
+    end
+    
+    -- Return the matched database name (or original if no match), instance type, and whether it's known
+    return matchedDungeonName or name, instanceType, isKnownDungeon
 end
 
 -- Get NPCs that belong to the current dungeon

@@ -269,17 +269,23 @@ function QueueDisplayComponent:refreshQueueDisplay()
         local actualQueue = addon.CCRotation.cooldownQueue or {}
         local unavailableQueue = addon.CCRotation.unavailableQueue or {}
         
+        -- Debug: Show raw queue data
+        if addon.Config:Get("debugMode") then
+            print("SpellsList Debug - actualQueue size: " .. #actualQueue)
+            print("SpellsList Debug - unavailableQueue size: " .. #unavailableQueue)
+        end
+        
         -- Combine both queues but mark unavailable ones
         for _, spellData in ipairs(actualQueue) do
             -- Apply CC type filter to preview
             local spellInfo = addon.Database.defaultSpells[spellData.spellID]
             local ccType = spellInfo and spellInfo.ccType
-            local ccTypeString = ccType == 1 and "stun" or 
-                               ccType == 2 and "disorient" or
-                               ccType == 3 and "incapacitate" or
-                               ccType == 4 and "silence" or
-                               ccType == 5 and "root" or
-                               "unknown"
+            local ccTypeString = ccType -- ccType is already a string in the database
+            
+            -- Debug: Show CC type conversion
+            if addon.Config:Get("debugMode") then
+                print("SpellsList Debug - Spell " .. spellData.spellID .. " (" .. (spellInfo and spellInfo.name or "Unknown") .. "): ccType=" .. tostring(ccType))
+            end
             
             if not ccType or self.ccTypeFilters[ccTypeString] then
                 table.insert(fullQueue, {
@@ -300,12 +306,7 @@ function QueueDisplayComponent:refreshQueueDisplay()
         for _, spellData in ipairs(unavailableQueue) do
             local spellInfo = addon.Database.defaultSpells[spellData.spellID]
             local ccType = spellInfo and spellInfo.ccType
-            local ccTypeString = ccType == 1 and "stun" or 
-                               ccType == 2 and "disorient" or
-                               ccType == 3 and "incapacitate" or
-                               ccType == 4 and "silence" or
-                               ccType == 5 and "root" or
-                               "unknown"
+            local ccTypeString = ccType -- ccType is already a string in the database
             
             if not ccType or self.ccTypeFilters[ccTypeString] then
                 table.insert(fullQueue, {
@@ -320,6 +321,14 @@ function QueueDisplayComponent:refreshQueueDisplay()
                     isAvailable = false
                 })
             end
+        end
+    end
+    
+    -- Debug: Show final queue
+    if addon.Config:Get("debugMode") then
+        print("SpellsList Debug - Final queue size: " .. #fullQueue)
+        for i, entry in ipairs(fullQueue) do
+            print("SpellsList Debug - Entry " .. i .. ": " .. entry.spellID .. " (" .. tostring(entry.ccType) .. ") - " .. (entry.isAvailable and "Available" or "Unavailable"))
         end
     end
     
@@ -379,7 +388,15 @@ function QueueDisplayComponent:refreshQueueDisplay()
                 remaining,
                 statusText
             )
-            spellIcon:SetLabel(tooltipText)
+            -- Don't set label as text - just use for tooltip
+            spellIcon:SetCallback("OnEnter", function(widget)
+                GameTooltip:SetOwner(widget.frame, "ANCHOR_TOPRIGHT")
+                GameTooltip:SetText(tooltipText, 1, 1, 1, 1, true)
+                GameTooltip:Show()
+            end)
+            spellIcon:SetCallback("OnLeave", function(widget)
+                GameTooltip:Hide()
+            end)
             
             -- Dim unavailable spells
             if not entry.isAvailable then
