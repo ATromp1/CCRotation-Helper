@@ -185,7 +185,7 @@ function UI:updateCooldownText()
         if icon.queueData and icon:IsShown() then
             local cooldownData = icon.queueData
             local charges = cooldownData.charges or 0
-            local isReady = charges > 0 or cooldownData.expirationTime <= now
+            local isReady = (charges > 0) and (cooldownData.expirationTime <= now)
             
             if isReady then
                 icon.cooldownText:SetText("")
@@ -228,7 +228,9 @@ end
 
 -- Update display with current queue (main function)
 function UI:UpdateDisplay(queue, unavailableQueue)
-    if not self.mainFrame or not self.mainFrame.container then return end
+    if not self.mainFrame or not self.mainFrame.container then 
+        return
+    end
     
     if not queue then
         return
@@ -236,6 +238,15 @@ function UI:UpdateDisplay(queue, unavailableQueue)
     
     local now = GetTime()
     
+    -- Debug: Show what spells are being sent to iconRenderer
+    for i, spell in ipairs(queue) do
+        if i <= 2 then -- Only show first 2
+            local remaining = spell.expirationTime - now
+            local isReady = (spell.charges > 0) and (spell.expirationTime <= now)
+            addon.DebugSystem.Print("  Sending to IconRenderer[" .. i .. "]: spell " .. tostring(spell.spellID) .. " remaining=" .. string.format("%.1f", remaining) .. " ready=" .. tostring(isReady), "MainFrame")
+        end
+    end
+
     -- Use component-based rendering (this should be safe during combat)
     self.iconRenderer:updateMainIcons(queue, now, self.mainFrame)
     self.iconRenderer:updateUnavailableIcons(unavailableQueue or {}, now, self.mainFrame)

@@ -4,8 +4,7 @@ local addonName, addon = ...
 addon.CCRotation = {}
 local CCRotation = addon.CCRotation
 
--- LibOpenRaid reference
-local lib = LibStub("LibOpenRaid-1.0", true)
+local cooldownTracker = nil
 
 -- Event system for decoupled communication
 CCRotation.eventListeners = {}
@@ -34,6 +33,14 @@ function CCRotation:Initialize()
     
     -- Get tracked spells from config
     self.trackedCooldowns = addon.Config:GetTrackedSpells()
+    if self:CountKeys(self.trackedCooldowns) > 0 then
+        local count = 0
+        for spellID, info in pairs(self.trackedCooldowns) do
+            print("  -", spellID, info.name)
+            count = count + 1
+            if count >= 3 then break end
+        end
+    end
     
     -- Initialize tracking variables
     self.cooldownQueue = {}
@@ -47,15 +54,14 @@ function CCRotation:Initialize()
     -- Initialize GUID mapping
     self:RefreshGUIDToUnit()
     
-    -- Register LibOpenRaid callbacks if library is available
-    if lib then
-        self:RegisterLibOpenRaidCallbacks()
-    end
+    cooldownTracker = addon.CooldownTracker
+    cooldownTracker:Initialize()
+    self:RegisterCooldownCallbacks()
     
     -- Register for events
     self:RegisterEvents()
     
-    -- Schedule delayed queue rebuild to ensure LibOpenRaid has data
+    -- Schedule delayed queue rebuild to ensure cooldown data is available
     C_Timer.After(1, function()
         self:RebuildQueue()
     end)
@@ -88,21 +94,17 @@ function CCRotation:RefreshGUIDToUnit()
     end
 end
 
--- Register LibOpenRaid callbacks
-function CCRotation:RegisterLibOpenRaidCallbacks()
-    if not lib then return end
-    
-    local callbacks = {
-        CooldownUpdate = function(...)
-            self:OnCooldownUpdate(...)
-        end,
-        TalentUpdate = function(...)
-            self:OnTalentUpdate(...)
-        end,
-    }
-    
-    lib.RegisterCallback(callbacks, "CooldownUpdate", "CooldownUpdate")
-    lib.RegisterCallback(callbacks, "TalentUpdate", "TalentUpdate")
+-- Register callbacks
+function CCRotation:RegisterCooldownCallbacks()
+    cooldownTracker:RegisterEventListener("COOLDOWN_STARTED", function(...)
+        self:OnCooldownUpdate(...)
+    end)
+    cooldownTracker:RegisterEventListener("GROUP_UPDATED", function(...)
+        self:OnGroupUpdate(...)
+    end)
+    cooldownTracker:RegisterEventListener("PLAYER_INSPECTED", function(...)
+        self:OnTalentUpdate(...)
+    end)
 end
 
 -- Register for WoW events
@@ -156,20 +158,77 @@ function CCRotation:OnEvent(event, ...)
     end
 end
 
--- Handle LibOpenRaid cooldown updates
+-- Handle CooldownTracker cooldown updates
 function CCRotation:OnCooldownUpdate(...)
-    -- Only rebuild queue, it will handle UI updates if needed
+    local spellID, srcGUID, expirationTime, duration = ...
+    addon.DebugSystem.Print("OnCooldownUpdate called - spell " .. spellID .. " expires at " .. string.format("%.1f", expirationTime), "RotationCore")
+    
+    -- Schedule queue rebuild for when this cooldown expires
+    self:ScheduleCooldownExpiration(spellID, expirationTime)
+    
+    -- Rebuild queue immediately to reflect new cooldown state
     self:RebuildQueue()
 end
 
--- Handle LibOpenRaid talent updates
-function CCRotation:OnTalentUpdate(...)
-    -- Refresh our tracked cooldowns list
-    self.trackedCooldowns = addon.Config:GetTrackedSpells()
-    
-    -- Clear cached cooldown data and rebuild queue
-    self.spellCooldowns = {}
+-- Handle group composition updates
+function CCRotation:OnGroupUpdate(...)
+    -- Refresh GUID mapping and rebuild queue
+    self:RefreshGUIDToUnit()
     self:RebuildQueue()
+end
+
+-- Handle talent/inspection updates
+function CCRotation:OnTalentUpdate(...)
+    -- Add delay to allow CooldownTracker to rebuild first
+    C_Timer.After(1.0, function()
+        -- Clear spell cooldowns to force talent-based filtering
+        self:ClearStaleSpellCooldowns()
+        
+        -- Refresh tracked cooldowns and rebuild queue
+        self.trackedCooldowns = addon.Config:GetTrackedSpells()
+        self:RebuildQueue()
+    end)
+end
+
+-- Clear spell cooldowns that are no longer available due to talent changes
+function CCRotation:ClearStaleSpellCooldowns()
+    local cooldownTracker = addon.CooldownTracker
+    if not (cooldownTracker and cooldownTracker.groupInfo) then return end
+    
+    -- Check each spell cooldown against current talent availability
+    for key, spellData in pairs(self.spellCooldowns) do
+        local GUID = spellData.GUID
+        local spellID = spellData.spellID
+        
+        local playerInfo = cooldownTracker.groupInfo[GUID]
+        if playerInfo and playerInfo.availableSpells then
+            -- If player doesn't have this spell available, remove it
+            if not playerInfo.availableSpells[spellID] then
+                self.spellCooldowns[key] = nil
+                addon.DebugSystem.Print("Removed stale spell from queue: " .. spellID .. " for " .. GUID, "RotationCore")
+            end
+        end
+    end
+end
+
+-- Public method for UI to notify of configuration changes
+function CCRotation:NotifyConfigChanged()
+    addon.DebugSystem.Print("Configuration changed - scheduling debounced rebuild", "RotationCore")
+    
+    -- Cancel any previous config update timer
+    if self._configUpdateTimer then
+        self._configUpdateTimer:Cancel()
+        self._configUpdateTimer = nil
+    end
+    
+    -- Schedule a debounced config update after rapid changes settle
+    self._configUpdateTimer = C_Timer.After(0.5, function()
+        self._configUpdateTimer = nil
+        addon.DebugSystem.Print("Debounced config update - rebuilding queue", "RotationCore")
+        -- Refresh tracked cooldowns and rebuild queue
+        self.trackedCooldowns = addon.Config:GetTrackedSpells()
+        self:RebuildQueue()
+    end)
 end
 
 -- Extract NPC ID from a unit GUID
@@ -179,15 +238,47 @@ function CCRotation:GetNPCIDFromGUID(guid)
     return tonumber(npcID)
 end
 
+-- Helper function to count keys in a table
+function CCRotation:CountKeys(tbl)
+    local count = 0
+    for k, v in pairs(tbl) do
+        count = count + 1
+    end
+    return count
+end
+
 -- Update individual spell cooldown data
 function CCRotation:UpdateSpellCooldown(unit, spellID, cooldownInfo)
-    local info = self.trackedCooldowns[spellID]
-    if not (unit and info and cooldownInfo and lib) then return end
+    if not (unit and spellID and cooldownInfo) then 
+        addon.DebugSystem.Print("UpdateSpellCooldown - Missing parameters: unit=" .. tostring(unit) .. " spellID=" .. tostring(spellID) .. " cooldownInfo=" .. tostring(cooldownInfo), "RotationCore")
+        return 
+    end
+    
+    -- Get spell info from CooldownTracker's database instead of config
+    local spellInfo = addon.Database.defaultSpells[spellID]
+    if not spellInfo then
+        return
+    end
     
     local GUID = UnitGUID(unit)
     if not GUID then return end
     
-    local _, _, timeLeft, charges, _, _, _, duration = lib.GetCooldownStatusFromCooldownInfo(cooldownInfo)
+    -- Check if the player actually has this spell available (talent check)
+    local cooldownTracker = addon.CooldownTracker
+    if cooldownTracker and cooldownTracker.groupInfo and cooldownTracker.groupInfo[GUID] then
+        local playerInfo = cooldownTracker.groupInfo[GUID]
+        if playerInfo.availableSpells and not playerInfo.availableSpells[spellID] then
+            -- Player doesn't have this spell due to talents/spec, remove from queue if it exists
+            local key = GUID .. ":" .. spellID
+            if self.spellCooldowns[key] then
+                self.spellCooldowns[key] = nil
+                return true -- Signal that something changed so queue gets rebuilt
+            end
+            return false
+        end
+    end
+    
+    local _, _, timeLeft, charges, _, _, _, duration = cooldownTracker:GetCooldownStatusFromCooldownInfo(cooldownInfo)
     local currentTime = GetTime()
     
     -- Create unique key for this spell/player combination
@@ -197,23 +288,40 @@ function CCRotation:UpdateSpellCooldown(unit, spellID, cooldownInfo)
     local existingData = self.spellCooldowns[key]
     local newExpirationTime = timeLeft + currentTime
     
-    -- Only update if this is a new spell or the cooldown changed significantly (more than 0.2 seconds)
+    addon.DebugSystem.Print(string.format("UpdateSpellCooldown - spell %d: timeLeft=%.1f newExp=%.1f existingExp=%.1f charges=%d", 
+        spellID, timeLeft, newExpirationTime, existingData and existingData.expirationTime or 0, charges), "RotationCore")
+    
+    -- Check if readiness state changed (from on cooldown to ready or vice versa)
+    -- More direct approach: check if timeLeft changed from >0 to 0 or vice versa
+    local wasOnCooldown = existingData and (existingData.expirationTime > existingData.lastUpdate)
+    local isOnCooldown = (timeLeft > 0)
+    local readinessChanged = wasOnCooldown ~= isOnCooldown
+    
+    addon.DebugSystem.Print(string.format("UpdateSpellCooldown - spell %d: wasOnCooldown=%s isOnCooldown=%s readinessChanged=%s", 
+        spellID, tostring(wasOnCooldown), tostring(isOnCooldown), tostring(readinessChanged)), "RotationCore")
+    
+    -- Only update if this is a new spell, readiness state changed, cooldown changed significantly (more than 0.2 seconds), or charges changed
     if not existingData or 
+       readinessChanged or
        math.abs(existingData.expirationTime - newExpirationTime) > 0.2 or
        (existingData.charges or 0) ~= charges then
         
         self.spellCooldowns[key] = {
             GUID = GUID,
             spellID = spellID,
-            priority = info.priority,
+            priority = spellInfo.priority or 5,
             expirationTime = newExpirationTime,
             duration = duration,
             charges = charges,
-            lastUpdate = currentTime
+            lastUpdate = currentTime,
+            -- Preserve isEffective if it was previously set, will be recalculated in RecalculateQueue
+            isEffective = existingData and existingData.isEffective
         }
+        addon.DebugSystem.Print(string.format("UpdateSpellCooldown - spell %d: SIGNIFICANT CHANGE detected, returning true", spellID), "RotationCore")
         return true
     end
     
+    addon.DebugSystem.Print(string.format("UpdateSpellCooldown - spell %d: no significant change, returning false", spellID), "RotationCore")
     return false -- No significant change
 end
 
@@ -221,19 +329,44 @@ end
 function CCRotation:RebuildQueue()
     -- Cancel any previous scheduled rebuild
     if self._rebuildTimer then
+        addon.DebugSystem.Print("Canceling previous rebuild timer", "RotationCore")
         self._rebuildTimer:Cancel()
         self._rebuildTimer = nil
     end
     
+    addon.DebugSystem.Print("Scheduling queue rebuild in 0.1s", "RotationCore")
     -- Schedule a new rebuild after a short delay
     self._rebuildTimer = C_Timer.After(0.1, function()
+        addon.DebugSystem.Print("Executing scheduled queue rebuild", "RotationCore")
         self._rebuildTimer = nil
         self:DoRebuildQueue()
     end)
 end
 
+-- Schedule queue rebuild for when specific cooldowns expire
+function CCRotation:ScheduleCooldownExpiration(spellID, expirationTime)
+    local now = GetTime()
+    local delay = expirationTime - now
+    
+    if delay > 0 then
+        C_Timer.After(delay, function()
+            addon.DebugSystem.Print("Cooldown expired for spell " .. spellID .. " - rebuilding queue", "RotationCore")
+            self:RebuildQueue()
+        end)
+    end
+end
+
+-- Cancel old periodic updates
+function CCRotation:StopPeriodicUpdates()
+    if self._periodicTimer then
+        self._periodicTimer:Cancel()
+        self._periodicTimer = nil
+    end
+end
+
 -- Actual queue rebuild implementation
 function CCRotation:DoRebuildQueue()
+    addon.DebugSystem.Print("DoRebuildQueue started", "RotationCore")
     -- Store old GUID mapping to detect group changes
     local oldGUIDToUnit = {}
     for guid, unit in pairs(self.GUIDToUnit) do
@@ -267,10 +400,13 @@ function CCRotation:DoRebuildQueue()
     local hasChanges = false
     
     -- Update individual spell cooldowns without affecting others
-    if lib then
-        local allUnits = lib.GetAllUnitsCooldown()
-        if allUnits then
-            for unit, cds in pairs(allUnits) do
+    local allCooldowns = cooldownTracker:GetAllCooldowns()
+    if allCooldowns then
+        for guid, cds in pairs(allCooldowns) do
+            -- Convert GUID back to unit for compatibility
+            local unit = self.GUIDToUnit[guid]
+            
+            if unit then
                 for spellID, info in pairs(cds) do
                     if self.trackedCooldowns[spellID] then
                         if self:UpdateSpellCooldown(unit, spellID, info) then
@@ -310,9 +446,13 @@ function CCRotation:RecalculateQueue()
     
     -- Convert spell cooldowns to queue format
     for key, spellData in pairs(self.spellCooldowns) do
+        -- Ensure isEffective defaults to true if not set (will be recalculated below)
+        if spellData.isEffective == nil then
+            spellData.isEffective = true
+        end
         table.insert(self.cooldownQueue, spellData)
     end
-    
+
     -- Determine if we have any known NPCs and handle filtering/effectiveness
     local hasKnownNPCs = false
     local hasUnknownNPCs = false
@@ -330,8 +470,8 @@ function CCRotation:RecalculateQueue()
     if hasKnownNPCs then
         local filtered = {}
         for _, cd in ipairs(self.cooldownQueue) do
-            local info = self.trackedCooldowns[cd.spellID]
-            local ccType = info and info.type
+            local spellInfo = addon.Database.defaultSpells[cd.spellID]
+            local ccType = spellInfo and spellInfo.ccType
             
             if not ccType then
                 -- Uncategorized spells always show
@@ -362,24 +502,30 @@ function CCRotation:RecalculateQueue()
     end
     
     -- Sort and separate queues
+    addon.DebugSystem.Print("About to sort and separate queues", "RotationCore")
     self:SortAndSeparateQueues()
+    addon.DebugSystem.Print("Sorting complete, about to fire events", "RotationCore")
     
-    -- Fire event if queue actually changed (UI will listen for this event)
-    if self:HasQueueChanged() then
-        self:FireEvent("QUEUE_UPDATED", self.cooldownQueue, self.unavailableQueue)
-        
-        -- Check if secondary queue should be shown (first ability on cooldown)
-        local shouldShowSecondary = self:ShouldShowSecondaryQueue()
-        self:FireEvent("SECONDARY_QUEUE_STATE_CHANGED", shouldShowSecondary)
-    end
+    -- Always fire UI update events - cooldown states matter even if queue order is the same
+    addon.DebugSystem.Print("Queue rebuild complete - firing QUEUE_UPDATED event", "RotationCore")
+    self:FireEvent("QUEUE_UPDATED", self.cooldownQueue, self.unavailableQueue)
+    
+    -- Check if secondary queue should be shown (first ability on cooldown)
+    local shouldShowSecondary = self:ShouldShowSecondaryQueue()
+    self:FireEvent("SECONDARY_QUEUE_STATE_CHANGED", shouldShowSecondary)
+    
+    -- Still save queue state for potential optimizations elsewhere
+    self:SaveCurrentQueue()
 end
 
 -- Sort the cooldown queue and separate available from unavailable
 function CCRotation:SortAndSeparateQueues()
+    addon.DebugSystem.Print("SortAndSeparateQueues - Starting", "RotationCore")
     local now = GetTime()
     local availableQueue = {}
     local unavailableQueue = {}
     
+    addon.DebugSystem.Print("SortAndSeparateQueues - Separating into available/unavailable", "RotationCore")
     -- Add status information and separate into available/unavailable
     for _, cooldownData in ipairs(self.cooldownQueue) do
         local unit = self.GUIDToUnit[cooldownData.GUID]
@@ -404,67 +550,92 @@ function CCRotation:SortAndSeparateQueues()
         end
     end
     
+    addon.DebugSystem.Print("SortAndSeparateQueues - About to sort available queue (size: " .. #availableQueue .. ")", "RotationCore")
     -- Sort available queue
-    table.sort(availableQueue, function(a, b)
-        local unitA, unitB = self.GUIDToUnit[a.GUID], self.GUIDToUnit[b.GUID]
-        if not (unitA and unitB) then return false end
-        
-        local nameA, nameB = UnitName(unitA), UnitName(unitB)
-        local isPriorityA = addon.Config:IsPriorityPlayer(nameA)
-        local isPriorityB = addon.Config:IsPriorityPlayer(nameB)
-        
-        local readyA = a.charges > 0 or a.expirationTime <= now
-        local readyB = b.charges > 0 or b.expirationTime <= now
-        
-        -- 1. Ready spells first
-        if readyA ~= readyB then return readyA end
-        
-        -- 2. Among ready spells, prioritize priority players
-        if readyA and readyB and (isPriorityA ~= isPriorityB) then
-            return isPriorityA
-        end
-        
-        -- 3. Finally, fallback on configured priority (or soonest available cooldown)
-        if readyA then
-            return a.priority < b.priority
-        else
-            return a.expirationTime < b.expirationTime
-        end
+    local success = pcall(function()
+        table.sort(availableQueue, function(a, b)
+            local unitA, unitB = self.GUIDToUnit[a.GUID], self.GUIDToUnit[b.GUID]
+            if not (unitA and unitB) then return false end
+            
+            local nameA, nameB = UnitName(unitA), UnitName(unitB)
+            local isPriorityA = addon.Config:IsPriorityPlayer(nameA)
+            local isPriorityB = addon.Config:IsPriorityPlayer(nameB)
+            
+            -- Safe readiness calculation - handle potential nil values
+            local readyA = (a.charges and a.charges > 0) and (not a.expirationTime or a.expirationTime <= now)
+            local readyB = (b.charges and b.charges > 0) and (not b.expirationTime or b.expirationTime <= now)
+
+            -- 1. Ready spells first
+            if readyA ~= readyB then 
+                return readyA
+            end
+            
+            -- 2. Among ready spells, prioritize priority players
+            if readyA and readyB and (isPriorityA ~= isPriorityB) then
+                return isPriorityA
+            end
+            
+            -- 3. Finally, fallback on configured priority (or soonest available cooldown)
+            if readyA then
+                return (a.priority or 0) < (b.priority or 0)
+            else
+                return (a.expirationTime or 0) < (b.expirationTime or 0)
+            end
+        end)
     end)
     
+    if not success then
+        addon.DebugSystem.Print("SortAndSeparateQueues - ERROR: Available queue sort failed!", "RotationCore")
+        return -- Exit early if sorting fails
+    end
+    
+    addon.DebugSystem.Print("SortAndSeparateQueues - Available queue sorted, about to sort unavailable queue (size: " .. #unavailableQueue .. ")", "RotationCore")
     -- Sort unavailable queue by what their priority WOULD be if available
-    table.sort(unavailableQueue, function(a, b)
-        local unitA, unitB = self.GUIDToUnit[a.GUID], self.GUIDToUnit[b.GUID]
-        if not (unitA and unitB) then return false end
-        
-        local nameA, nameB = UnitName(unitA), UnitName(unitB)
-        local isPriorityA = addon.Config:IsPriorityPlayer(nameA)
-        local isPriorityB = addon.Config:IsPriorityPlayer(nameB)
-        
-        local readyA = a.charges > 0 or a.expirationTime <= now
-        local readyB = b.charges > 0 or b.expirationTime <= now
-        
-        -- Same sorting as available queue to show proper priority
-        if readyA ~= readyB then return readyA end
-        if readyA and readyB and (isPriorityA ~= isPriorityB) then
-            return isPriorityA
-        end
-        if readyA then
-            return a.priority < b.priority
-        else
-            return a.expirationTime < b.expirationTime
-        end
+    local success2 = pcall(function()
+        table.sort(unavailableQueue, function(a, b)
+            local unitA, unitB = self.GUIDToUnit[a.GUID], self.GUIDToUnit[b.GUID]
+            if not (unitA and unitB) then return false end
+            
+            local nameA, nameB = UnitName(unitA), UnitName(unitB)
+            local isPriorityA = addon.Config:IsPriorityPlayer(nameA)
+            local isPriorityB = addon.Config:IsPriorityPlayer(nameB)
+            
+            -- Safe readiness calculation - handle potential nil values  
+            local readyA = (a.charges and a.charges > 0) or (not a.expirationTime or a.expirationTime <= now)
+            local readyB = (b.charges and b.charges > 0) or (not b.expirationTime or b.expirationTime <= now)
+            
+            -- Same sorting as available queue to show proper priority
+            if readyA ~= readyB then return readyA end
+            if readyA and readyB and (isPriorityA ~= isPriorityB) then
+                return isPriorityA
+            end
+            if readyA then
+                return (a.priority or 0) < (b.priority or 0)
+            else
+                return (a.expirationTime or 0) < (b.expirationTime or 0)
+            end
+        end)
     end)
     
+    if not success2 then
+        addon.DebugSystem.Print("SortAndSeparateQueues - ERROR: Unavailable queue sort failed!", "RotationCore")
+        return -- Exit early if sorting fails
+    end
+    
+    addon.DebugSystem.Print("SortAndSeparateQueues - Both queues sorted, updating main queue", "RotationCore")
     -- Update the main queue and store unavailable queue
     self.cooldownQueue = availableQueue
     self.unavailableQueue = unavailableQueue
     
+    addon.DebugSystem.Print("SortAndSeparateQueues - About to check pug announcements", "RotationCore")
     -- Check for pug announcements
     self:CheckPugAnnouncement()
     
+    addon.DebugSystem.Print("SortAndSeparateQueues - About to check player turn status", "RotationCore")
     -- Check if player is next in queue and fire event for sound notification
     self:CheckPlayerTurnStatus()
+    
+    addon.DebugSystem.Print("SortAndSeparateQueues - Completed successfully", "RotationCore")
 end
 
 -- Check if player is next in queue and fire notification event
@@ -720,7 +891,10 @@ function CCRotation:HasQueueChanged()
         -- Check if ability state changed (ready -> not ready or vice versa)
         local wasReady = (last.charges or 0) > 0 or last.expirationTime <= (last.checkTime or now)
         local isReady = (cd.charges or 0) > 0 or cd.expirationTime <= now
+        
+        
         if wasReady ~= isReady then
+            addon.DebugSystem.Print("Ready state changed for spell " .. cd.spellID .. ": wasReady=" .. tostring(wasReady) .. " -> isReady=" .. tostring(isReady), "RotationCore")
             hasSignificantChange = true
             break
         end

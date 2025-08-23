@@ -265,22 +265,22 @@ function QueueDisplayComponent:refreshQueueDisplay()
     local fullQueue = {}
     
     if addon.CCRotation and addon.CCRotation.GUIDToUnit then
-        -- Use LibOpenRaid to get all cooldowns from all units
-        local lib = LibStub("LibOpenRaid-1.0", true)
-        if lib then
-            local allUnits = lib.GetAllUnitsCooldown()
+        local cooldownTracker = addon.CooldownTracker
+        if cooldownTracker then
+            local allUnits = cooldownTracker:GetAllCooldowns()
             if allUnits then
-                for unit, cds in pairs(allUnits) do
-                    for spellID, info in pairs(cds) do
-                        if addon.CCRotation.trackedCooldowns and addon.CCRotation.trackedCooldowns[spellID] then
-                            local spellInfo = addon.CCRotation.trackedCooldowns[spellID]
-                            local ccType = spellInfo.type -- This contains string values like "stun", "disorient", etc.
-                                                            
-                            -- Apply CC type filter
-                            if not ccType or self.ccTypeFilters[ccType] then
-                                local guid = UnitGUID(unit)
-                                if guid then
-                                    local _, _, timeLeft, charges, _, _, _, duration = lib.GetCooldownStatusFromCooldownInfo(info)
+                for guid, cds in pairs(allUnits) do
+                    -- Convert GUID to unit for display purposes
+                    local unit = addon.CCRotation.GUIDToUnit[guid]
+                    if unit then
+                        for spellID, info in pairs(cds) do
+                            if addon.CCRotation.trackedCooldowns and addon.CCRotation.trackedCooldowns[spellID] then
+                                local spellInfo = addon.CCRotation.trackedCooldowns[spellID]
+                                local ccType = spellInfo.type -- This contains string values like "stun", "disorient", etc.
+                                                                
+                                -- Apply CC type filter
+                                if not ccType or self.ccTypeFilters[ccType] then
+                                    local _, _, timeLeft, charges, _, _, _, duration = cooldownTracker:GetCooldownStatusFromCooldownInfo(info)
                                     local currentTime = GetTime()
                                     
                                     table.insert(fullQueue, {

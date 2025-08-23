@@ -19,6 +19,11 @@ AceComm:Embed(addon)
 function CCRotationHelper:OnAddonLoaded(loadedAddonName)
     if loadedAddonName ~= addonName then return end
     
+    -- Clear debug output on reload
+    if addon.DebugSystem and addon.DebugSystem.Clear then
+        addon.DebugSystem.Clear()
+    end
+    
     -- Initialize configuration
     addon.Config:Initialize()
     
@@ -32,6 +37,7 @@ end
 
 -- Player login handler  
 function CCRotationHelper:OnPlayerLogin()
+    print("CCRotationHelper: OnPlayerLogin called")
     -- Initialize core rotation system
     addon.CCRotation:Initialize()
     
