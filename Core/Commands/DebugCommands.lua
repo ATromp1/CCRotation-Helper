@@ -52,3 +52,18 @@ function addon.DebugCommands:preview()
         print("|cff00ff00CC Rotation Helper|r: UI not initialized")
     end
 end
+
+function addon.DebugCommands:debugframe()
+    -- Show general debug frame with tabs
+    if addon.DebugFrame then
+        addon.DebugFrame:ShowFrame("General", "General Debug")
+        -- Test messages for different categories
+        addon.DebugFrame:Print("General", "SPELL", "=== SPELL DEBUG FRAME TEST ===")
+        addon.DebugFrame:Print("General", "SPELL", "LibOpenRaid cooldown data will appear here")
+        addon.DebugFrame:Print("General", "ERROR", "Error messages appear in ERROR tab")
+        addon.DebugFrame:Print("General", "INIT", "Initialization messages appear in INIT tab")
+        print("|cff00ff00CC Rotation Helper|r: General debug frame shown with tabs")
+    else
+        print("|cff00ff00CC Rotation Helper|r: DebugFrame not initialized")
+    end
+end

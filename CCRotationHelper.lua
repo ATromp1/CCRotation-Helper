@@ -87,6 +87,8 @@ SlashCmdList["CCROTATION"] = function(msg)
         addon.DebugCommands:icons()
     elseif command == "preview" then
         addon.DebugCommands:preview()
+    elseif command == "debugframe" then
+        addon.DebugCommands:debugframe()
     
     -- Profile commands
     elseif command == "profile" or command == "profiles" then
@@ -115,6 +117,7 @@ SlashCmdList["CCROTATION"] = function(msg)
         print("  /ccr preview - Toggle config positioning preview")
         print("  /ccr pugtest - Test pug announcer functionality")
         print("  /ccr debugnpc - Toggle NPC debug frame")
+        print("  /ccr debugframe - Show tabbed debug frame")
         print("  /ccr resetdb - Reset database (WARNING: loses all settings)")
     end
 end

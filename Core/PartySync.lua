@@ -35,7 +35,8 @@ local userProfileTracking = {
 local function DebugPrint(category, ...)
     if addon.DebugFrame then 
         addon.DebugFrame:Print("PartySync", category, ...) 
-   end
+    end
+end
 
 -- Simple hash function for data comparison
 local function CalculateDataHash(data)
@@ -49,6 +50,7 @@ local function CalculateDataHash(data)
                 id = tonumber(spellID) or 0,
                 spell = spell
             })
+        end
                
         -- Sort by priority first (to capture reordering), then by ID for stability
         table.sort(spellEntries, function(a, b)
@@ -74,6 +76,8 @@ local function CalculateDataHash(data)
             )
             table.insert(spellList, spellStr)
                str = str .. table.concat(spellList, ",")
+        end
+    end
        
     -- Hash priority players
     if data.priorityPlayers then
@@ -81,7 +85,9 @@ local function CalculateDataHash(data)
         for player in pairs(data.priorityPlayers) do
             table.insert(playerList, player)
                table.sort(playerList)
+        end
         str = str .. "|" .. table.concat(playerList, ",")
+    end
        
     -- Hash custom NPCs
     if data.customNPCs then
@@ -89,6 +95,7 @@ local function CalculateDataHash(data)
         for npcID in pairs(data.customNPCs) do
             table.insert(npcIDs, tonumber(npcID) or 0)
                table.sort(npcIDs)
+        end
         
         local npcList = {}
         for _, npcID in ipairs(npcIDs) do
@@ -106,13 +113,19 @@ local function CalculateDataHash(data)
                             ccValue = 0
                                                npcStr = npcStr .. ":" .. ccValue
                                                   table.insert(npcList, npcStr)
-                          str = str .. "|" .. table.concat(npcList, ",")
+                        end
+                        str = str .. "|" .. table.concat(npcList, ",")
+                    end
+                end
+            end
+        end
+    end
        
     -- Simple string hash (djb2 algorithm)
     local hash = 5381
     for i = 1, #str do
         hash = ((hash * 33) + string.byte(str, i)) % 2147483647
-       
+    end
     return hash
 end
 
@@ -140,23 +153,32 @@ function addon.PartySync:Initialize()
                 addon.PartySync:GROUP_ROSTER_UPDATE()
             elseif event == "PARTY_LEADER_CHANGED" then
                 addon.PartySync:UpdateGroupStatus()
-                   end)
+            end
+        end)
         
-        DebugPrint("INIT", "Created event frame and registered group events")       
+        DebugPrint("INIT", "Created event frame and registered group events")
+    end
+    
     -- Listen for config changes to trigger immediate broadcast
     if addon.Config then
-        DebugPrint("INIT", "Config found, registering PROFILE_DATA_CHANGED listener")        addon.Config:RegisterEventListener("PROFILE_DATA_CHANGED", function(dataType, value)
+        DebugPrint("INIT", "Config found, registering PROFILE_DATA_CHANGED listener")
+        addon.Config:RegisterEventListener("PROFILE_DATA_CHANGED", function(dataType, value)
             -- If we're the leader and actively syncing, broadcast immediately
             if UnitIsGroupLeader("player") and addon.PartySync:IsInGroup() then
-                DebugPrint("COMM", "Config changed, broadcasting immediately")                addon.PartySync:BroadcastProfile()
-                   end)
+                DebugPrint("COMM", "Config changed, broadcasting immediately")
+                addon.PartySync:BroadcastProfile()
+            end
+        end)
         self.configListenerRegistered = true
     else
-        DebugPrint("INIT", "Config not found during PartySync initialization - will register later")       
+        DebugPrint("INIT", "Config not found during PartySync initialization - will register later")
+    end
+    
     -- Initialize user profile tracking from saved variables
     if addon.Config and addon.Config.global and addon.Config.global.lastUserChosenProfile then
         userProfileTracking.lastUserChosenProfile = addon.Config.global.lastUserChosenProfile
-       
+    end
+    
     -- Start sync if we're already in a group (delay to ensure group status is ready)
     C_Timer.After(1, function()
         self:UpdateGroupStatus()
@@ -171,10 +193,13 @@ function addon.PartySync:RegisterConfigListener()
         addon.Config:RegisterEventListener("PROFILE_DATA_CHANGED", function(dataType, value)
             -- If we're the leader and actively syncing, broadcast immediately
             if UnitIsGroupLeader("player") and addon.PartySync:IsInGroup() then
-                DebugPrint("COMM", "Config changed, broadcasting immediately")                addon.PartySync:BroadcastProfile()
-                   end)
+                DebugPrint("COMM", "Config changed, broadcasting immediately")
+                addon.PartySync:BroadcastProfile()
+            end
+        end)
         self.configListenerRegistered = true
-   end
+    end
+end
 
 -- Group status management
 function addon.PartySync:UpdateGroupStatus()
@@ -185,12 +210,14 @@ function addon.PartySync:UpdateGroupStatus()
     else
         self:StopBroadcasting()
    end
+end
 
 function addon.PartySync:IsInGroup()
     -- In delves, IsInGroup() returns true but you're only grouped with NPCs
     -- Check if we have actual player group members
     if IsInRaid() then
         return true -- Raids are always player groups
+    end
        
     if IsInGroup() then
         -- Check if we have any real players in the group besides ourselves
@@ -201,14 +228,18 @@ function addon.PartySync:IsInGroup()
                 local unit = "party" .. i
                 if UnitIsPlayer(unit) then
                     return true -- Found at least one real player
-                                        
+                end
+            end
+        end
     return false -- Solo or only grouped with NPCs
+    end
 end
 
 -- Broadcasting (leader only)
 function addon.PartySync:StartBroadcasting()
     if broadcastTimer then
         broadcastTimer:Cancel()
+    end
        
     DebugPrint("GROUP", "Starting to broadcast as group leader")
     
@@ -221,7 +252,8 @@ function addon.PartySync:StartBroadcasting()
             addon.PartySync:BroadcastProfile()
         else
             addon.PartySync:StopBroadcasting()
-           end)
+        end
+    end)
 end
 
 function addon.PartySync:StopBroadcasting()
@@ -229,6 +261,7 @@ function addon.PartySync:StopBroadcasting()
         broadcastTimer:Cancel()
         broadcastTimer = nil
         DebugPrint("GROUP", "Stopped broadcasting")
+    end
        
     -- Restore original settings when leaving group or losing leadership
     self:RestoreOriginalSettings()
@@ -237,6 +270,7 @@ end
 function addon.PartySync:BroadcastProfile()
     if not addon.Config or not addon.Config.db then
         return
+    end
        
     local profileData = {
         spells = addon.Config.db.spells or {},
@@ -249,6 +283,7 @@ function addon.PartySync:BroadcastProfile()
     if currentHash == lastDataHash then
         DebugPrint("COMM", "Data unchanged, skipping broadcast (hash:", currentHash, ")")
         return
+    end
        
     DebugPrint("COMM", "Data changed, broadcasting (old hash:", lastDataHash, "new hash:", currentHash, ")")
     lastDataHash = currentHash
@@ -263,16 +298,20 @@ function addon.PartySync:BroadcastProfile()
         
         if not success then
             DebugPrint("COMM", "Failed to send sync message")
-          end
+        end
+    end
+end
 
 -- Request sync from leader
 function addon.PartySync:RequestSync()
     if not self:IsInGroup() or UnitIsGroupLeader("player") then
         return
+    end
        
     if syncedData.spells then
         return
-       
+    end
+
     DebugPrint("COMM", "Requesting sync from leader")
     local success = pcall(function()
         addon.PartySync:SendCommMessage(REQUEST_PREFIX, "REQUEST", "PARTY")
@@ -280,17 +319,21 @@ function addon.PartySync:RequestSync()
     
     if not success then
         DebugPrint("COMM", "Failed to send sync request")
-   end
+    end
+end
 
 function addon.PartySync:OnRequestReceived(prefix, message, distribution, sender)
     if prefix ~= REQUEST_PREFIX then
         return
+    end
        
     if sender == UnitName("player") then
         return
-       
+    end
+
     if not UnitIsGroupLeader("player") then
         return
+    end
        
     DebugPrint("COMM", "Received sync request from:", sender)
     -- Mark sender as having the addon
@@ -304,6 +347,7 @@ end
 function addon.PartySync:ForceBroadcast()
     if not addon.Config or not addon.Config.db then
         return
+    end
        
     local profileData = {
         spells = addon.Config.db.spells or {},
@@ -324,22 +368,27 @@ function addon.PartySync:ForceBroadcast()
         
         if not success then
             DebugPrint("COMM", "Failed to send forced sync message")
-          end
+        end
+    end
+end
 
 -- Handle AceComm messages
 function addon.PartySync:OnCommReceived(prefix, message, distribution, sender)
     -- Only handle our prefix
     if prefix ~= SYNC_PREFIX then
         return
+    end
        
     -- Ignore our own messages
     if sender == UnitName("player") then
         return
+    end
        
     -- Only accept from group leader
     if not UnitIsGroupLeader(sender) then
         DebugPrint("COMM", "Ignoring sync from non-leader:", sender)
         return
+    end
        
     DebugPrint("COMM", "Received sync from leader:", sender)
     
@@ -347,6 +396,7 @@ function addon.PartySync:OnCommReceived(prefix, message, distribution, sender)
     if not success then
         DebugPrint("COMM", "Failed to deserialize sync message")
         return
+    end
        
     if profileData.transmissionHash then
         local dataToVerify = {
@@ -360,6 +410,8 @@ function addon.PartySync:OnCommReceived(prefix, message, distribution, sender)
             DebugPrint("COMM", "Transmission integrity verified (hash:", calculatedHash, ")")
         else
             DebugPrint("COMM", "WARNING: Transmission hash mismatch! Expected:", profileData.transmissionHash, "Got:", calculatedHash)
+        end
+    end
               
     DebugPrint("COMM", "Applying synced data from leader:", sender)
     -- Mark sender as having the addon
@@ -370,78 +422,49 @@ end
 function addon.PartySync:ApplyProfileData(profileData)
     DebugPrint("SYNC", "ApplyProfileData called")
     
-    if not addon.Config or not addon.CCRotation then
-        DebugPrint("SYNC", "Missing Config or CCRotation, aborting")
+    if not addon.Config then
+        DebugPrint("SYNC", "Missing Config, aborting")
         return
+    end
        
-    -- Store original profile spell data for restoration later if needed
-    if not originalData.spells then
-        originalData.spells = addon.Config:GetTrackedSpells()
-        DebugPrint("SYNC", "Stored original spells for restoration")
-       
-    -- Apply sync data directly to the rotation system
-    if profileData.spells then
-        DebugPrint("SYNC", "Processing synced spells data")
-        local syncedSpells = {}
-        local activeCount = 0
-        
-        -- Convert synced spells to the format expected by rotation system
-        for spellID, spell in pairs(profileData.spells) do
-            if spell.active then
-                activeCount = activeCount + 1
-                syncedSpells[spellID] = {
-                    priority = spell.priority,
-                    type = addon.Config:NormalizeCCType(spell.ccType)
-                }
-                          
-        DebugPrint("SYNC", "Converted", activeCount, "active synced spells")
-        
-        -- Update rotation system directly with synced data
-        addon.CCRotation.trackedCooldowns = syncedSpells
-        
-        -- Store synced data for UI display and status checking
-        syncedData.spells = profileData.spells
-        DebugPrint("SYNC", "Updated syncedData.spells with", activeCount, "spells")
-        
-        if addon.CCRotation.RebuildQueue then
-            addon.CCRotation:RebuildQueue()
-            DebugPrint("SYNC", "Rebuilt rotation queue")
-           else
-        DebugPrint("SYNC", "No spells data in profileData")
-       
-    -- Store other sync data
-    if profileData.priorityPlayers then
-        syncedData.priorityPlayers = profileData.priorityPlayers
-        DebugPrint("SYNC", "Updated priority players")
-       
-    if profileData.customNPCs then
-        syncedData.customNPCs = profileData.customNPCs
-        DebugPrint("SYNC", "Updated custom NPCs")
+    -- Apply sync data through Config layer (proper architecture)
+    DebugPrint("SYNC", "Applying sync overlay through Config layer")
+    addon.Config:ApplySyncOverlay(profileData)
+    
+    -- Store sync data for status checking
+    syncedData.spells = profileData.spells
+    syncedData.priorityPlayers = profileData.priorityPlayers
+    syncedData.customNPCs = profileData.customNPCs
        
     -- Fire events for UI updates
     addon.Config:FireEvent("PROFILE_SYNC_RECEIVED", profileData)
     if addon.CCRotation then
         addon.CCRotation:FireEvent("PROFILE_SYNC_RECEIVED", profileData)
+    end
        
     DebugPrint("SYNC", "Applied sync data and fired events")
 end
 
 -- Data restoration
 function addon.PartySync:RestoreOriginalSettings()
-    if originalData.spells and addon.CCRotation then
-        addon.CCRotation.trackedCooldowns = originalData.spells
-        originalData.spells = nil
-        
-        if addon.CCRotation.RebuildQueue then
-            addon.CCRotation:RebuildQueue()
+    if addon.Config then
+        -- Remove sync overlay through Config layer (proper architecture)
+        DebugPrint("SYNC", "Removing sync overlay through Config layer")
+        addon.Config:RemoveSyncOverlay()
+    end
               
     -- Clear synced data
     syncedData.spells = nil
     syncedData.priorityPlayers = nil
     syncedData.customNPCs = nil
     
+    -- Clear original data backup (no longer needed)
+    originalData.spells = nil
+    
     -- Fire event to notify UI that sync ended
-    addon.Config:FireEvent("PROFILE_SYNC_ENDED")
+    if addon.Config then
+        addon.Config:FireEvent("PROFILE_SYNC_ENDED")
+    end
 end
 
 -- Event handlers
@@ -457,6 +480,7 @@ function addon.PartySync:GROUP_ROSTER_UPDATE()
         if not addon.PartySync:IsInGroup() then
             addon.PartySync:StopBroadcasting()
                addon.PartySync:UpdateGroupStatus()
+        end
     end)
 end
 
@@ -468,7 +492,8 @@ function addon.PartySync:GetStatus()
         return "Broadcasting (Leader)"
     else
         return "Receiving"
-   end
+    end
+end
 
 function addon.PartySync:IsInPartySync()
     return self:IsInGroup() and not UnitIsGroupLeader("player") and syncedData.spells ~= nil
@@ -481,6 +506,7 @@ function addon.PartySync:TrackUserProfileChoice(profileName)
     -- Store in global config
     if addon.Config and addon.Config.global then
         addon.Config.global.lastUserChosenProfile = profileName
+    end
        
     DebugPrint("PROFILE", "User chose profile:", profileName)
 end
@@ -493,37 +519,39 @@ function addon.PartySync:GetRecommendedLeaderProfile()
         for _, name in ipairs(profiles) do
             if name == userProfileTracking.lastUserChosenProfile then
                 return userProfileTracking.lastUserChosenProfile
-                         
+            end
+        end
+    end
+
     -- Fall back to current profile
     if addon.Config then
         return addon.Config:GetCurrentProfileName()
+    end
        
     return nil
 end
 
--- Data access methods for UI (returns synced data when in sync, otherwise normal data)
+-- Data access methods for UI (delegate to Config layer which handles sync overlay)
 function addon.PartySync:GetDisplaySpells()
-    if self:IsInPartySync() and syncedData.spells then
-        return syncedData.spells
-       return addon.Config and addon.Config.database and addon.Config.database.profile.spells
+    -- Config automatically handles sync overlay in its data access methods
+    return addon.Config and addon.Config.db and addon.Config.db.spells
 end
 
 function addon.PartySync:GetDisplayPriorityPlayers()
-    if self:IsInPartySync() and syncedData.priorityPlayers then
-        return syncedData.priorityPlayers
-       return addon.Config and addon.Config.database and addon.Config.database.profile.priorityPlayers
+    -- Config.IsPriorityPlayer already handles sync overlay
+    return addon.Config and addon.Config.db and addon.Config.db.priorityPlayers
 end
 
 function addon.PartySync:GetDisplayCustomNPCs()
-    if self:IsInPartySync() and syncedData.customNPCs then
-        return syncedData.customNPCs
-       return addon.Config and addon.Config.database and addon.Config.database.profile.customNPCs
+    -- Config.GetNPCEffectiveness already handles sync overlay
+    return addon.Config and addon.Config.db and addon.Config.db.customNPCs
 end
 
 -- Get current data hash for debugging
 function addon.PartySync:GetCurrentDataHash()
     if not addon.Config then
         return nil
+    end
        
     -- Use display data (synced when in party sync, otherwise local)
     local profileData = {
@@ -539,10 +567,12 @@ end
 function addon.PartySync:IsPlayerPug(playerName)
     if not playerName then
         return false
+    end
        
     -- If we're not in a group, there are no pugs
     if not self:IsInGroup() then
         return false
+    end
        
     -- Check if player has responded to addon communications
     return not playersWithAddon[playerName]
@@ -552,14 +582,17 @@ end
 function addon.PartySync:ShowDebugFrame()
     if addon.DebugFrame then
         addon.DebugFrame:ShowFrame("PartySync", "Party Sync Debug")
-   end
+    end
+end
 
 function addon.PartySync:HideDebugFrame()
     if addon.DebugFrame then
         addon.DebugFrame:HideFrame("PartySync")
-   end
+    end
+end
 
 function addon.PartySync:ToggleDebugFrame()
     if addon.DebugFrame then
         addon.DebugFrame:ToggleFrame("PartySync", "Party Sync Debug")
-   end
+    end
+end

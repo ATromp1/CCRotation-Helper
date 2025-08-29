@@ -9,6 +9,14 @@ local LSM = LibStub("LibSharedMedia-3.0")
 
 addon.Config = {}
 
+-- Party sync overlay data
+local syncOverlay = {
+    active = false,
+    spells = nil,
+    priorityPlayers = nil,
+    customNPCs = nil
+}
+
 -- Use unified event system instead of local one
 function addon.Config:RegisterEventListener(event, callback)
     addon.EventSystem:RegisterEventListener(event, callback)
@@ -266,9 +274,12 @@ function addon.Config:IsProfileSetting(key)
 end
 
 function addon.Config:GetNPCEffectiveness(npcID)
+    -- Use sync overlay data when in sync mode, otherwise use profile data
+    local customNPCs = syncOverlay.active and syncOverlay.customNPCs or self.db.customNPCs
+    
     -- Check custom NPCs first
-    if self.db.customNPCs[npcID] then
-        local customNPC = self.db.customNPCs[npcID]
+    if customNPCs[npcID] then
+        local customNPC = customNPCs[npcID]
         -- Convert array format to map format for consistency
         return {
             stun = customNPC.cc[1],
@@ -333,8 +344,11 @@ end
 function addon.Config:GetTrackedSpells()
     local spells = {}
     
-    -- Get only active spells from profile
-    for spellID, spell in pairs(self.db.spells) do
+    -- Use sync overlay data when in sync mode, otherwise use profile data
+    local sourceData = syncOverlay.active and syncOverlay.spells or self.db.spells
+    
+    -- Get only active spells from source
+    for spellID, spell in pairs(sourceData) do
         if spell.active then
             spells[spellID] = {
                 priority = spell.priority,
@@ -347,7 +361,8 @@ function addon.Config:GetTrackedSpells()
 end
 
 function addon.Config:IsPriorityPlayer(playerName)
-    return self.db.priorityPlayers[playerName] == true
+    local sourceData = syncOverlay.active and syncOverlay.priorityPlayers or self.db.priorityPlayers
+    return sourceData[playerName] == true
 end
 
 function addon.Config:AddPriorityPlayer(playerName)
@@ -358,6 +373,46 @@ end
 function addon.Config:RemovePriorityPlayer(playerName)
     self.db.priorityPlayers[playerName] = nil
     self:FireEvent("PROFILE_DATA_CHANGED", "priorityPlayers", playerName)
+end
+
+-- Party Sync Overlay Management
+function addon.Config:ApplySyncOverlay(syncData)
+    syncOverlay.active = true
+    syncOverlay.spells = syncData.spells
+    syncOverlay.priorityPlayers = syncData.priorityPlayers
+    syncOverlay.customNPCs = syncData.customNPCs
+    
+    -- Refresh rotation system with new data
+    self:RefreshTrackedCooldowns()
+    
+    -- Fire event to notify UI
+    self:FireEvent("SYNC_OVERLAY_APPLIED", syncData)
+end
+
+function addon.Config:RemoveSyncOverlay()
+    syncOverlay.active = false
+    syncOverlay.spells = nil
+    syncOverlay.priorityPlayers = nil
+    syncOverlay.customNPCs = nil
+    
+    -- Refresh rotation system with original data
+    self:RefreshTrackedCooldowns()
+    
+    -- Fire event to notify UI
+    self:FireEvent("SYNC_OVERLAY_REMOVED")
+end
+
+function addon.Config:IsInSyncMode()
+    return syncOverlay.active
+end
+
+function addon.Config:RefreshTrackedCooldowns()
+    if addon.CCRotation then
+        addon.CCRotation.trackedCooldowns = self:GetTrackedSpells()
+        if addon.CCRotation.RebuildQueue then
+            addon.CCRotation:RebuildQueue()
+        end
+    end
 end
 
 -- Normalize CC type to string format (handle both old numeric and new string values)

@@ -177,6 +177,11 @@ function QueueDisplayComponent:new(container, callbacks, dataProvider)
         ["incapacitate"] = true
     }
     
+    -- Register for queue updates from the main rotation system
+    instance:RegisterEventListener("QUEUE_UPDATED", function(queue, unavailableQueue)
+        instance:updateQueueDisplay(queue, unavailableQueue)
+    end)
+    
     return instance
 end
 
@@ -242,83 +247,60 @@ function QueueDisplayComponent:buildUI()
     self.queueGroup:SetLayout("Flow")
     self.container:AddChild(self.queueGroup)
     
-    -- Initial queue display
-    self:refreshQueueDisplay()
+    -- Initial queue display - get current queue from CCRotation
+    if addon.CCRotation then
+        local queue = addon.CCRotation:GetQueue() or {}
+        local unavailableQueue = addon.CCRotation.unavailableQueue or {}
+        self:updateQueueDisplay(queue, unavailableQueue)
+    end
 end
 
-function QueueDisplayComponent:refreshQueueDisplay()
+-- New simpler method that uses the already-calculated queue
+function QueueDisplayComponent:updateQueueDisplay(queue, unavailableQueue)
     if not self.queueGroup then
         return
     end
     
     self.queueGroup:ReleaseChildren()
     
-    if not addon.CCRotation then
-        local noRotationText = self.AceGUI:Create("Label")
-        noRotationText:SetText("Rotation system not initialized.")
-        noRotationText:SetFullWidth(true)
-        self.queueGroup:AddChild(noRotationText)
+    if not queue then
+        local noQueueText = self.AceGUI:Create("Label")
+        noQueueText:SetText("No rotation queue available.")
+        noQueueText:SetFullWidth(true)
+        self.queueGroup:AddChild(noQueueText)
         return
     end
     
-    -- Get the full unfiltered queue by rebuilding it manually
-    local fullQueue = {}
+    -- Use the already-calculated queue from DoRebuildQueue()
+    local filteredQueue = {}
     
-    if addon.CCRotation and addon.CCRotation.GUIDToUnit then
-        -- Use LibOpenRaid to get all cooldowns from all units
-        local lib = LibStub("LibOpenRaid-1.0", true)
-        if lib then
-            local allUnits = lib.GetAllUnitsCooldown()
-            if allUnits then
-                for unit, cds in pairs(allUnits) do
-                    for spellID, info in pairs(cds) do
-                        if addon.CCRotation.trackedCooldowns and addon.CCRotation.trackedCooldowns[spellID] then
-                            local spellInfo = addon.CCRotation.trackedCooldowns[spellID]
-                            local ccType = spellInfo.type -- This contains string values like "stun", "disorient", etc.
-                                                            
-                            -- Apply CC type filter
-                            if not ccType or self.ccTypeFilters[ccType] then
-                                local guid = UnitGUID(unit)
-                                if guid then
-                                    local _, _, timeLeft, charges, _, _, _, duration = lib.GetCooldownStatusFromCooldownInfo(info)
-                                    local currentTime = GetTime()
-                                    
-                                    table.insert(fullQueue, {
-                                        GUID = guid,
-                                        unit = unit,
-                                        spellID = spellID,
-                                        priority = spellInfo.priority,
-                                        expirationTime = timeLeft + currentTime,
-                                        duration = duration,
-                                        charges = charges,
-                                        ccType = ccType
-                                    })
-                                end
-                            end
-                        end
-                    end
-                end
+    -- Apply CC type filters to the calculated queue
+    for _, entry in ipairs(queue) do
+        local spellInfo = addon.CCRotation.trackedCooldowns and addon.CCRotation.trackedCooldowns[entry.spellID]
+        local ccType = spellInfo and spellInfo.type
+        
+        -- Apply CC type filter
+        if not ccType or self.ccTypeFilters[ccType] then
+            table.insert(filteredQueue, entry)
+        end
+    end
+    
+    -- Also check unavailable queue if it exists
+    if unavailableQueue then
+        for _, entry in ipairs(unavailableQueue) do
+            local spellInfo = addon.CCRotation.trackedCooldowns and addon.CCRotation.trackedCooldowns[entry.spellID]
+            local ccType = spellInfo and spellInfo.type
+            
+            -- Apply CC type filter
+            if not ccType or self.ccTypeFilters[ccType] then
+                table.insert(filteredQueue, entry)
             end
         end
     end
     
-    -- Sort queue by priority and availability
-    table.sort(fullQueue, function(a, b)
-        local aReady = (a.expirationTime <= GetTime())
-        local bReady = (b.expirationTime <= GetTime())
-        
-        if aReady and not bReady then
-            return true
-        elseif not aReady and bReady then
-            return false
-        else
-            return a.priority < b.priority
-        end
-    end)
-    
-    if #fullQueue == 0 then
+    if #filteredQueue == 0 then
         local noQueueText = self.AceGUI:Create("Label")
-        noQueueText:SetText("No spells in rotation queue.")
+        noQueueText:SetText("No spells match current filters.")
         noQueueText:SetFullWidth(true)
         self.queueGroup:AddChild(noQueueText)
     else
@@ -329,7 +311,7 @@ function QueueDisplayComponent:refreshQueueDisplay()
         self.queueGroup:AddChild(iconRow)
         
         -- Display spell icons in a row
-        for i, entry in ipairs(fullQueue) do
+        for i, entry in ipairs(filteredQueue) do
             local spellIcon = self.AceGUI:Create("Icon")
             spellIcon:SetWidth(32)
             spellIcon:SetHeight(32)
@@ -345,6 +327,15 @@ function QueueDisplayComponent:refreshQueueDisplay()
             
             iconRow:AddChild(spellIcon)
         end
+    end
+end
+
+-- Compatibility method for existing code
+function QueueDisplayComponent:refreshQueueDisplay()
+    if addon.CCRotation then
+        local queue = addon.CCRotation:GetQueue() or {}
+        local unavailableQueue = addon.CCRotation.unavailableQueue or {}
+        self:updateQueueDisplay(queue, unavailableQueue)
     end
 end
 

@@ -178,7 +178,7 @@ function CCRotation:UpdateSpellCooldown(unit, spellID, cooldownInfo)
     
     local _, _, timeLeft, charges, _, _, _, duration = lib.GetCooldownStatusFromCooldownInfo(cooldownInfo)
     local currentTime = GetTime()
-    
+
     -- Create unique key for this spell/player combination
     local key = GUID .. ":" .. spellID
     
@@ -221,8 +221,10 @@ function CCRotation:RebuildQueue()
     end)
 end
 
--- Actual queue rebuild implementation
+-- Consolidated queue rebuild implementation
 function CCRotation:DoRebuildQueue()
+    -- === STEP 1: Gather Data ===
+    
     -- Store old GUID mapping to detect group changes
     local oldGUIDToUnit = {}
     for guid, unit in pairs(self.GUIDToUnit) do
@@ -234,15 +236,12 @@ function CCRotation:DoRebuildQueue()
     
     -- Check if group composition changed
     local groupChanged = false
-    
-    -- Check for added/removed players
     for guid, unit in pairs(self.GUIDToUnit) do
         if not oldGUIDToUnit[guid] then
             groupChanged = true
             break
         end
     end
-    
     if not groupChanged then
         for guid, unit in pairs(oldGUIDToUnit) do
             if not self.GUIDToUnit[guid] then
@@ -252,60 +251,44 @@ function CCRotation:DoRebuildQueue()
         end
     end
     
-    -- Track if any cooldowns actually changed
+    -- Update cooldown data
     local hasChanges = false
     
     -- Update individual spell cooldowns without affecting others
-    if lib then
-        local allUnits = lib.GetAllUnitsCooldown()
-        if allUnits then
-            for unit, cds in pairs(allUnits) do
-                for spellID, info in pairs(cds) do
-                    if self.trackedCooldowns[spellID] then
-                        if self:UpdateSpellCooldown(unit, spellID, info) then
-                            hasChanges = true
-                        end
+    local allUnits = lib.GetAllUnitsCooldown()
+    if allUnits then
+        for unit, cds in pairs(allUnits) do
+            for spellID, info in pairs(cds) do
+                if self.trackedCooldowns[spellID] then
+                    if self:UpdateSpellCooldown(unit, spellID, info) then
+                        hasChanges = true
                     end
                 end
             end
         end
     end
-    
-    -- Clean up stale cooldown data if group composition changed
+
+    -- Clean up stale data if group changed
     if groupChanged then
         self:CleanupStaleSpellCooldowns()
     end
     
-    -- Recalculate if there were cooldown changes OR group composition changed
-    if hasChanges or groupChanged then
-        self:RecalculateQueue()
+    -- Only proceed if there were changes
+    if not (hasChanges or groupChanged) then
+        return
     end
-end
-
--- Clean up spell cooldown data for players no longer in group
-function CCRotation:CleanupStaleSpellCooldowns()
-    for key, spellData in pairs(self.spellCooldowns) do
-        local guid = spellData.GUID
-        if not self.GUIDToUnit[guid] then
-            -- This GUID is no longer in our group, remove its cooldown data
-            self.spellCooldowns[key] = nil
-        end
-    end
-end
-
--- Recalculate queue order from individual spell cooldowns
-function CCRotation:RecalculateQueue()
-    self.cooldownQueue = {}
+    
+    -- === STEP 2: Transform Data ===
     
     -- Convert spell cooldowns to queue format
+    self.cooldownQueue = {}
     for key, spellData in pairs(self.spellCooldowns) do
         table.insert(self.cooldownQueue, spellData)
     end
     
-    -- Determine if we have any known NPCs and handle filtering/effectiveness
+    -- Filter by NPC effectiveness
     local hasKnownNPCs = false
     local hasUnknownNPCs = false
-    
     for npcID in pairs(self.activeNPCs) do
         local effectiveness = addon.Config:GetNPCEffectiveness(npcID)
         if effectiveness then
@@ -315,7 +298,6 @@ function CCRotation:RecalculateQueue()
         end
     end
     
-    -- Filter by active NPCs if we have known NPCs (standard behavior)
     if hasKnownNPCs then
         local filtered = {}
         for _, cd in ipairs(self.cooldownQueue) do
@@ -350,21 +332,8 @@ function CCRotation:RecalculateQueue()
         end
     end
     
-    -- Sort and separate queues
-    self:SortAndSeparateQueues()
+    -- === STEP 3: Sort and Separate ===
     
-    -- Fire event if queue actually changed (UI will listen for this event)
-    if self:HasQueueChanged() then
-        self:FireEvent("QUEUE_UPDATED", self.cooldownQueue, self.unavailableQueue)
-        
-        -- Check if secondary queue should be shown (first ability on cooldown)
-        local shouldShowSecondary = self:ShouldShowSecondaryQueue()
-        self:FireEvent("SECONDARY_QUEUE_STATE_CHANGED", shouldShowSecondary)
-    end
-end
-
--- Sort the cooldown queue and separate available from unavailable
-function CCRotation:SortAndSeparateQueues()
     local now = GetTime()
     local availableQueue = {}
     local unavailableQueue = {}
@@ -393,8 +362,8 @@ function CCRotation:SortAndSeparateQueues()
         end
     end
     
-    -- Sort available queue
-    table.sort(availableQueue, function(a, b)
+    -- Sort both queues using shared sorting logic
+    local function sortQueue(a, b)
         local unitA, unitB = self.GUIDToUnit[a.GUID], self.GUIDToUnit[b.GUID]
         if not (unitA and unitB) then return false end
         
@@ -419,41 +388,38 @@ function CCRotation:SortAndSeparateQueues()
         else
             return a.expirationTime < b.expirationTime
         end
-    end)
+    end
     
-    -- Sort unavailable queue by what their priority WOULD be if available
-    table.sort(unavailableQueue, function(a, b)
-        local unitA, unitB = self.GUIDToUnit[a.GUID], self.GUIDToUnit[b.GUID]
-        if not (unitA and unitB) then return false end
-        
-        local nameA, nameB = UnitName(unitA), UnitName(unitB)
-        local isPriorityA = addon.Config:IsPriorityPlayer(nameA)
-        local isPriorityB = addon.Config:IsPriorityPlayer(nameB)
-        
-        local readyA = a.charges > 0 or a.expirationTime <= now
-        local readyB = b.charges > 0 or b.expirationTime <= now
-        
-        -- Same sorting as available queue to show proper priority
-        if readyA ~= readyB then return readyA end
-        if readyA and readyB and (isPriorityA ~= isPriorityB) then
-            return isPriorityA
-        end
-        if readyA then
-            return a.priority < b.priority
-        else
-            return a.expirationTime < b.expirationTime
-        end
-    end)
+    table.sort(availableQueue, sortQueue)
+    table.sort(unavailableQueue, sortQueue)
     
     -- Update the main queue and store unavailable queue
     self.cooldownQueue = availableQueue
     self.unavailableQueue = unavailableQueue
     
-    -- Check for pug announcements
-    self:CheckPugAnnouncement()
+    -- === STEP 4: Check Changes and Fire Events ===
     
-    -- Check if player is next in queue and fire event for sound notification
+    self:FireEvent("QUEUE_UPDATED", self.cooldownQueue, self.unavailableQueue)
+
+    -- Check if secondary queue should be shown (first ability on cooldown)
+    local shouldShowSecondary = self:ShouldShowSecondaryQueue()
+    self:FireEvent("SECONDARY_QUEUE_STATE_CHANGED", shouldShowSecondary)
+
+    -- === STEP 5: Handle Side Effects ===
+    
+--     self:CheckPugAnnouncement()
     self:CheckPlayerTurnStatus()
+end
+
+-- Clean up spell cooldown data for players no longer in group
+function CCRotation:CleanupStaleSpellCooldowns()
+    for key, spellData in pairs(self.spellCooldowns) do
+        local guid = spellData.GUID
+        if not self.GUIDToUnit[guid] then
+            -- This GUID is no longer in our group, remove its cooldown data
+            self.spellCooldowns[key] = nil
+        end
+    end
 end
 
 -- Check if player is next in queue and fire notification event
