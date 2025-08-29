@@ -145,6 +145,10 @@ local defaults = {
         -- Anchor settings
         anchorLocked = false,
         
+        -- Frame position settings (for persistence)
+        frameTop = nil,
+        frameLeft = nil,
+        
         -- Core addon settings
         enabled = true,
         showInSolo = false,

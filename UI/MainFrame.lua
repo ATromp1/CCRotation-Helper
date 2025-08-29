@@ -12,7 +12,7 @@ function UI:Initialize()
         addon.Config:DebugPrint("Initialize called but mainFrame already exists")
         return 
     end
-    
+
     -- Prevent recursive initialization during sync events
     if self.initializing then
         addon.Config:DebugPrint("Already initializing, skipping")
@@ -69,7 +69,7 @@ function UI:Initialize()
     addon.Config:DebugPrint("UI initialization complete")
 end
 
--- Create main frame - simplified approach
+-- Create main frame - simple approach
 function UI:createMainFrame()
     -- Clean up existing frame
     if _G["CCRotationMainFrame"] then
@@ -80,6 +80,9 @@ function UI:createMainFrame()
     -- Create frame directly
     self.mainFrame = CreateFrame("Frame", "CCRotationMainFrame", UIParent)
     self.mainFrame:SetSize(200, 64)
+    
+    -- Restore position from config or use default
+    self:restoreFramePosition()
     
     -- Create container
     self.mainFrame.container = CreateFrame("Frame", nil, self.mainFrame)
@@ -95,6 +98,10 @@ function UI:setupMainFrame()
     local config = addon.Config
     
     frame:SetSize(200, 64)
+    
+    -- Make frame movable (required for SetUserPlaced)
+    frame:SetMovable(true)
+    frame:SetClampedToScreen(true)
 
     -- Enable mouse if frame is unlocked OR tooltips are enabled
     frame:EnableMouse(not config:Get("anchorLocked") or config:Get("showTooltips"))
@@ -110,6 +117,10 @@ function UI:setupMainFrame()
     frame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         self:SetUserPlaced(true)
+        -- Save position to config after drag
+        if addon and addon.UI then
+            addon.UI:saveFramePosition()
+        end
     end)
 
     -- Create unavailable queue container
@@ -653,7 +664,7 @@ end
 -- Update UI when configuration changes (called after profile switch)
 function UI:UpdateFromConfig()
     addon.Config:DebugPrint("UpdateFromConfig started")
-    
+
     -- Validate frame state first
     if not self:validateFrameState() then
         addon.Config:DebugPrint("Failed to validate/recover frame state")
@@ -702,8 +713,46 @@ function UI:UpdateFromConfig()
     
     -- Debug output
     local config = addon.Config
-    config:DebugPrint("Profile switch complete - Position: Handled by SetUserPlaced" .. 
+    config:DebugPrint("Profile switch complete - Position: Saved in config" .. 
           " | Enabled: " .. tostring(config:Get("enabled")) .. 
           " | MaxIcons: " .. config:Get("maxIcons") .. 
           " | Visible: " .. tostring(self.mainFrame:IsShown()))
+end
+
+-- Save current frame position to config (using AceGUI approach)
+function UI:saveFramePosition()
+    if not self.mainFrame then 
+        return 
+    end
+    
+    -- Use AceGUI's approach: GetTop() and GetLeft()
+    local top = self.mainFrame:GetTop()
+    local left = self.mainFrame:GetLeft()
+    
+    if top and left then
+        local config = addon.Config
+        config:Set("frameTop", top)
+        config:Set("frameLeft", left)
+    end
+end
+
+-- Restore frame position from config (using AceGUI approach)
+function UI:restoreFramePosition()
+    if not self.mainFrame then return end
+    
+    local config = addon.Config
+    local savedTop = config:Get("frameTop")
+    local savedLeft = config:Get("frameLeft")
+    
+    if savedTop and savedLeft then
+        -- Restore saved position using AceGUI's method
+        self.mainFrame:ClearAllPoints()
+        self.mainFrame:SetPoint("TOP", UIParent, "BOTTOM", 0, savedTop)
+        self.mainFrame:SetPoint("LEFT", UIParent, "LEFT", savedLeft, 0)
+        config:DebugPrint("Frame position restored:", savedTop, savedLeft)
+    else
+        -- Use default position
+        self.mainFrame:SetPoint("CENTER", UIParent, "CENTER", 354, 134)
+        config:DebugPrint("Frame position set to default")
+    end
 end

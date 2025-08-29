@@ -26,11 +26,15 @@ function addon.CoreCommands:toggle()
 end
 
 function addon.CoreCommands:reset()
-    -- Reset position to default and clear WoW's saved position
+    -- Reset position to default and clear saved position
     if addon.UI and addon.UI.mainFrame then
+        -- Clear saved position from config
+        addon.Config:Set("frameTop", nil)
+        addon.Config:Set("frameLeft", nil)
+        
+        -- Reset frame position
         addon.UI.mainFrame:ClearAllPoints()
         addon.UI.mainFrame:SetPoint("CENTER", UIParent, "CENTER", 354, 134)
-        -- Clear WoW's saved position so it uses our default
         addon.UI.mainFrame:SetUserPlaced(false)
         print("|cff00ff00CC Rotation Helper|r: Position reset to default")
     else

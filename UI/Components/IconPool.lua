@@ -206,6 +206,10 @@ function IconPool:setupMainIconEvents(icon)
         if mainFrame then
             mainFrame:StopMovingOrSizing()
             mainFrame:SetUserPlaced(true)
+            -- Save position after icon drag
+            if addon and addon.UI and addon.UI.saveFramePosition then
+                addon.UI:saveFramePosition()
+            end
         end
     end)
 end
@@ -279,6 +283,10 @@ function IconPool:setupUnavailableIconEvents(icon)
             if mainFrame then
                 mainFrame:StopMovingOrSizing()
                 mainFrame:SetUserPlaced(true)
+                -- Save position after icon drag
+                if addon and addon.UI and addon.UI.saveFramePosition then
+                    addon.UI:saveFramePosition()
+                end
             end
         end
     end)
