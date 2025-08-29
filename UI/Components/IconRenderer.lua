@@ -218,24 +218,15 @@ function IconRenderer:updateIconDisplay(icon, iconIndex, cooldownData, needsUpda
         icon.cooldownEndTime = nil
     end
     
-    -- Calculate if spell is ready (not on cooldown)
-    local isReady = true
-    if cooldownData.expirationTime and cooldownData.expirationTime > now then
-        isReady = false
-    elseif cooldownData.charges and cooldownData.charges == 0 then
-        isReady = false
-    end
-    
-    -- Desaturate only when spell is on cooldown
-    local shouldDesaturate = not isReady
-    
-    
+    -- Always update effectiveness state - desaturate if not effective OR (optionally) no enabled NPCs
+    local hasActiveEnabledNPCs = addon.CCRotation and addon.CCRotation:HasActiveEnabledNPCs() or false
+    local shouldDesaturateForNPCs = config:Get("desaturateWhenNoTrackedNPCs") and not hasActiveEnabledNPCs
+    local shouldDesaturate = not cooldownData.isEffective or shouldDesaturateForNPCs
     icon.displayTexture:SetDesaturated(shouldDesaturate)
     
     -- Set spell name (only on first icon, using global setting)
     if iconIndex == 1 and config:Get("showSpellName") then
-        -- Prioritize live spell name over database name to handle talent modifications like Gravity Lapse
-        local spellName = icon.spellInfo.name or (icon.spellConfig and icon.spellConfig.name)
+        local spellName = (icon.spellConfig and icon.spellConfig.name) or icon.spellInfo.name
         local truncatedName = self:truncateText(spellName, config:Get("spellNameMaxLength"))
         icon.spellName:SetText(truncatedName)
         config:SetFontProperties(icon.spellName, config:Get("spellNameFont"), config:Get("spellNameFontSize"))
@@ -382,17 +373,15 @@ end
 
 -- Update individual icon cooldown
 function IconRenderer:updateIconCooldown(icon, cooldownData, now, config, isUnavailable)
-    
     local charges = cooldownData.charges or 0
-    local isReady = (charges > 0) and (cooldownData.expirationTime <= now)
+    local isReady = charges > 0 or cooldownData.expirationTime <= now
     
     if isReady then
         -- Don't clear if cooldown animation is still running - let it finish naturally
         if icon.cooldown:IsShown() and (cooldownData.expirationTime - now) > -0.5 then
             if config:Get("showCooldownText") and not isUnavailable then
                 local timeLeft = math.max(0, cooldownData.expirationTime - now)
-                local formattedText = timeLeft > 0 and self:formatTime(timeLeft) or ""
-                icon.cooldownText:SetText(formattedText)
+                icon.cooldownText:SetText(timeLeft > 0 and self:formatTime(timeLeft) or "")
             else
                 icon.cooldownText:SetText("")
             end
@@ -414,8 +403,7 @@ function IconRenderer:updateIconCooldown(icon, cooldownData, now, config, isUnav
         end
         if config:Get("showCooldownText") and not isUnavailable then
             local timeLeft = cooldownData.expirationTime - now
-            local formattedText = self:formatTime(timeLeft)
-            icon.cooldownText:SetText(formattedText)
+            icon.cooldownText:SetText(self:formatTime(timeLeft))
         else
             icon.cooldownText:SetText("")
         end
@@ -450,7 +438,12 @@ function IconRenderer:updateStatusIndicators(icon, cooldownData, now)
         icon.rangeIndicator:Hide()
     end
     
-    -- Desaturation is handled in updateIconDisplay, don't override it here
+    -- Desaturate icon if any status indicator is shown OR if not effective OR on cooldown OR (optionally) no fighting NPCs
+    local isOnCooldown = (cooldownData.charges or 0) == 0 or (cooldownData.expirationTime and cooldownData.expirationTime > now)
+    local hasActiveEnabledNPCs = addon.CCRotation and addon.CCRotation:HasActiveEnabledNPCs() or false
+    local shouldDesaturateForNPCs = self.dataManager.config:get("desaturateWhenNoTrackedNPCs") and not hasActiveEnabledNPCs
+    local shouldDesaturate = hasStatusIndicator or (not cooldownData.isEffective) or isOnCooldown or shouldDesaturateForNPCs
+    icon.displayTexture:SetDesaturated(shouldDesaturate)
 end
 
 -- Truncate text to max length

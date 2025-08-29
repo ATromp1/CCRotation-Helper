@@ -101,10 +101,19 @@ end
 
 -- Check if glow should be active for an icon
 function GlowManager:shouldGlow(iconIndex, unit, config, cooldownData)
+    -- Check if there are any active enabled NPCs using centralized logic
+    local hasActiveEnabledNPCs = addon.CCRotation and addon.CCRotation:HasActiveEnabledNPCs() or false
+    
+    -- Check if we should require fighting NPCs for glow
+    local shouldRequireFightingNPCs = config:Get("desaturateWhenNoTrackedNPCs")
+    local npcRequirementMet = not shouldRequireFightingNPCs or hasActiveEnabledNPCs
+    
     return iconIndex == 1 and 
            config:Get("highlightNext") and 
            UnitIsUnit(unit, "player") and
-           (not config:Get("glowOnlyInCombat") or InCombatLockdown())
+           (not config:Get("glowOnlyInCombat") or InCombatLockdown()) and
+           (cooldownData and cooldownData.isEffective) and
+           npcRequirementMet
 end
 
 -- Register component

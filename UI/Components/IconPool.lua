@@ -102,20 +102,6 @@ function IconPool:createMainIcon()
     -- Hide countdown numbers from cooldown frame
     icon.cooldown:SetHideCountdownNumbers(true)
     
-    -- Create a separate frame for cooldown text that's definitely above everything
-    icon.cooldownTextFrame = CreateFrame("Frame", nil, icon)
-    icon.cooldownTextFrame:SetAllPoints(icon)
-    icon.cooldownTextFrame:SetFrameLevel(icon:GetFrameLevel() + 10) -- Way above everything
-    
-    -- Ensure the cooldown text frame is visible
-    icon.cooldownTextFrame:Show()
-    
-    -- Move the cooldown text to this new frame
-    icon.cooldownText:SetParent(icon.cooldownTextFrame)
-    icon.cooldownText:ClearAllPoints()
-    icon.cooldownText:SetPoint("CENTER", icon.cooldownTextFrame, "CENTER")
-    icon.cooldownText:Show()
-    
     -- Initialize glow system via GlowManager
     if addon.Components and addon.Components.GlowManager then
         local glowManager = addon.Components.GlowManager:new()

@@ -185,7 +185,7 @@ function UI:updateCooldownText()
         if icon.queueData and icon:IsShown() then
             local cooldownData = icon.queueData
             local charges = cooldownData.charges or 0
-            local isReady = (charges > 0) and (cooldownData.expirationTime <= now)
+            local isReady = charges > 0 or cooldownData.expirationTime <= now
             
             if isReady then
                 icon.cooldownText:SetText("")
@@ -228,9 +228,7 @@ end
 
 -- Update display with current queue (main function)
 function UI:UpdateDisplay(queue, unavailableQueue)
-    if not self.mainFrame or not self.mainFrame.container then 
-        return
-    end
+    if not self.mainFrame or not self.mainFrame.container then return end
     
     if not queue then
         return
@@ -238,30 +236,6 @@ function UI:UpdateDisplay(queue, unavailableQueue)
     
     local now = GetTime()
     
-    -- Debug: Show what spells are being sent to iconRenderer
-    local maxIcons = addon.Config:Get("maxIcons")
-    local spellsToShow = self._debugTable or {}
-    if not self._debugTable then
-        self._debugTable = spellsToShow
-    else
-        wipe(spellsToShow)
-    end
-    for i, spell in ipairs(queue) do
-        if i <= maxIcons then
-            local remaining = spell.expirationTime - now
-            local isReady = (spell.charges > 0) and (spell.expirationTime <= now)
-            local spellInfo = addon.Database.defaultSpells[spell.spellID]
-            local spellName = spellInfo and spellInfo.name or ("Spell_" .. spell.spellID)
-            local playerName = (addon.CooldownTracker.groupInfo[spell.GUID] and addon.CooldownTracker.groupInfo[spell.GUID].name) or "Unknown"
-            table.insert(spellsToShow, string.format("%s(%d):%s:%.1fs", spellName, spell.spellID, playerName, remaining))
-        end
-    end
-    if #spellsToShow > 0 then
-        addon.DebugSystem.Print("UpdateDisplay - Showing " .. #spellsToShow .. "/" .. #queue .. " spells (maxIcons=" .. maxIcons .. "): " .. table.concat(spellsToShow, ", "), "MainFrame")
-    else
-        addon.DebugSystem.Print("UpdateDisplay - No spells to show from queue of " .. #queue .. " (maxIcons=" .. maxIcons .. ")", "MainFrame")
-    end
-
     -- Use component-based rendering (this should be safe during combat)
     self.iconRenderer:updateMainIcons(queue, now, self.mainFrame)
     self.iconRenderer:updateUnavailableIcons(unavailableQueue or {}, now, self.mainFrame)

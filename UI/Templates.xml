@@ -59,7 +59,7 @@
 			
 			<!-- Overlay elements -->
 			<Layer level="OVERLAY" textureSubLevel="3">
-				<!-- Cooldown text (center) - moved to highest sublevel -->
+				<!-- Cooldown text (center) -->
 				<FontString name="$parentCooldownText" parentKey="cooldownText" inherits="GameFontNormalLarge" justifyH="CENTER">
 					<Anchors>
 						<Anchor point="CENTER"/>

@@ -23,9 +23,6 @@ function NPCsTab.create(container)
     helpText:SetFullWidth(true)
     scroll:AddChild(helpText)
     
-    -- Initialize data provider
-    local dataProvider = addon.Components.DataManager
-    
     -- Current location and filtering using CurrentLocationComponent
     local currentLocationGroup = addon.BaseComponent:createInlineGroup("Current Location", scroll)
     
