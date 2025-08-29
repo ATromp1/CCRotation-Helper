@@ -9,24 +9,13 @@ local LSM = LibStub("LibSharedMedia-3.0")
 
 addon.Config = {}
 
--- Event system for decoupled communication
-addon.Config.eventListeners = {}
-
--- Register event listener
+-- Use unified event system instead of local one
 function addon.Config:RegisterEventListener(event, callback)
-    if not self.eventListeners[event] then
-        self.eventListeners[event] = {}
-    end
-    table.insert(self.eventListeners[event], callback)
+    addon.EventSystem:RegisterEventListener(event, callback)
 end
 
--- Fire event to all listeners
 function addon.Config:FireEvent(event, ...)
-    if self.eventListeners[event] then
-        for _, callback in ipairs(self.eventListeners[event]) do
-            callback(...)
-        end
-    end
+    addon.EventSystem:FireEvent(event, ...)
 end
 
 -- Font utility function using LibSharedMedia
@@ -548,9 +537,9 @@ function addon.Config:GetPartySyncStatus()
     }
 end
 
--- Debug utility function
+-- Debug utility function - centralized to debug frame only
 function addon.Config:DebugPrint(...)
-    if self:Get("debugMode") then
-        print("|cff00ff00CC Rotation Helper [DEBUG]:|r", ...)
+    if self:Get("debugMode") and addon.DebugFrame then
+        addon.DebugFrame:Print("General", "DEBUG", ...)
     end
 end

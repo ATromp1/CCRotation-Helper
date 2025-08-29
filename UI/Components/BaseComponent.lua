@@ -84,7 +84,7 @@ function BaseComponent:RegisterEventListener(eventName, callback)
         callback(self, ...)
     end
     
-    addon.Config:RegisterEventListener(eventName, wrappedCallback)
+    addon.EventSystem:RegisterEventListener(eventName, wrappedCallback)
     table.insert(self.eventListeners[eventName], wrappedCallback)
 end
 
@@ -93,8 +93,7 @@ function BaseComponent:Cleanup()
     if self.eventListeners then
         for eventName, callbacks in pairs(self.eventListeners) do
             for _, callback in ipairs(callbacks) do
-                -- Note: We'd need to add UnregisterEventListener to Config
-                -- addon.Config:UnregisterEventListener(eventName, callback)
+                addon.EventSystem:UnregisterEventListener(eventName, callback)
             end
         end
         self.eventListeners = {}

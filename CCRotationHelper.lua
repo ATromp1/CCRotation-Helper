@@ -152,10 +152,8 @@ SlashCmdList["CCROTATION"] = function(msg)
     elseif command == "party" then
         -- Debug party information in party sync frame
         local function DebugPrint(...)
-            if addon.DebugFrame and addon.DebugFrame.Print then
+            if addon.DebugFrame then
                 addon.DebugFrame:Print("PartySync", "DEBUG", ...)
-            else
-                print(...)
             end
         end
         

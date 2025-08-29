@@ -7,24 +7,13 @@ local CCRotation = addon.CCRotation
 -- LibOpenRaid reference
 local lib = LibStub("LibOpenRaid-1.0", true)
 
--- Event system for decoupled communication
-CCRotation.eventListeners = {}
-
--- Register event listener
+-- Use unified event system instead of local one
 function CCRotation:RegisterEventListener(event, callback)
-    if not self.eventListeners[event] then
-        self.eventListeners[event] = {}
-    end
-    table.insert(self.eventListeners[event], callback)
+    addon.EventSystem:RegisterEventListener(event, callback)
 end
 
--- Fire event to all listeners
 function CCRotation:FireEvent(event, ...)
-    if self.eventListeners[event] then
-        for _, callback in ipairs(self.eventListeners[event]) do
-            callback(...)
-        end
-    end
+    addon.EventSystem:FireEvent(event, ...)
 end
 
 -- Initialize core variables
