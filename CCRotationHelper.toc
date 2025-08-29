@@ -28,6 +28,10 @@ Core\RotationCore.lua
 Core\SoundManager.lua
 Core\DebugFrame.lua
 Core\PartySync.lua
+Core\Commands\CoreCommands.lua
+Core\Commands\DebugCommands.lua
+Core\Commands\ProfileCommands.lua
+Core\Commands\PartySyncCommands.lua
 
 # UI files  
 UI\Templates.xml
