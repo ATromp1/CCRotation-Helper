@@ -231,25 +231,53 @@ end
 function DataManager.spells:moveSpellPriority(spellID, direction)
     local directionStr = tostring(direction)
     
-    if not addon.Config.db.spells[spellID] or not addon.Config.db.spells[spellID].active then
+    if not addon.Config.db.spells[spellID] then
         return
     end
     
-    -- Get all active spells sorted by priority
-    local activeSpells = {}
-    for id, spell in pairs(addon.Config.db.spells) do
-        if spell.active then
-            table.insert(activeSpells, {spellID = id, priority = spell.priority, name = spell.name})
-        end
+    -- DEBUG: Log initial state
+    if addon.DebugFrame then
+        addon.DebugFrame:Print("General", "SPELL", "=== MOVE SPELL DEBUG ===")
+        addon.DebugFrame:Print("General", "SPELL", string.format("Moving spell %s %s", spellID, directionStr))
     end
     
-    table.sort(activeSpells, function(a, b)
+    -- Get ALL spells (active and inactive) sorted by priority
+    local allSpells = {}
+    for id, spell in pairs(addon.Config.db.spells) do
+        table.insert(allSpells, {spellID = id, priority = spell.priority, name = spell.name, active = spell.active})
+    end
+    
+    table.sort(allSpells, function(a, b)
         return a.priority < b.priority
     end)
     
+    -- Check for duplicate priorities and fix them if found
+    local hasDuplicates = false
+    for i = 1, #allSpells - 1 do
+        if allSpells[i].priority == allSpells[i + 1].priority then
+            hasDuplicates = true
+            break
+        end
+    end
+    
+    if hasDuplicates then
+        if addon.DebugFrame then
+            addon.DebugFrame:Print("General", "SPELL", "FOUND DUPLICATE PRIORITIES - Auto-fixing...")
+        end
+        -- Renumber all spells sequentially
+        for i, spell in ipairs(allSpells) do
+            addon.Config.db.spells[spell.spellID].priority = i
+            spell.priority = i -- Update local copy too
+        end
+    end
+    
+    if addon.DebugFrame then
+        addon.DebugFrame:Print("General", "SPELL", string.format("Found %d total spells, sorted by priority%s", #allSpells, hasDuplicates and " (fixed duplicates)" or ""))
+    end
+    
     -- Find current position in sorted list
     local currentIndex = nil
-    for i, spell in ipairs(activeSpells) do
+    for i, spell in ipairs(allSpells) do
         if spell.spellID == spellID then
             currentIndex = i
             break
@@ -257,55 +285,77 @@ function DataManager.spells:moveSpellPriority(spellID, direction)
     end
     
     if not currentIndex then
+        if addon.DebugFrame then
+            addon.DebugFrame:Print("General", "SPELL", "ERROR: Spell not found in list!")
+        end
         return
+    end
+    
+    if addon.DebugFrame then
+        addon.DebugFrame:Print("General", "SPELL", "Current spell is at index", currentIndex)
     end
     
     -- Calculate new position  
     local moveOffset = (directionStr == "up" and -1 or 1)
     local newIndex = currentIndex + moveOffset
     
+    if addon.DebugFrame then
+        addon.DebugFrame:Print("General", "SPELL", "Target index:", newIndex)
+    end
+    
     -- Check bounds
-    if newIndex < 1 or newIndex > #activeSpells then
+    if newIndex < 1 or newIndex > #allSpells then
+        if addon.DebugFrame then
+            addon.DebugFrame:Print("General", "SPELL", "ERROR: Move out of bounds!")
+        end
         return -- Can't move beyond bounds
     end
     
-    -- Swap positions in the array
-    local temp = activeSpells[currentIndex]
-    activeSpells[currentIndex] = activeSpells[newIndex]
-    activeSpells[newIndex] = temp
+    -- Swap priorities with the target spell (simple swap, preserves all other spells)
+    local currentSpell = allSpells[currentIndex]
+    local targetSpell = allSpells[newIndex]
     
-    -- Reassign priorities based on new order
-    for i, spell in ipairs(activeSpells) do
-        addon.Config.db.spells[spell.spellID].priority = i
+    if addon.DebugFrame then
+        addon.DebugFrame:Print("General", "SPELL", string.format("Swapping %s (priority %d) with %s (priority %d)", 
+            currentSpell.spellID, currentSpell.priority,
+            targetSpell.spellID, targetSpell.priority))
+    end
+    
+    -- Swap only the priorities of these two spells
+    addon.Config.db.spells[currentSpell.spellID].priority = targetSpell.priority
+    addon.Config.db.spells[targetSpell.spellID].priority = currentSpell.priority
+    
+    if addon.DebugFrame then
+        addon.DebugFrame:Print("General", "SPELL", string.format("Result: %s now has priority %d, %s now has priority %d", 
+            currentSpell.spellID, targetSpell.priority,
+            targetSpell.spellID, currentSpell.priority))
+        addon.DebugFrame:Print("General", "SPELL", "=== END DEBUG ===")
     end
     
     self:updateRotationSystem()
     addon.Config:FireEvent("PROFILE_DATA_CHANGED", "spells")
 end
 
--- Renumber spell priorities to eliminate gaps
+-- Renumber ALL spell priorities to eliminate gaps and duplicates
 function DataManager.spells:renumberSpellPriorities()
-    -- Get all active spells
-    local allSpells = self:getActiveSpells()
-    
-    -- Sort spells by current priority
-    local sortedSpells = {}
-    for spellID, data in pairs(allSpells) do
-        table.insert(sortedSpells, {spellID = spellID, data = data})
+    -- Get ALL spells (active and inactive)
+    local allSpells = {}
+    for spellID, spell in pairs(addon.Config.db.spells) do
+        table.insert(allSpells, {spellID = spellID, priority = spell.priority, name = spell.name, active = spell.active})
     end
     
-    table.sort(sortedSpells, function(a, b)
-        return a.data.priority < b.data.priority
+    -- Sort by current priority
+    table.sort(allSpells, function(a, b)
+        return a.priority < b.priority
     end)
     
-    -- Reassign priorities starting from 1
-    for i, spell in ipairs(sortedSpells) do
-        local newPriority = i
-        
-        -- Update the priority in unified table
-        if addon.Config.db.spells[spell.spellID] then
-            addon.Config.db.spells[spell.spellID].priority = newPriority
-        end
+    -- Reassign priorities starting from 1 (eliminates gaps AND duplicates)
+    for i, spell in ipairs(allSpells) do
+        addon.Config.db.spells[spell.spellID].priority = i
+    end
+    
+    if addon.DebugFrame then
+        addon.DebugFrame:Print("General", "SPELL", string.format("Renumbered %d spells to eliminate gaps and duplicates", #allSpells))
     end
     
     -- Immediately update tracked cooldowns cache and rebuild queue
