@@ -38,13 +38,13 @@ function IconSettings:buildUI()
     -- Max icons slider with special handling for dynamic controls
     local maxIconsSlider = AceGUI:Create("Slider")
     maxIconsSlider:SetLabel("Max Icons")
-    maxIconsSlider:SetSliderValues(1, 5, 1)
+    maxIconsSlider:SetSliderValues(1, 3, 1)
     maxIconsSlider:SetValue(self.dataProvider.config:get("maxIcons") or 2)
     maxIconsSlider:SetFullWidth(true)
     self.container:AddChild(maxIconsSlider)
     
     -- Individual icon size controls (create AceGUI widgets directly for show/hide)
-    for i = 1, 5 do
+    for i = 1, 3 do
         local iconSlider = self.AceGUI:Create("Slider")
         iconSlider:SetLabel("Icon " .. i .. " Size")
         iconSlider:SetSliderValues(16, 128, 1)
@@ -61,12 +61,21 @@ function IconSettings:buildUI()
         end)
         
         iconSlider:SetFullWidth(true)
+        
+        -- Check if this control should be hidden before adding to container
+        local maxIcons = self.dataProvider.config:get("maxIcons") or 2
+        local shouldHide = i > maxIcons
+        
         self.container:AddChild(iconSlider)
         self.iconSizeWidgets[i] = iconSlider
         
-        -- Initially hide controls beyond maxIcons
-        if i > self.dataProvider.config:get("maxIcons") then
-            iconSlider.frame:Hide()
+        -- Hide controls beyond maxIcons after UI renders
+        if shouldHide then
+            C_Timer.After(0.01, function()
+                if iconSlider.frame then
+                    iconSlider.frame:Hide()
+                end
+            end)
         end
     end
     
@@ -75,7 +84,7 @@ function IconSettings:buildUI()
         self.dataProvider.config:set("maxIcons", value)
         
         -- Show/hide icon controls based on maxIcons
-        for i = 1, 5 do
+        for i = 1, 3 do
             if self.iconSizeWidgets[i] then
                 if i <= value then
                     self.iconSizeWidgets[i].frame:Show()
