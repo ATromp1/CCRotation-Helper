@@ -84,6 +84,14 @@ function IconPool:createMainIcon()
     icon.rangeIndicator:SetPoint("TOPLEFT", icon, "TOPLEFT", 2, -2)
     icon.rangeIndicator:Hide()
     
+    -- Create dangerous cast text overlay
+    icon.dangerousCastText = icon:CreateFontString("DangerousCastText_" .. self.numMainIconsCreated, "OVERLAY", "GameFontNormalSmall")
+    icon.dangerousCastText:SetPoint("CENTER", icon, "CENTER", 0, 0)
+    icon.dangerousCastText:SetTextColor(1, 1, 1) -- White text
+    icon.dangerousCastText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+    icon.dangerousCastText:SetText("")
+    icon.dangerousCastText:Hide()
+    
     -- Hide the XML template icon texture
     if icon.icon then
         icon.icon:Hide()
@@ -138,6 +146,14 @@ function IconPool:createUnavailableIcon()
     icon.rangeIndicator:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
     icon.rangeIndicator:SetPoint("TOPLEFT", icon, "TOPLEFT", 1, -1)
     icon.rangeIndicator:Hide()
+    
+    -- Create dangerous cast text overlay
+    icon.dangerousCastText = icon:CreateFontString("DangerousCastTextUnavailable_" .. self.numUnavailableIconsCreated, "OVERLAY", "GameFontNormalSmall")
+    icon.dangerousCastText:SetPoint("CENTER", icon, "CENTER", 0, 0)
+    icon.dangerousCastText:SetTextColor(1, 1, 1) -- White text
+    icon.dangerousCastText:SetFont("Fonts\\FRIZQT__.TTF", 8, "OUTLINE") -- Will be dynamically resized
+    icon.dangerousCastText:SetText("")
+    icon.dangerousCastText:Hide()
     
     -- Hide the XML template icon texture
     if icon.icon then
@@ -304,6 +320,8 @@ function IconPool:resetMainIcon(icon)
     icon.spellName:SetText("")
     icon.playerName:SetText("")
     icon.cooldownText:SetText("")
+    icon.dangerousCastText:SetText("")
+    icon.dangerousCastText:Hide()
     icon.displayTexture:SetTexture(nil)
     icon.displayTexture:SetDesaturated(false)
     icon.displayTexture:Hide()
@@ -334,6 +352,8 @@ function IconPool:resetUnavailableIcon(icon)
     icon.spellName:SetText("")
     icon.playerName:SetText("")
     icon.cooldownText:SetText("")
+    icon.dangerousCastText:SetText("")
+    icon.dangerousCastText:Hide()
     icon.displayTexture:SetTexture(nil)
     icon.displayTexture:SetDesaturated(true)  -- Always desaturated for unavailable
     icon.displayTexture:Hide()

@@ -196,6 +196,7 @@ function IconRenderer:updateUnavailableIcons(unavailableQueue, now, mainFrame)
                     
                     if icon.spellInfo and icon.unit then
                         self:updateUnavailableIconDisplay(icon, cooldownData, needsUpdate, now, config)
+                        self:updateDangerousCastText(icon, iconIndex, cooldownData, now)
                         self:positionUnavailableIcon(icon, iconIndex, activeUnavailableIcons, config, mainFrame)
                         icon:Show()
                     end
@@ -218,23 +219,51 @@ function IconRenderer:updateIconDisplay(icon, iconIndex, cooldownData, needsUpda
         icon.cooldownEndTime = nil
     end
     
-    -- Always update effectiveness state - desaturate if not effective OR (optionally) no enabled NPCs
-    local hasActiveEnabledNPCs = addon.CCRotation and addon.CCRotation:HasActiveEnabledNPCs() or false
-    local shouldDesaturateForNPCs = config:Get("desaturateWhenNoTrackedNPCs") and not hasActiveEnabledNPCs
-    local shouldDesaturate = not cooldownData.isEffective or shouldDesaturateForNPCs
-    icon.displayTexture:SetDesaturated(shouldDesaturate)
+    -- Never desaturate - abilities only show when they're needed and effective
+    icon.displayTexture:SetDesaturated(false)
     
-    -- Set spell name (only on first icon, using global setting)
-    if iconIndex == 1 and config:Get("showSpellName") then
-        local spellName = (icon.spellConfig and icon.spellConfig.name) or icon.spellInfo.name
-        local truncatedName = self:truncateText(spellName, config:Get("spellNameMaxLength"))
-        icon.spellName:SetText(truncatedName)
-        config:SetFontProperties(icon.spellName, config:Get("spellNameFont"), config:Get("spellNameFontSize"))
-        icon.spellName:SetParent(mainFrame.container)
-        icon.spellName:ClearAllPoints()
-        icon.spellName:SetPoint("BOTTOM", icon, "TOP", 0, 2)
-        icon.spellName:SetAlpha(1)
-        icon.spellName:Show()
+    -- Set spell name (only on first icon per original design)
+    if iconIndex == 1 then
+        local shouldShowText = false
+        local displayText = ""
+        local textColor = {1, 1, 1} -- Default white
+        
+        -- Check if there's an active dangerous cast to display (only if feature is enabled)
+        if config:Get("showDangerousCasts") and cooldownData.dangerousCasts and #cooldownData.dangerousCasts > 0 then
+            local cast = cooldownData.dangerousCasts[1] -- Show first matching cast
+            local timeLeft = cast.endTime - now
+            if timeLeft > 0 then
+                -- Don't truncate dangerous cast names - just show the cast name (timer is on icon)
+                displayText = cast.name
+                textColor = {1, 0.2, 0.2} -- Red for dangerous cast
+                shouldShowText = true
+            end
+        elseif config:Get("showSpellName") then
+            -- Fall back to spell name if no dangerous cast
+            local spellName = (icon.spellConfig and icon.spellConfig.name) or icon.spellInfo.name
+            displayText = self:truncateText(spellName, config:Get("spellNameMaxLength"))
+            textColor = {1, 1, 1} -- White for spell name
+            shouldShowText = true
+        end
+        
+        if shouldShowText then
+            icon.spellName:SetText(displayText)
+            icon.spellName:SetTextColor(textColor[1], textColor[2], textColor[3])
+            config:SetFontProperties(icon.spellName, config:Get("spellNameFont"), config:Get("spellNameFontSize"))
+            icon.spellName:SetParent(mainFrame.container)
+            icon.spellName:ClearAllPoints()
+            icon.spellName:SetPoint("BOTTOM", icon, "TOP", 0, 2)
+            
+            -- Make sure the font string has enough width for longer dangerous cast names
+            icon.spellName:SetWidth(0) -- Auto-width
+            icon.spellName:SetWordWrap(false) -- Don't wrap text
+            icon.spellName:SetJustifyH("CENTER")
+            
+            icon.spellName:SetAlpha(1)
+            icon.spellName:Show()
+        else
+            icon.spellName:Hide()
+        end
     else
         icon.spellName:Hide()
     end
@@ -271,10 +300,13 @@ function IconRenderer:updateIconDisplay(icon, iconIndex, cooldownData, needsUpda
     
     -- Handle glow effect for the first spell
     if self.glowManager:shouldGlow(iconIndex, icon.unit, config, cooldownData) then
-        self.glowManager:startGlow(icon, config)
+        self.glowManager:startGlow(icon, config, cooldownData)
     else
         self.glowManager:stopGlow(icon)
     end
+    
+    -- Handle dangerous cast text overlay
+    self:updateDangerousCastText(icon, iconIndex, cooldownData, now)
     
     -- Add status indicators for dead/out-of-range
     self:updateStatusIndicators(icon, cooldownData, now)
@@ -438,12 +470,41 @@ function IconRenderer:updateStatusIndicators(icon, cooldownData, now)
         icon.rangeIndicator:Hide()
     end
     
-    -- Desaturate icon if any status indicator is shown OR if not effective OR on cooldown OR (optionally) no fighting NPCs
-    local isOnCooldown = (cooldownData.charges or 0) == 0 or (cooldownData.expirationTime and cooldownData.expirationTime > now)
-    local hasActiveEnabledNPCs = addon.CCRotation and addon.CCRotation:HasActiveEnabledNPCs() or false
-    local shouldDesaturateForNPCs = self.dataManager.config:get("desaturateWhenNoTrackedNPCs") and not hasActiveEnabledNPCs
-    local shouldDesaturate = hasStatusIndicator or (not cooldownData.isEffective) or isOnCooldown or shouldDesaturateForNPCs
+    -- Optional desaturation for icons on cooldown only
+    local isOnCooldown = (cooldownData.charges or 0) == 0 and (cooldownData.expirationTime and cooldownData.expirationTime > now)
+    local shouldDesaturate = self.dataManager.config:get("desaturateOnCooldown") and isOnCooldown
     icon.displayTexture:SetDesaturated(shouldDesaturate)
+end
+
+-- Update dangerous cast text overlay
+function IconRenderer:updateDangerousCastText(icon, iconIndex, cooldownData, now)
+    if not icon.dangerousCastText then
+        return
+    end
+    
+    -- Only show if feature is enabled, on first icon, and if there are dangerous casts that can be stopped
+    if addon.Config:Get("showDangerousCasts") and iconIndex == 1 and cooldownData.dangerousCasts and #cooldownData.dangerousCasts > 0 then
+        local cast = cooldownData.dangerousCasts[1] -- Show first matching cast
+        local timeLeft = cast.endTime - now
+        
+        if timeLeft > 0 then
+            local iconSize = icon:GetWidth() or addon.Config:Get("iconSize" .. iconIndex) or 64
+            local fontSize = math.max(8, iconSize * 0.3)
+            
+            -- Update font size
+            icon.dangerousCastText:SetFont("Fonts\\FRIZQT__.TTF", fontSize, "OUTLINE")
+            
+            -- Show "USE!" text with remaining time
+            local displayText = string.format("USE!\n%.1fs", timeLeft)
+            icon.dangerousCastText:SetText(displayText)
+            icon.dangerousCastText:SetTextColor(1, 0.2, 0.2) -- Red text
+            icon.dangerousCastText:Show()
+        else
+            icon.dangerousCastText:Hide()
+        end
+    else
+        icon.dangerousCastText:Hide()
+    end
 end
 
 -- Truncate text to max length

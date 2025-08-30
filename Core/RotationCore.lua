@@ -18,9 +18,6 @@ end
 
 -- Initialize core variables
 function CCRotation:Initialize()
-    -- Build NPC effectiveness map from database
-    self.npcEffectiveness = addon.Database:BuildNPCEffectiveness()
-    
     -- Get tracked spells from config
     self.trackedCooldowns = addon.Config:GetTrackedSpells()
     
@@ -28,13 +25,17 @@ function CCRotation:Initialize()
     self.cooldownQueue = {}
     self.spellCooldowns = {}  -- Individual spell tracking
     self.GUIDToUnit = {}
-    self.activeNPCs = {}
     self.wasPlayerNext = false  -- Track player turn state for notifications
     self.lastAnnouncedSpell = nil  -- Track last announced spell to prevent spam
     self.lastAnnouncementTime = 0  -- Track when we last made an announcement
     
     -- Initialize GUID mapping
     self:RefreshGUIDToUnit()
+    
+    -- Initialize CastTracker
+    if addon.CastTracker then
+        addon.CastTracker:Initialize()
+    end
     
     -- Register LibOpenRaid callbacks if library is available
     if lib then
@@ -43,6 +44,15 @@ function CCRotation:Initialize()
     
     -- Register for events
     self:RegisterEvents()
+    
+    -- Register for cast tracker events
+    self:RegisterEventListener("DANGEROUS_CAST_STARTED", function(castInfo)
+        self:OnDangerousCastStarted(castInfo)
+    end)
+    
+    self:RegisterEventListener("DANGEROUS_CAST_STOPPED", function(castInfo)
+        self:OnDangerousCastStopped(castInfo)
+    end)
     
     -- Schedule delayed queue rebuild to ensure LibOpenRaid has data
     C_Timer.After(1, function()
@@ -104,7 +114,6 @@ function CCRotation:RegisterEvents()
     frame:RegisterEvent("GROUP_ROSTER_UPDATE")
     frame:RegisterEvent("PLAYER_REGEN_DISABLED")
     frame:RegisterEvent("PLAYER_REGEN_ENABLED")
-    frame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
     frame:RegisterEvent("PLAYER_ALIVE")
     frame:RegisterEvent("PLAYER_UNGHOST")
     frame:RegisterEvent("TRAIT_CONFIG_UPDATED")
@@ -131,9 +140,6 @@ function CCRotation:OnEvent(event, ...)
         self:OnCombatStart()
     elseif event == "PLAYER_REGEN_ENABLED" then
         self:OnCombatEnd()
-    elseif event == "NAME_PLATE_UNIT_ADDED" then
-        local unit = ...
-        self:OnNameplateAdded(unit)
     elseif event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then
         -- Player has been resurrected, immediately rebuild queue to move abilities back to available
         self:RebuildQueue()
@@ -286,49 +292,30 @@ function CCRotation:DoRebuildQueue()
         table.insert(self.cooldownQueue, spellData)
     end
     
-    -- Filter by NPC effectiveness
-    local hasKnownNPCs = false
-    local hasUnknownNPCs = false
-    for npcID in pairs(self.activeNPCs) do
-        local effectiveness = addon.Config:GetNPCEffectiveness(npcID)
-        if effectiveness then
-            hasKnownNPCs = true
-        else
-            hasUnknownNPCs = true
-        end
-    end
-    
-    if hasKnownNPCs then
-        local filtered = {}
-        for _, cd in ipairs(self.cooldownQueue) do
+    -- Mark abilities as effective and add cast information for glow logic
+    for _, cd in ipairs(self.cooldownQueue) do
+        cd.isEffective = true -- All abilities are always effective in normal rotation
+        
+        -- Add dangerous cast information only if feature is enabled
+        if addon.Config:Get("showDangerousCasts") then
             local info = self.trackedCooldowns[cd.spellID]
             local ccType = info and info.type
             
-            if not ccType then
-                -- Uncategorized spells always show
-                filtered[#filtered+1] = cd
-                cd.isEffective = true
+            if ccType and addon.CastTracker then
+                local matchingCasts = addon.CastTracker:GetDangerousCastsForCCType(ccType)
+                if #matchingCasts > 0 then
+                    cd.dangerousCasts = matchingCasts
+                else
+                    -- Clear stale dangerous cast data when no active casts
+                    cd.dangerousCasts = nil
+                end
             else
-                -- Only keep if ANY known NPC accepts this CC type
-                local isEffective = false
-                for npcID in pairs(self.activeNPCs) do
-                    local effectiveness = addon.Config:GetNPCEffectiveness(npcID)
-                    if effectiveness and effectiveness[ccType] then
-                        isEffective = true
-                        break
-                    end
-                end
-                if isEffective then
-                    filtered[#filtered+1] = cd
-                    cd.isEffective = true
-                end
+                -- Clear dangerous cast data if no CC type or CastTracker
+                cd.dangerousCasts = nil
             end
-        end
-        self.cooldownQueue = filtered
-    else
-        -- No known NPCs - mark all as ineffective if we have unknown NPCs
-        for _, cd in ipairs(self.cooldownQueue) do
-            cd.isEffective = not hasUnknownNPCs
+        else
+            -- Clear dangerous cast data if feature is disabled
+            cd.dangerousCasts = nil
         end
     end
     
@@ -431,12 +418,7 @@ function CCRotation:CheckPlayerTurnStatus()
     end
     
     
-    -- Check if there are any active enabled NPCs
-    local hasActiveEnabledNPCs = self:HasActiveEnabledNPCs()
-    if not hasActiveEnabledNPCs then
-        self.wasPlayerNext = false
-        return
-    end
+    -- Always check player turn status in normal rotation (no dangerous cast requirement)
     
     local isPlayerNext = false
     
@@ -479,12 +461,7 @@ function CCRotation:CheckPugAnnouncement()
         return
     end
     
-    -- Check if there are any active enabled NPCs
-    local hasActiveEnabledNPCs = self:HasActiveEnabledNPCs()
-    if not hasActiveEnabledNPCs then
-        self.lastAnnouncedSpell = nil
-        return
-    end
+    -- Always check pug announcements in normal rotation (no dangerous cast requirement)
     
     -- Check if first person in queue is a pug and their spell is ready
     if #self.cooldownQueue > 0 then
@@ -530,27 +507,15 @@ end
 
 -- Combat start handler
 function CCRotation:OnCombatStart()
-    -- Reset active NPCs
-    wipe(self.activeNPCs)
-    
-    -- Start scanning for nameplates
-    self:ScanNameplates()
-    
-    -- Schedule quick scan
-    self.quickScan = C_Timer.After(0.3, function()
-        self:ScanNameplates()
-    end)
-    
     -- Cancel non-combat timer if running
     if self.nonCombatTicker then
         self.nonCombatTicker:Cancel()
         self.nonCombatTicker = nil
     end
     
-    -- Start periodic scanning every second
-    if self.scanTicker then self.scanTicker:Cancel() end
-    self.scanTicker = C_Timer.NewTicker(1, function()
-        self:ScanNameplates()
+    -- Start periodic queue rebuilding every second
+    if self.queueTicker then self.queueTicker:Cancel() end
+    self.queueTicker = C_Timer.NewTicker(1, function()
         -- Rebuild queue (will only update UI if queue actually changed)
         self:RebuildQueue()
     end)
@@ -559,17 +524,10 @@ end
 -- Combat end handler
 function CCRotation:OnCombatEnd()
     -- Stop combat timers
-    if self.scanTicker then
-        self.scanTicker:Cancel()
-        self.scanTicker = nil
+    if self.queueTicker then
+        self.queueTicker:Cancel()
+        self.queueTicker = nil
     end
-    if self.quickScan then
-        self.quickScan:Cancel()
-        self.quickScan = nil
-    end
-    
-    -- Clear active NPCs when combat ends
-    wipe(self.activeNPCs)
     
     -- Start non-combat periodic queue rebuild every 3 seconds
     if self.nonCombatTicker then self.nonCombatTicker:Cancel() end
@@ -578,30 +536,20 @@ function CCRotation:OnCombatEnd()
     end)
 end
 
--- Nameplate added handler
-function CCRotation:OnNameplateAdded(unit)
-    if UnitAffectingCombat(unit) and UnitIsEnemy("player", unit) then
-        local guid = UnitGUID(unit)
-        local npcID = self:GetNPCIDFromGUID(guid)
-        if npcID then
-            self.activeNPCs[npcID] = true
-            -- Trigger queue rebuild
-            self:RebuildQueue()
-        end
+-- Handle dangerous cast events
+function CCRotation:OnDangerousCastStarted(castInfo)
+    -- Only process dangerous cast events if feature is enabled
+    if addon.Config:Get("showDangerousCasts") then
+        -- Immediately rebuild queue when dangerous cast starts
+        self:RebuildQueue()
     end
 end
 
--- Scan for active nameplates
-function CCRotation:ScanNameplates()
-    for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
-        local unit = plate.UnitFrame.unit
-        if UnitAffectingCombat(unit) and UnitIsEnemy("player", unit) then
-            local guid = UnitGUID(unit)
-            local npcID = self:GetNPCIDFromGUID(guid)
-            if npcID then
-                self.activeNPCs[npcID] = true
-            end
-        end
+function CCRotation:OnDangerousCastStopped(castInfo)
+    -- Only process dangerous cast events if feature is enabled
+    if addon.Config:Get("showDangerousCasts") then
+        -- Immediately rebuild queue when dangerous cast stops
+        self:RebuildQueue()
     end
 end
 
@@ -610,31 +558,6 @@ function CCRotation:GetQueue()
     return self.cooldownQueue
 end
 
--- Check if there are any active enabled NPCs
-function CCRotation:HasActiveEnabledNPCs()
-    if not self.activeNPCs then
-        return false
-    end
-    
-    for npcID in pairs(self.activeNPCs) do
-        local effectiveness
-        local usingDataProvider = false
-        
-        -- Check disabled state first
-        if addon.Config.db.inactiveNPCs[npcID] then
-            effectiveness = nil
-        else
-            effectiveness = addon.Config:GetNPCEffectiveness(npcID)
-        end
-        
-        
-        if effectiveness then
-            return true
-        end
-    end
-    
-    return false
-end
 
 -- Check if the queue has actually changed since last update
 function CCRotation:HasQueueChanged()

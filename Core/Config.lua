@@ -13,8 +13,7 @@ addon.Config = {}
 local syncOverlay = {
     active = false,
     spells = nil,
-    priorityPlayers = nil,
-    customNPCs = nil
+    priorityPlayers = nil
 }
 
 -- Use unified event system instead of local one
@@ -53,10 +52,6 @@ local defaults = {
         -- Single source of truth for spells (per profile)
         spells = {}, -- Working copy of spell data: { [spellID] = { name, ccType, priority, active, source } }
         
-        -- NPCs
-        customNPCs = {},
-        inactiveNPCs = {},
-        
         -- Display settings
         maxIcons = 2,
         iconSize = 64,
@@ -84,11 +79,11 @@ local defaults = {
         showPlayerName = true,
         showCooldownText = true,
         desaturateOnCooldown = true,
-        desaturateWhenNoTrackedNPCs = false,
         showTooltips = false,
         highlightNext = true,
         glowOnlyInCombat = false,
         cooldownDecimalThreshold = 3,
+        showDangerousCasts = true,
         
         -- Colors (profile-specific)
         nextSpellGlow = {0.91, 1.0, 0.37, 1.0},
@@ -277,28 +272,6 @@ function addon.Config:IsProfileSetting(key)
     return true
 end
 
-function addon.Config:GetNPCEffectiveness(npcID)
-    -- Use sync overlay data when in sync mode, otherwise use profile data
-    local customNPCs = syncOverlay.active and syncOverlay.customNPCs or self.db.customNPCs
-    
-    -- Check custom NPCs first
-    if customNPCs[npcID] then
-        local customNPC = customNPCs[npcID]
-        -- Convert array format to map format for consistency
-        return {
-            stun = customNPC.cc[1],
-            disorient = customNPC.cc[2],
-            fear = customNPC.cc[3],
-            knock = customNPC.cc[4],
-            incapacitate = customNPC.cc[5],
-        }
-    end
-    
-    -- Fall back to database
-    local dbNPCs = addon.Database:BuildNPCEffectiveness()
-    return dbNPCs[npcID]
-end
-
 function addon.Config:GetSpellInfo(spellID)
     -- Check unified spells table first
     if self.db.spells and self.db.spells[spellID] then
@@ -384,7 +357,6 @@ function addon.Config:ApplySyncOverlay(syncData)
     syncOverlay.active = true
     syncOverlay.spells = syncData.spells
     syncOverlay.priorityPlayers = syncData.priorityPlayers
-    syncOverlay.customNPCs = syncData.customNPCs
     
     -- Refresh rotation system with new data
     self:RefreshTrackedCooldowns()
@@ -397,7 +369,6 @@ function addon.Config:RemoveSyncOverlay()
     syncOverlay.active = false
     syncOverlay.spells = nil
     syncOverlay.priorityPlayers = nil
-    syncOverlay.customNPCs = nil
     
     -- Refresh rotation system with original data
     self:RefreshTrackedCooldowns()

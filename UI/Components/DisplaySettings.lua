@@ -128,6 +128,23 @@ function DisplaySettings:buildUI()
     )
     cooldownTextControl:buildUI()
 
+    -- Show dangerous cast alerts
+    local dangerousCastsControl = addon.Components.CheckboxControl:new(
+        internalGroup,
+        "Show dangerous cast alerts",
+        "showDangerousCasts",
+        {
+            onValueChanged = function(configKey, value)
+                -- Rebuild queue to refresh dangerous cast data
+                self.dataProvider.config:rebuildQueue()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
+            end
+        }
+    )
+    dangerousCastsControl:buildUI()
+
     -- Desaturate icon if spell is on cooldown
     local desaturateIconControl = addon.Components.CheckboxControl:new(
         internalGroup,
@@ -143,20 +160,6 @@ function DisplaySettings:buildUI()
     )
     desaturateIconControl:buildUI()
     
-    -- Desaturate icon when no tracked NPCs are in combat
-    local desaturateNoNPCsControl = addon.Components.CheckboxControl:new(
-        internalGroup,
-        "Desaturate when no tracked NPCs are fighting us",
-        "desaturateWhenNoTrackedNPCs",
-        {
-            onValueChanged = function(configKey, value)
-                if addon.UI and addon.UI.RefreshDisplay then
-                    addon.UI:RefreshDisplay()
-                end
-            end
-        }
-    )
-    desaturateNoNPCsControl:buildUI()
     
     -- Show tooltips on hover
     local tooltipControl = addon.Components.CheckboxControl:new(

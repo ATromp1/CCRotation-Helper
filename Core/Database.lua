@@ -1,6 +1,6 @@
 local addonName, addon = ...
 
--- Database of NPC effectiveness and spell configurations
+-- Database of dangerous casts and spell configurations
 addon.Database = {}
 
 -- CC Type lookup (backwards compatibility for old numeric values)
@@ -30,63 +30,30 @@ addon.Database.ccTypeDisplayNames = {
 -- CC Type order for UI consistency
 addon.Database.ccTypeOrder = {"stun", "disorient", "fear", "knock", "incapacitate"}
 
-
-
--- Default NPC configurations for Season 1 Mythic+
-addon.Database.defaultNPCs = {
+-- Casts that should be stopped with CC abilities
+addon.Database.dangerousCasts = {
     -- Ara-Kara, City of Echoes
-    [216293] = { name = "Trilling Attendant", dungeon = "Ara-Kara, City of Echoes", cc = {true, true, true, true, true} },
-    [223253] = { name = "Bloodstained Webmage", dungeon = "Ara-Kara, City of Echoes", cc = {true, true, true, true, true} },
-    [216340] = { name = "Sentry Stagshell", dungeon = "Ara-Kara, City of Echoes", cc = {true, true, true, true, true} },
+    [438622] = { name = "Impale", npcName = "Trilling Attendant", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    [438476] = { name = "Web Wrap", npcName = "Bloodstained Webmage", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    [438787] = { name = "Burrow Charge", npcName = "Sentry Stagshell", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+
+    -- TESTING IN ROOKERY
+    [430109] = { name = "Lightning Bolt", npcName = "Cursed Thunderer", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
 
     -- The Dawnbreaker
-    [213892] = { name = "Nightfall Shadowmage", dungeon = "The Dawnbreaker", cc = {true, true, true, true, true} },
-    [213893] = { name = "Nightfall Darkcaster", dungeon = "The Dawnbreaker", cc = {true, true, true, true, true} },
-    [224616] = { name = "Animated Shadow", dungeon = "The Dawnbreaker", cc = {true, true, true, true, true} },
+    [431309] = { name = "Dark Orb", npcName = "Nightfall Shadowmage", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    [430735] = { name = "Shadow Bolt", npcName = "Nightfall Darkcaster", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    [426883] = { name = "Animate Shadow", npcName = "Nightfall Commander", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
 
     -- Priory of the Sacred Flame
-    [206705] = { name = "Arathi Footman", dungeon = "Priory of the Sacred Flame", cc = {true, true, true, true, true} },
-    [206697] = { name = "Devout Priest", dungeon = "Priory of the Sacred Flame", cc = {true, true, true, true, true} },
-    [206698] = { name = "Fanatical Conjuror", dungeon = "Priory of the Sacred Flame", cc = {true, true, true, true, true} },
-    [206699] = { name = "War Lynx", dungeon = "Priory of the Sacred Flame", cc = {true, true, true, true, false} },
-    [207943] = { name = "Arathi neophyte", dungeon = "Priory of the Sacred Flame", cc = {true, true, true, true, true} },
-    [221760] = { name = "Risen Mage", dungeon = "Priory of the Sacred Flame", cc = {true, true, false, true, true} },
+    [427583] = { name = "Consecration", npcName = "Devout Priest", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    [448515] = { name = "Fireball", npcName = "Fanatical Conjuror", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    [427001] = { name = "Holy Radiance", npcName = "Arathi Priest", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
 
     -- Operation Floodgate
-    [229686] = { name = "Venture Co. Surveyor", dungeon = "Operation Floodgate", cc = {true, true, true, true, true} },
-    [229252] = { name = "Darkfuse Hyena", dungeon = "Operation Floodgate", cc = {true, true, true, true, false} },
-    [231014] = { name = "Loaderbot", dungeon = "Operation Floodgate", cc = {true, false, false, false, false} },
-    [229069] = { name = "Mechadrone Sniper", dungeon = "Operation Floodgate", cc = {true, true, false, true, false} },
-    [231496] = { name = "Venture Co. Diver", dungeon = "Operation Floodgate", cc = {true, true, true, true, true} },
-    [229212] = { name = "Darkfuse Demolitionist", dungeon = "Operation Floodgate", cc = {true, true, true, true, true} },
-    [231223] = { name = "Disturbed Kelp", dungeon = "Operation Floodgate", cc = {true, true, true, true, true} },
-    [231312] = { name = "Venture Co. Electrician", dungeon = "Operation Floodgate", cc = {true, true, true, true, true} },
-
-    -- Eco-Dome Al'dani
-    [234883] = { name = "Voracious Gorger", dungeon = "Eco-Dome Al'dani", cc = {true, true, true, true, true} },
-    [242209] = { name = "Overgorged Mite", dungeon = "Eco-Dome Al'dani", cc = {true, true, true, true, true} },
-    [234962] = { name = "Wastelander Farstalker", dungeon = "Eco-Dome Al'dani", cc = {true, true, true, true, true} },
-    [234957] = { name = "Wastelander Ritualist", dungeon = "Eco-Dome Al'dani", cc = {true, true, true, true, true} },
-
-    -- Halls of Atonement
-    [164562] = { name = "Depraved Houndmaster", dungeon = "Halls of Atonement", cc = {true, true, true, true, true} },
-    [165414] = { name = "Depraved Obliterator", dungeon = "Halls of Atonement", cc = {true, true, true, true, true} },
-    [165529] = { name = "Depraved Collector", dungeon = "Halls of Atonement", cc = {true, true, true, true, true} },
-
-    -- Tazavesh Streets
-    [177817] = { name = "Support Officer", dungeon = "Tazavesh Streets", cc = {true, true, true, true, true} },
-    [179840] = { name = "Market Peacekeeper", dungeon = "Tazavesh Streets", cc = {true, true, true, true, true} },
-    [179841] = { name = "Veteran Sparkcaster", dungeon = "Tazavesh Streets", cc = {true, true, true, true, true} },
-    [176395] = { name = "Overloaded Mailemental", dungeon = "Tazavesh Streets", cc = {true, true, true, true, true} },
-    [176396] = { name = "Defective Sorter", dungeon = "Tazavesh Streets", cc = {true, true, true, true, true} },
-
-    -- Tazavesh Gambit
-    [178139] = { name = "Murkbrine Shellcrusher", dungeon = "Tazavesh Gambit", cc = {true, true, true, true, true} },
-    [178142] = { name = "Murkbrine Fishmancer", dungeon = "Tazavesh Gambit", cc = {true, true, true, true, true} },
-    [176551] = { name = "Vault Purifier", dungeon = "Tazavesh Gambit", cc = {true, true, true, true, true} },
-    [179388] = { name = "Hourglass Tidesage", dungeon = "Tazavesh Gambit", cc = {true, true, true, true, true} },
-    [180015] = { name = "Burly Deckhand", dungeon = "Tazavesh Gambit", cc = {true, true, true, true, true} },
-    [180431] = { name = "Focused Ritualist", dungeon = "Tazavesh Gambit", cc = {true, true, true, true, true} },
+    [462373] = { name = "Survey", npcName = "Venture Co. Surveyor", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    [463428] = { name = "Explosive Shot", npcName = "Mechadrone Sniper", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    [463457] = { name = "Repair Protocol", npcName = "Loaderbot", ccTypes = {"stun"} },
 }
 
 -- Default spell configurations - unified format
@@ -142,24 +109,17 @@ addon.Database.defaultSpells = {
     [5246] = { name = "Fear", ccType = "fear", priority = 19, active = true, source = "database" },
 }
 
--- Convert CC array to effectiveness map
-function addon.Database:BuildNPCEffectiveness()
-    local effectiveness = {}
-
-    for npcID, data in pairs(self.defaultNPCs) do
-        effectiveness[npcID] = {
-            stun = data.cc[1],
-            disorient = data.cc[2],
-            fear = data.cc[3],
-            knock = data.cc[4],
-            incapacitate = data.cc[5],
-        }
-    end
-
-    return effectiveness
+-- Check if a spell is a dangerous cast
+function addon.Database:IsDangerousCast(spellID)
+    return self.dangerousCasts[spellID] ~= nil
 end
 
--- Get NPC info from current target
+-- Get dangerous cast info
+function addon.Database:GetDangerousCast(spellID)
+    return self.dangerousCasts[spellID]
+end
+
+-- Get NPC info from current target (legacy method for UI compatibility)
 function addon.Database:GetTargetNPCInfo()
     if not UnitExists("target") or UnitIsPlayer("target") then
         return nil
@@ -177,15 +137,40 @@ function addon.Database:GetTargetNPCInfo()
         return {
             id = npcID,
             name = npcName,
-            exists = self.defaultNPCs[npcID] ~= nil
+            exists = false -- No longer tracking NPCs, always false
         }
     end
     
     return nil
 end
 
--- Search for NPCs by name (fuzzy matching)
-function addon.Database:SearchNPCsByName(searchTerm)
+-- Get current dungeon/instance information
+function addon.Database:GetCurrentDungeonInfo()
+    local name, instanceType, difficultyID, difficultyName, maxPlayers = GetInstanceInfo()
+    
+    -- Only consider party dungeons and raids
+    if instanceType ~= "party" and instanceType ~= "raid" then
+        return nil, instanceType or "none", false
+    end
+    
+    if not name or name == "" then
+        return nil, instanceType or "none", false
+    end
+    
+    -- Check if we have dangerous casts for this dungeon (simplified check)
+    local hasKnownCasts = false
+    for spellID, castData in pairs(self.dangerousCasts) do
+        -- For now, consider any dungeon with casts as "known"
+        hasKnownCasts = true
+        break
+    end
+    
+    -- Return dungeon name, instance type, and whether it has known dangerous casts
+    return name, instanceType, hasKnownCasts
+end
+
+-- Search for dangerous casts by name (fuzzy matching)
+function addon.Database:SearchDangerousCastsByName(searchTerm)
     if not searchTerm or searchTerm == "" then
         return {}
     end
@@ -193,29 +178,16 @@ function addon.Database:SearchNPCsByName(searchTerm)
     local results = {}
     local searchLower = searchTerm:lower()
     
-    -- Search database NPCs
-    for npcID, data in pairs(self.defaultNPCs) do
+    -- Search dangerous casts
+    for spellID, data in pairs(self.dangerousCasts) do
         local name = data.name:lower()
         if name:find(searchLower, 1, true) then
             table.insert(results, {
-                id = npcID,
+                spellID = spellID,
                 name = data.name,
-                source = "database"
+                npcName = data.npcName,
+                ccTypes = data.ccTypes
             })
-        end
-    end
-    
-    -- Search custom NPCs if Config is available
-    if addon.Config and addon.Config.db then
-        for npcID, data in pairs(addon.Config.db.customNPCs) do
-            local name = data.name:lower()
-            if name:find(searchLower, 1, true) then
-                table.insert(results, {
-                    id = npcID,
-                    name = data.name,
-                    source = "custom"
-                })
-            end
         end
     end
     
@@ -230,125 +202,4 @@ function addon.Database:SearchNPCsByName(searchTerm)
     end)
     
     return results
-end
-
--- Check if NPC exists in database or custom NPCs
-function addon.Database:NPCExists(npcID)
-    if self.defaultNPCs[npcID] then
-        return true, "database"
-    end
-    
-    if addon.Config and addon.Config.db and addon.Config.db.customNPCs[npcID] then
-        return true, "custom"
-    end
-    
-    return false, nil
-end
-
--- Get NPC info by ID from database or custom
-function addon.Database:GetNPCInfo(npcID)
-    if self.defaultNPCs[npcID] then
-        return {
-            id = npcID,
-            name = self.defaultNPCs[npcID].name,
-            cc = self.defaultNPCs[npcID].cc,
-            source = "database"
-        }
-    end
-    
-    if addon.Config and addon.Config.db and addon.Config.db.customNPCs[npcID] then
-        local customNPC = addon.Config.db.customNPCs[npcID]
-        return {
-            id = npcID,
-            name = customNPC.name,
-            cc = customNPC.cc,
-            source = "custom",
-            dungeon = customNPC.dungeon
-        }
-    end
-    
-    return nil
-end
-
--- Get current dungeon/instance information
-function addon.Database:GetCurrentDungeonInfo()
-    local name, instanceType, difficultyID, difficultyName, maxPlayers = GetInstanceInfo()
-    
-    -- Only consider party dungeons and raids
-    if instanceType ~= "party" and instanceType ~= "raid" then
-        return nil, instanceType
-    end
-    
-    if not name or name == "" then
-        return nil, instanceType
-    end
-    
-    -- Return dungeon name and instance type
-    return name, instanceType
-end
-
--- Get NPCs that belong to the current dungeon
-function addon.Database:GetCurrentDungeonNPCs()
-    local dungeonName, instanceType = self:GetCurrentDungeonInfo()
-    if not dungeonName then
-        return {}
-    end
-    
-    local dungeonNPCs = {}
-    
-    -- Get database NPCs for this dungeon
-    for npcID, data in pairs(self.defaultNPCs) do
-        if data.dungeon == dungeonName then
-            dungeonNPCs[npcID] = {
-                id = npcID,
-                name = data.name,
-                cc = data.cc,
-                source = "database",
-                dungeon = data.dungeon
-            }
-        end
-    end
-    
-    -- Get custom NPCs for this dungeon
-    if addon.Config and addon.Config.db then
-        for npcID, data in pairs(addon.Config.db.customNPCs) do
-            if data.dungeon == dungeonName then
-                dungeonNPCs[npcID] = {
-                    id = npcID,
-                    name = data.name,
-                    cc = data.cc,
-                    source = "custom",
-                    dungeon = data.dungeon
-                }
-            end
-        end
-    end
-    
-    return dungeonNPCs
-end
-
--- Check if we're currently in a dungeon that has NPCs in our database
-function addon.Database:IsInKnownDungeon()
-    local dungeonName, instanceType = self:GetCurrentDungeonInfo()
-    if not dungeonName then
-        return false
-    end
-    
-    -- Check if we have any NPCs for this dungeon
-    for npcID, data in pairs(self.defaultNPCs) do
-        if data.dungeon == dungeonName then
-            return true
-        end
-    end
-    
-    -- Check custom NPCs too
-    if addon.Config and addon.Config.db then
-        for npcID, data in pairs(addon.Config.db.customNPCs) do
-            if data.dungeon == dungeonName then
-                return true
-            end
-        end
-    end
-    
-    return false
 end

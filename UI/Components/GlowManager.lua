@@ -73,8 +73,9 @@ function GlowManager:initializeIconGlow(icon)
 end
 
 -- Start glow effect on an icon
-function GlowManager:startGlow(icon, config)
+function GlowManager:startGlow(icon, config, cooldownData)
     if icon and icon.StartGlow then
+        -- Simple glow with normal config - no color changes for now
         icon:StartGlow(config)
     end
 end
@@ -101,19 +102,22 @@ end
 
 -- Check if glow should be active for an icon
 function GlowManager:shouldGlow(iconIndex, unit, config, cooldownData)
-    -- Check if there are any active enabled NPCs using centralized logic
-    local hasActiveEnabledNPCs = addon.CCRotation and addon.CCRotation:HasActiveEnabledNPCs() or false
-    
-    -- Check if we should require fighting NPCs for glow
-    local shouldRequireFightingNPCs = config:Get("desaturateWhenNoTrackedNPCs")
-    local npcRequirementMet = not shouldRequireFightingNPCs or hasActiveEnabledNPCs
-    
+    -- Glow if it's the first icon, it's the player, and glow is enabled
     return iconIndex == 1 and 
            config:Get("highlightNext") and 
            UnitIsUnit(unit, "player") and
-           (not config:Get("glowOnlyInCombat") or InCombatLockdown()) and
-           (cooldownData and cooldownData.isEffective) and
-           npcRequirementMet
+           (not config:Get("glowOnlyInCombat") or InCombatLockdown())
+end
+
+function GlowManager:getGlowColor(cooldownData, config)
+    -- Check if this ability can stop an active dangerous cast
+    if cooldownData and cooldownData.dangerousCasts and #cooldownData.dangerousCasts > 0 then
+        -- Blue glow for dangerous cast stopping
+        return {0.2, 0.5, 1.0}
+    else
+        -- Normal glow color from config
+        return config:Get("glowColor")
+    end
 end
 
 -- Register component

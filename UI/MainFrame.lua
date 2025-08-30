@@ -155,27 +155,30 @@ function UI:stopCooldownTextUpdates()
     end
 end
 
--- Update only the cooldown text on visible icons
+-- Update only the cooldown text and dangerous cast text on visible icons
 function UI:updateCooldownText()
-    if not addon.Config:Get("showCooldownText") then
-        return
-    end
-    
     local now = GetTime()
     local activeIcons = self.iconPool:getActiveMainIcons()
     
     for i, icon in ipairs(activeIcons) do
         if icon.queueData and icon:IsShown() then
             local cooldownData = icon.queueData
-            local charges = cooldownData.charges or 0
-            local isReady = charges > 0 or cooldownData.expirationTime <= now
             
-            if isReady then
-                icon.cooldownText:SetText("")
-            else
-                local timeLeft = cooldownData.expirationTime - now
-                icon.cooldownText:SetText(self.iconRenderer:formatTime(timeLeft))
+            -- Update cooldown text if enabled
+            if addon.Config:Get("showCooldownText") then
+                local charges = cooldownData.charges or 0
+                local isReady = charges > 0 or cooldownData.expirationTime <= now
+                
+                if isReady then
+                    icon.cooldownText:SetText("")
+                else
+                    local timeLeft = cooldownData.expirationTime - now
+                    icon.cooldownText:SetText(self.iconRenderer:formatTime(timeLeft))
+                end
             end
+            
+            -- Update dangerous cast text (for smooth countdown)
+            self.iconRenderer:updateDangerousCastText(icon, i, cooldownData, now)
         end
     end
 end

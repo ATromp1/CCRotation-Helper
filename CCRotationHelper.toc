@@ -23,7 +23,8 @@ Libs\LibCustomGlow\LibCustomGlow-1.0.xml
 # Core files
 Core\EventSystem.lua
 Core\Database.lua
-Core\Config.lua  
+Core\Config.lua
+Core\CastTracker.lua
 Core\RotationCore.lua
 Core\SoundManager.lua
 Core\DebugFrame.lua
