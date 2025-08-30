@@ -22,10 +22,20 @@ function DisplayTab.create(container)
         error("DisplaySettings component not loaded. Make sure UI/Components/DisplaySettings.lua is loaded first.")
     end
     
+    -- Load glow settings component
+    if not addon.Components or not addon.Components.GlowSettings then
+        error("GlowSettings component not loaded. Make sure UI/Components/GlowSettings.lua is loaded first.")
+    end
+    
     -- Display Settings Section
     local displayGroup = addon.BaseComponent:createInlineGroup("Display Settings", scroll)
     local displaySettings = addon.Components.DisplaySettings:new(displayGroup, {})
     displaySettings:buildUI()
+    
+    -- Glow Settings Section (component creates its own header)
+    local glowGroup = addon.BaseComponent:createInlineGroup("", scroll)
+    local glowSettings = addon.Components.GlowSettings:new(glowGroup, {})
+    glowSettings:buildUI()
 end
 
 -- Register the tab module

@@ -22,20 +22,10 @@ function IconsTab.create(container)
         error("IconSettings component not loaded. Make sure UI/Components/IconSettings.lua is loaded first.")
     end
     
-    -- Load glow settings component
-    if not addon.Components or not addon.Components.GlowSettings then
-        error("GlowSettings component not loaded. Make sure UI/Components/GlowSettings.lua is loaded first.")
-    end
-    
     -- Icon Settings Section
     local iconGroup = addon.BaseComponent:createInlineGroup("Icon Settings", scroll)
     local iconSettings = addon.Components.IconSettings:new(iconGroup, {})
     iconSettings:buildUI()
-    
-    -- Glow Settings Section (component creates its own header)
-    local glowGroup = addon.BaseComponent:createInlineGroup("", scroll)
-    local glowSettings = addon.Components.GlowSettings:new(glowGroup, {})
-    glowSettings:buildUI()
 end
 
 -- Register the tab module
