@@ -56,7 +56,6 @@ end
 function CastTracker:OnNameplateRemoved(unit)
     if self.nameplateUnits[unit] then
         self.nameplateUnits[unit] = nil
-        self:UnregisterCastEventsForUnit(unit)
         
         -- Clean up any active casts from this unit
         for castId, castInfo in pairs(self.activeDangerousCasts) do

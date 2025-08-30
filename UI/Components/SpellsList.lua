@@ -261,6 +261,11 @@ function QueueDisplayComponent:updateQueueDisplay(queue, unavailableQueue)
         return
     end
     
+    -- Only update queue display if we're on the Spells tab
+    if addon.UI and addon.UI.activeConfigTab and addon.UI.activeConfigTab ~= "spells" then
+        return
+    end
+    
     self.queueGroup:ReleaseChildren()
     
     if not queue then
@@ -332,6 +337,11 @@ end
 
 -- Compatibility method for existing code
 function QueueDisplayComponent:refreshQueueDisplay()
+    -- Only refresh if we're on the Spells tab
+    if addon.UI and addon.UI.activeConfigTab and addon.UI.activeConfigTab ~= "spells" then
+        return
+    end
+    
     if addon.CCRotation then
         local queue = addon.CCRotation:GetQueue() or {}
         local unavailableQueue = addon.CCRotation.unavailableQueue or {}
