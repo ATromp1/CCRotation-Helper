@@ -102,22 +102,31 @@ end
 
 -- Check if glow should be active for an icon
 function GlowManager:shouldGlow(iconIndex, unit, config, cooldownData)
-    -- Glow if it's the first icon, it's the player, and glow is enabled
-    return iconIndex == 1 and 
-           config:Get("highlightNext") and 
-           UnitIsUnit(unit, "player") and
-           (not config:Get("glowOnlyInCombat") or InCombatLockdown())
+    -- Must be first icon and player's ability
+    if not (iconIndex == 1 and UnitIsUnit(unit, "player")) then
+        return false
+    end
+    
+    -- Check combat requirements if enabled
+    if config:Get("glowOnlyInCombat") and not InCombatLockdown() then
+        return false
+    end
+    
+    -- Different glow logic based on dangerous cast feature
+    if config:Get("showDangerousCasts") then
+        -- When dangerous cast feature is enabled: only glow when there's an active dangerous cast to stop
+        return cooldownData and 
+               cooldownData.dangerousCasts and 
+               #cooldownData.dangerousCasts > 0
+    else
+        -- When dangerous cast feature is disabled: use normal highlight behavior
+        return config:Get("highlightNext")
+    end
 end
 
 function GlowManager:getGlowColor(cooldownData, config)
-    -- Check if this ability can stop an active dangerous cast
-    if cooldownData and cooldownData.dangerousCasts and #cooldownData.dangerousCasts > 0 then
-        -- Blue glow for dangerous cast stopping
-        return {0.2, 0.5, 1.0}
-    else
-        -- Normal glow color from config
-        return config:Get("glowColor")
-    end
+    -- Always use the normal glow color from config
+    return config:Get("glowColor")
 end
 
 -- Register component
