@@ -108,6 +108,70 @@ local function CreateDebugFrame(frameName, title)
     -- Set title
     frame.TitleText:SetText(title or "Debug Frame")
     
+    -- Create Copy button
+    local copyButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    copyButton:SetSize(60, 22)
+    copyButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -25, -5)
+    copyButton:SetText("Copy")
+    copyButton:SetScript("OnClick", function()
+        local currentFrameName = frameName
+        local currentTab = activeTab
+        local messages = {}
+        
+        -- Get all messages for current tab
+        if debugLines[currentFrameName] and debugLines[currentFrameName][currentTab] then
+            for _, line in ipairs(debugLines[currentFrameName][currentTab]) do
+                -- Remove color codes for cleaner copying
+                local cleanLine = line:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+                table.insert(messages, cleanLine)
+            end
+        end
+        
+        local copyText = table.concat(messages, "\n")
+        if copyText and copyText ~= "" then
+            -- Create invisible editbox for copying
+            if not frame.copyBox then
+                frame.copyBox = CreateFrame("EditBox", nil, frame)
+                frame.copyBox:SetSize(1, 1)
+                frame.copyBox:SetPoint("TOPLEFT", frame, "TOPLEFT", -100, -100)
+                frame.copyBox:SetAlpha(0)
+                frame.copyBox:SetAutoFocus(false)
+                frame.copyBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+            end
+            
+            frame.copyBox:SetText(copyText)
+            frame.copyBox:HighlightText()
+            frame.copyBox:SetFocus()
+            print("|cff00ff00CC Rotation Helper|r: Debug text copied to clipboard. Press Ctrl+C to copy, then Escape to close.")
+        else
+            print("|cff00ff00CC Rotation Helper|r: No debug text to copy.")
+        end
+    end)
+    frame.copyButton = copyButton
+    
+    -- Create Clear button
+    local clearButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    clearButton:SetSize(60, 22)
+    clearButton:SetPoint("TOPRIGHT", copyButton, "TOPLEFT", -5, 0)
+    clearButton:SetText("Clear")
+    clearButton:SetScript("OnClick", function()
+        local currentFrameName = frameName
+        local currentTab = activeTab
+        
+        -- Clear messages for current tab
+        if debugLines[currentFrameName] and debugLines[currentFrameName][currentTab] then
+            debugLines[currentFrameName][currentTab] = {}
+            -- Refresh the frame display
+            if frame.text then
+                frame.text:SetText("Debug messages cleared for " .. currentTab .. " tab.")
+            end
+            print("|cff00ff00CC Rotation Helper|r: Cleared " .. currentTab .. " debug messages.")
+        else
+            print("|cff00ff00CC Rotation Helper|r: No debug messages to clear.")
+        end
+    end)
+    frame.clearButton = clearButton
+    
     -- Create tabs
     frame.tabs = {}
     local tabCategories = {"INIT", "GROUP", "LEADER", "SYNC", "COMM", "PROFILE", "SPELL", "ERROR"}

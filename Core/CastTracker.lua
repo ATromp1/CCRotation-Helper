@@ -47,7 +47,6 @@ end
 
 function CastTracker:OnNameplateAdded(unit)
     if UnitIsEnemy("player", unit) then
-        local unitName = UnitName(unit) or "Unknown"
         self.nameplateUnits[unit] = true
         self:RegisterCastEventsForUnit(unit)
     end
@@ -91,25 +90,60 @@ function CastTracker:RegisterCastEventsForUnit(unit)
         self.castFrame:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
         self.castFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         self.castFrame:RegisterEvent("UNIT_SPELLCAST_FAILED")
+        
+        -- Register for channel events
+        self.castFrame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
+        self.castFrame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+        self.castFrame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE")
     end
 end
 
 function CastTracker:OnCastEvent(event, unit, ...)
-    if not self.nameplateUnits[unit] then
+    -- Check if unit is tracked, or if it's an enemy unit (more permissive)
+    local isTracked = self.nameplateUnits[unit]
+    local isEnemy = UnitExists(unit) and UnitIsEnemy("player", unit)
+    
+    if not isTracked and not isEnemy then
         return
     end
     
-    if event == "UNIT_SPELLCAST_START" then
+    if event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START" then
         self:OnCastStart(unit, ...)
     elseif event == "UNIT_SPELLCAST_STOP" or 
            event == "UNIT_SPELLCAST_INTERRUPTED" or
-           event == "UNIT_SPELLCAST_SUCCEEDED" or
-           event == "UNIT_SPELLCAST_FAILED" then
+           event == "UNIT_SPELLCAST_FAILED" or
+           event == "UNIT_SPELLCAST_CHANNEL_STOP" then
         self:OnCastEnd(unit, event, ...)
+    elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+        -- For channels, SUCCEEDED fires at the start but channel continues
+        -- Only end the cast if it's not a channel (check for active channel)
+        local name = UnitChannelInfo(unit)
+        if not name then
+            -- Not channeling, so this is a regular cast success
+            self:OnCastEnd(unit, event, ...)
+        end
+        -- If channeling, ignore SUCCEEDED and wait for CHANNEL_STOP
+    elseif event == "UNIT_SPELLCAST_CHANNEL_UPDATE" then
+        -- Channel updates can be handled the same as cast start to refresh timer
+        self:OnCastStart(unit, ...)
     end
 end
 
 function CastTracker:OnCastStart(unit, castGUID, spellID)
+    -- For channel events, spellID might not be provided in the event parameters
+    -- We need to get it from UnitChannelInfo or UnitCastingInfo
+    if not spellID then
+        local name, text, texture, startTimeMS, endTimeMS, isTradeSkill, castID, notInterruptible, actualSpellID = UnitCastingInfo(unit)
+        if not actualSpellID then
+            name, text, texture, startTimeMS, endTimeMS, isTradeSkill, notInterruptible, actualSpellID = UnitChannelInfo(unit)
+        end
+        spellID = actualSpellID
+    end
+    
+    if not spellID then
+        return
+    end
+    
     -- Check if this is a dangerous cast
     if not addon.Database:IsDangerousCast(spellID) then
         return
@@ -117,8 +151,17 @@ function CastTracker:OnCastStart(unit, castGUID, spellID)
     
     local dangerousCast = addon.Database:GetDangerousCast(spellID)
     
-    -- Get cast information
+    -- Get cast or channel information
     local name, text, texture, startTimeMS, endTimeMS, isTradeSkill, castID, notInterruptible = UnitCastingInfo(unit)
+    local isChannel = false
+    
+    -- If not a regular cast, check if it's a channel
+    if not name then
+        name, text, texture, startTimeMS, endTimeMS, isTradeSkill, notInterruptible = UnitChannelInfo(unit)
+        isChannel = true
+        castID = castGUID -- Use castGUID for channels since UnitChannelInfo doesn't return castID
+    end
+    
     if not name then
         return
     end
@@ -190,6 +233,14 @@ end
 
 function CastTracker:HasActiveDangerousCasts()
     return next(self.activeDangerousCasts) ~= nil
+end
+
+function CastTracker:GetActiveCastCount()
+    local count = 0
+    for _ in pairs(self.activeDangerousCasts) do
+        count = count + 1
+    end
+    return count
 end
 
 function CastTracker:GetDangerousCastsForCCType(ccType)
