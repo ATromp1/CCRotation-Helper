@@ -84,6 +84,7 @@ local defaults = {
         glowOnlyInCombat = false,
         cooldownDecimalThreshold = 3,
         showDangerousCasts = true,
+        dangerousCastsPlayerOnly = true,
         
         -- Colors (profile-specific)
         nextSpellGlow = {0.91, 1.0, 0.37, 1.0},

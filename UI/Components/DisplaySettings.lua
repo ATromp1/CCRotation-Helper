@@ -128,9 +128,12 @@ function DisplaySettings:buildUI()
     )
     cooldownTextControl:buildUI()
 
+    -- Dangerous Cast Settings Section
+    local dangerousCastsGroup = addon.BaseComponent:createInlineGroup("Dangerous Cast Settings", self.container)
+    
     -- Show dangerous cast alerts
     local dangerousCastsControl = addon.Components.CheckboxControl:new(
-        internalGroup,
+        dangerousCastsGroup,
         "Show dangerous cast alerts",
         "showDangerousCasts",
         {
@@ -144,6 +147,21 @@ function DisplaySettings:buildUI()
         }
     )
     dangerousCastsControl:buildUI()
+
+    -- Dangerous casts player only option (sub-option of show dangerous casts)
+    local dangerousCastsPlayerOnlyControl = addon.Components.CheckboxControl:new(
+        dangerousCastsGroup,
+        "Only show alerts for your own abilities",
+        "dangerousCastsPlayerOnly",
+        {
+            onValueChanged = function(configKey, value)
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
+            end
+        }
+    )
+    dangerousCastsPlayerOnlyControl:buildUI()
 
     -- Desaturate icon if spell is on cooldown
     local desaturateIconControl = addon.Components.CheckboxControl:new(

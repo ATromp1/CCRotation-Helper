@@ -111,10 +111,11 @@ end
 
 function CastTracker:OnCastStart(unit, castGUID, spellID)
     -- Check if this is a dangerous cast
-    local dangerousCast = addon.Database.dangerousCasts and addon.Database.dangerousCasts[spellID]
-    if not dangerousCast then
+    if not addon.Database:IsDangerousCast(spellID) then
         return
     end
+    
+    local dangerousCast = addon.Database:GetDangerousCast(spellID)
     
     -- Get cast information
     local name, text, texture, startTimeMS, endTimeMS, isTradeSkill, castID, notInterruptible = UnitCastingInfo(unit)

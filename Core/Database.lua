@@ -32,28 +32,57 @@ addon.Database.ccTypeOrder = {"stun", "disorient", "fear", "knock", "incapacitat
 
 -- Casts that should be stopped with CC abilities
 addon.Database.dangerousCasts = {
-    -- Ara-Kara, City of Echoes
-    [438622] = { name = "Impale", npcName = "Trilling Attendant", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
-    [438476] = { name = "Web Wrap", npcName = "Bloodstained Webmage", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
-    [438787] = { name = "Burrow Charge", npcName = "Sentry Stagshell", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    "Ara-Kara, City of Echoes", {
+        [434793] = { name = "Resonant Barrage", npcName = "Trilling Attendant", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [448248] = { name = "Revolting Volley", npcName = "Bloodstained Webmage", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [432967] = { name = "Alarm Shrill", npcName = "Sentry Stagshell", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    },
 
-    -- TESTING IN ROOKERY
-    [430109] = { name = "Lightning Bolt", npcName = "Cursed Thunderer", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    "Eco-dome Al'dani", {
+        [1229474] = { name = "Gorge", npcName = "Overgorged Mite", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [1229510] = { name = "Arcing Zap", npcName = "Wastelander Farstalker", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [1222815] = { name = "Arcane Bolt", npcName = "Wastelander Ritualist", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    },
 
-    -- The Dawnbreaker
-    [431309] = { name = "Dark Orb", npcName = "Nightfall Shadowmage", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
-    [430735] = { name = "Shadow Bolt", npcName = "Nightfall Darkcaster", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
-    [426883] = { name = "Animate Shadow", npcName = "Nightfall Commander", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    "Halls of Atonement", {
+        [326450] = { name = "Loyal Beasts", npcName = "Depraved Houndmaster", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [326661] = { name = "Wicked Bolt", npcName = "Depraved Obliterator", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [325701] = { name = "Siphon life", npcName = "Depraved Collector", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    },
 
-    -- Priory of the Sacred Flame
-    [427583] = { name = "Consecration", npcName = "Devout Priest", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
-    [448515] = { name = "Fireball", npcName = "Fanatical Conjuror", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
-    [427001] = { name = "Holy Radiance", npcName = "Arathi Priest", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    "The Dawnbreaker", {
+        [431303] = { name = "Night bolt", npcName = "Nightfall Shadowmage", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [431333] = { name = "Tormenting Beam", npcName = "Nightfall Darkcaster", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [452099] = { name = "Congealed Darkness", npcName = "Animated Shadow", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    },
 
-    -- Operation Floodgate
-    [462373] = { name = "Survey", npcName = "Venture Co. Surveyor", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
-    [463428] = { name = "Explosive Shot", npcName = "Mechadrone Sniper", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
-    [463457] = { name = "Repair Protocol", npcName = "Loaderbot", ccTypes = {"stun"} },
+    "Priory of the Sacred Flame", {
+        [427342] = { name = "Defend", npcName = "Arathi Footman", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [427357] = { name = "Holy Smite", npcName = "Devout Priest", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [427356] = { name = "Greater Heal", npcName = "Devout Priest", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [427469] = { name = "Fireball", npcName = "Fanatical Conjuror", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [427496] = { name = "Fireball", npcName = "Risen Mage", ccTypes = {"stun", "disorient", "knock", "incapacitate"} },
+        [444743] = { name = "Fireball Volley", npcName = "Risen Mage", ccTypes = {"stun", "disorient", "knock", "incapacitate"} },
+    },
+
+    "Operation: Floodgate", {
+        [462771] = { name = "Surveying Beam", npcName = "Venture Co. Surveyor", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [465127] = { name = "Wind up", npcName = "Loaderbot", ccTypes = {"stun"} },
+        [468631] = { name = "Harpoon", npcName = "Venture Co. Diver", ccTypes = {"stun"} },
+        [471736] = { name = "Jettison Kelp", npcName = "Disturbed Kelp", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [471733] = { name = "Restorative Algae", npcName = "Disturbed Kelp", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [461796] = { name = "Reload", npcName = "Darkfuse Demolitionist", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [465595] = { name = "Lightning Bolt", npcName = "Venture Co. Electrician", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    },
+
+    "Tazavesh: Streets of Wonder", {
+        [354297] = { name = "Hyperlight Bolt", npcName = "Support Officer", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    },
+
+    -- For testing
+    "The Rookery", {
+        [430109] = { name = "Lightning Bolt", npcName = "Cursed Thunderer", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    }
 }
 
 -- Default spell configurations - unified format
@@ -80,7 +109,7 @@ addon.Database.defaultSpells = {
 
     -- Mage
     [157980] = { name = "Supernova", ccType = "knock", priority = 9, active = true, source = "database" },
-    [449700] = { name = "Gravity lapse", ccType = "knock", priority = 10, active = true, source = "database" },
+    [449700] = { name = "Gravity lapse", ccType = "stun", priority = 10, active = true, source = "database" },
     [31661] = { name = "DB", ccType = "disorient", priority = 11, active = true, source = "database" },
     [157981] = { name = "Blastwave", ccType = "knock", priority = 12, active = true, source = "database" },
 
@@ -109,14 +138,47 @@ addon.Database.defaultSpells = {
     [5246] = { name = "Fear", ccType = "fear", priority = 19, active = true, source = "database" },
 }
 
+-- Initialize flattened lookup table for efficient access
+function addon.Database:InitializeDangerousCastsLookup()
+    if not self.dangerousCastsLookup then
+        self.dangerousCastsLookup = {}
+        
+        -- Flatten the dungeon-grouped structure into a simple lookup table
+        local i = 1
+        while i <= #self.dangerousCasts do
+            local entry = self.dangerousCasts[i]
+            
+            -- Skip dungeon names (strings)
+            if type(entry) == "string" then
+                -- Check if the next entry is the spell table for this dungeon
+                if i + 1 <= #self.dangerousCasts and type(self.dangerousCasts[i + 1]) == "table" then
+                    local spellTable = self.dangerousCasts[i + 1]
+                    for spellID, castData in pairs(spellTable) do
+                        if type(spellID) == "number" and type(castData) == "table" then
+                            self.dangerousCastsLookup[spellID] = castData
+                        end
+                    end
+                    i = i + 2 -- Skip both dungeon name and spell table
+                else
+                    i = i + 1 -- Just skip dungeon name if no spell table follows
+                end
+            else
+                i = i + 1 -- Skip any other entries
+            end
+        end
+    end
+end
+
 -- Check if a spell is a dangerous cast
 function addon.Database:IsDangerousCast(spellID)
-    return self.dangerousCasts[spellID] ~= nil
+    self:InitializeDangerousCastsLookup()
+    return self.dangerousCastsLookup[spellID] ~= nil
 end
 
 -- Get dangerous cast info
 function addon.Database:GetDangerousCast(spellID)
-    return self.dangerousCasts[spellID]
+    self:InitializeDangerousCastsLookup()
+    return self.dangerousCastsLookup[spellID]
 end
 
 -- Get NPC info from current target (legacy method for UI compatibility)
@@ -175,19 +237,23 @@ function addon.Database:SearchDangerousCastsByName(searchTerm)
         return {}
     end
     
+    self:InitializeDangerousCastsLookup()
+    
     local results = {}
     local searchLower = searchTerm:lower()
     
-    -- Search dangerous casts
-    for spellID, data in pairs(self.dangerousCasts) do
-        local name = data.name:lower()
-        if name:find(searchLower, 1, true) then
-            table.insert(results, {
-                spellID = spellID,
-                name = data.name,
-                npcName = data.npcName,
-                ccTypes = data.ccTypes
-            })
+    -- Search through flattened lookup table
+    for spellID, data in pairs(self.dangerousCastsLookup) do
+        if data.name then
+            local name = data.name:lower()
+            if name:find(searchLower, 1, true) then
+                table.insert(results, {
+                    spellID = spellID,
+                    name = data.name,
+                    npcName = data.npcName,
+                    ccTypes = data.ccTypes
+                })
+            end
         end
     end
     

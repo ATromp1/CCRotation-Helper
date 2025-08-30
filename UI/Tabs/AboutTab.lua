@@ -53,7 +53,7 @@ function AboutTab.create(container)
     
     -- Major Contributors
     local contributorsLabel = AceGUI:Create("Label")
-    contributorsLabel:SetText("|cff00ff00Major Contributors:|r Malpam")
+    contributorsLabel:SetText("|cff00ff00Contributors:|r Malpam, Chaarp, Zimbu, Bluenessie")
     contributorsLabel:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
     contributorsLabel:SetFullWidth(true)
     aboutGroup:AddChild(contributorsLabel)

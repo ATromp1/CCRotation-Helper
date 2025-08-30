@@ -19,103 +19,149 @@ function NPCsTab.create(container)
     
     -- Help text
     local helpText = AceGUI:Create("Label")
-    helpText:SetText("Manage NPC crowd control effectiveness. Configure which types of CC work on each NPC.")
+    helpText:SetText("View dangerous casts that the addon tracks for interrupt alerts. These are abilities that should be stopped with crowd control.")
     helpText:SetFullWidth(true)
     scroll:AddChild(helpText)
     
-    -- Current location and filtering using CurrentLocationComponent
-    local currentLocationGroup = addon.BaseComponent:createInlineGroup("Current Location", scroll)
+    -- Dangerous casts display
+    local dangerousCastsGroup = addon.BaseComponent:createInlineGroup("Tracked Dangerous Casts", scroll)
     
-    if not addon.Components or not addon.Components.CurrentLocationComponent then
-        error("CurrentLocationComponent not loaded. Make sure UI/Components/NPCsList.lua is loaded first.")
-    end
-    
-    -- Forward declarations for cross-component communication
-    local dungeonNPCList
-    
-    local currentLocationComponent = addon.Components.CurrentLocationComponent:new(currentLocationGroup, {
-        onFilterChanged = function(filterToDungeon)
-            -- Update filter and refresh dungeon list
-            if dungeonNPCList then
-                dungeonNPCList:setFilter(filterToDungeon)
-                dungeonNPCList:buildUI()
-            end
-        end,
-        onLocationRefresh = function()
-            -- Refresh entire tab
-            container:ReleaseChildren()
-            NPCsTab.create(container)
-        end
-    }, dataProvider)
-    
-    currentLocationComponent:buildUI()
-    
-    -- NPC list grouped by dungeon using DungeonNPCListComponent
-    local dungeonNPCGroup = addon.BaseComponent:createInlineGroup("NPCs by Dungeon", scroll)
-    
-    if not addon.Components or not addon.Components.DungeonNPCListComponent then
-        error("DungeonNPCListComponent not loaded. Make sure UI/Components/NPCsList.lua is loaded first.")
-    end
-    
-    dungeonNPCList = addon.Components.DungeonNPCListComponent:new(dungeonNPCGroup, {
-        onDungeonToggle = function(dungeonName)
-            -- Refresh to show/hide dungeon content
-            dungeonNPCList:buildUI()
-        end,
-        onNPCChanged = function(npcID)
-            -- Refresh dungeon list to show changes
-            dungeonNPCList:buildUI()
-        end,
-        onNPCDungeonChanged = function(npcID)
-            -- Full refresh needed when NPC changes dungeon (regroup)
-            container:ReleaseChildren()
-            NPCsTab.create(container)
-        end
-    }, dataProvider, scroll)
-    
-    dungeonNPCList:buildUI()
-    
-    -- Quick NPC lookup using NPCSearchComponent
-    local lookupGroup = addon.BaseComponent:createInlineGroup("Quick NPC Lookup", scroll)
-    
-    if not addon.Components or not addon.Components.NPCSearchComponent then
-        error("NPCSearchComponent not loaded. Make sure UI/Components/NPCsList.lua is loaded first.")
-    end
-    
-    local npcSearchComponent = addon.Components.NPCSearchComponent:new(lookupGroup, {
-        onExpandDungeon = function(dungeonName)
-            -- Expand the dungeon in the NPC list
-            if dungeonNPCList then
-                dungeonNPCList:expandDungeon(dungeonName)
-                dungeonNPCList:buildUI()
+    -- Group dangerous casts by dungeon and display
+    if addon.Database and addon.Database.dangerousCasts then
+        -- Create dungeon groups based on the new database structure
+        local dungeonGroups = {}
+        local dungeonOrder = {}
+        local currentDungeon = "Other"
+        
+        -- Parse the new structure using ipairs for ordered traversal
+        -- Structure: "DungeonName", { [spellID] = data, ... }, next entries...
+        local i = 1
+        local dangerousCasts = addon.Database.dangerousCasts
+        
+        while i <= #dangerousCasts do
+            local entry = dangerousCasts[i]
+            
+            -- Check if this entry is a dungeon name (string)
+            if type(entry) == "string" then
+                currentDungeon = entry
+                if not dungeonGroups[currentDungeon] then
+                    dungeonGroups[currentDungeon] = {}
+                    table.insert(dungeonOrder, currentDungeon)
+                end
+                
+                -- Check if the next entry is the spell table for this dungeon
+                if i + 1 <= #dangerousCasts and type(dangerousCasts[i + 1]) == "table" then
+                    local spellTable = dangerousCasts[i + 1]
+                    for spellID, castData in pairs(spellTable) do
+                        if type(spellID) == "number" and type(castData) == "table" then
+                            table.insert(dungeonGroups[currentDungeon], {spellID = spellID, data = castData})
+                        end
+                    end
+                    i = i + 2 -- Skip both dungeon name and spell table
+                else
+                    i = i + 1 -- Just skip dungeon name if no spell table follows
+                end
+            else
+                i = i + 1 -- Skip any other entries
             end
         end
-    }, dataProvider)
-    
-    npcSearchComponent:buildUI()
-    
-    -- Add custom NPC using AddNPCComponent
-    local addNPCGroup = addon.BaseComponent:createInlineGroup("Add Custom NPC", scroll)
-    
-    if not addon.Components or not addon.Components.AddNPCComponent then
-        error("AddNPCComponent not loaded. Make sure UI/Components/NPCsList.lua is loaded first.")
+        
+        
+        -- Display each dungeon group
+        for _, dungeonName in ipairs(dungeonOrder) do
+            local casts = dungeonGroups[dungeonName]
+            
+            -- Dungeon header
+            local dungeonHeader = AceGUI:Create("Heading")
+            dungeonHeader:SetText(dungeonName)
+            dungeonHeader:SetFullWidth(true)
+            dangerousCastsGroup:AddChild(dungeonHeader)
+            
+            -- Display casts in this dungeon
+            for _, castInfo in ipairs(casts) do
+                local spellID = castInfo.spellID
+                local castData = castInfo.data
+                
+                -- Only process if castData is valid
+                if castData and type(castData) == "table" then
+                    local castFrame = AceGUI:Create("SimpleGroup")
+                    castFrame:SetFullWidth(true)
+                    castFrame:SetLayout("Flow")
+                    dangerousCastsGroup:AddChild(castFrame)
+                    
+                    -- Spell icon
+                    local spellIcon = AceGUI:Create("Icon")
+                    spellIcon:SetWidth(32)
+                    spellIcon:SetHeight(32)
+                    spellIcon:SetImageSize(32, 32)
+                    
+                    local spellInfo = C_Spell.GetSpellInfo(spellID)
+                    if spellInfo and spellInfo.iconID then
+                        spellIcon:SetImage(spellInfo.iconID)
+                    else
+                        spellIcon:SetImage("Interface\\Icons\\INV_Misc_QuestionMark")
+                    end
+                    castFrame:AddChild(spellIcon)
+                    
+                    -- Spell details
+                    local detailsGroup = AceGUI:Create("SimpleGroup")
+                    detailsGroup:SetWidth(400)
+                    detailsGroup:SetLayout("Flow")
+                    castFrame:AddChild(detailsGroup)
+                    
+                    local spellName = AceGUI:Create("Label")
+                    local name = castData.name or "Unknown Spell"
+                    spellName:SetText(string.format("|cff00ff00%s|r (ID: %d)", name, spellID))
+                    spellName:SetWidth(400)
+                    detailsGroup:AddChild(spellName)
+                    
+                    local npcName = AceGUI:Create("Label")
+                    local npc = castData.npcName or "Unknown NPC"
+                    npcName:SetText(string.format("Cast by: |cffffff00%s|r", npc))
+                    npcName:SetWidth(400)
+                    detailsGroup:AddChild(npcName)
+                    
+                    local ccTypes = AceGUI:Create("Label")
+                    local ccTypeNames = {}
+                    if castData.ccTypes then
+                        for _, ccType in ipairs(castData.ccTypes) do
+                            local displayName = addon.Database.ccTypeDisplayNames and addon.Database.ccTypeDisplayNames[ccType] or ccType
+                            table.insert(ccTypeNames, displayName)
+                        end
+                    end
+                    ccTypes:SetText(string.format("Stoppable with: |cffff8800%s|r", table.concat(ccTypeNames, ", ")))
+                    ccTypes:SetWidth(400)
+                    detailsGroup:AddChild(ccTypes)
+                else
+                    print("|cff00ff00CC Rotation Helper|r: Invalid cast data for spell ID", spellID)
+                end
+            end
+            
+            -- Add spacing after each dungeon
+            local spacer = AceGUI:Create("Label")
+            spacer:SetText(" ")
+            spacer:SetFullWidth(true)
+            dangerousCastsGroup:AddChild(spacer)
+        end
+    else
+        local noCastsLabel = AceGUI:Create("Label")
+        noCastsLabel:SetText("No dangerous casts configured.")
+        noCastsLabel:SetFullWidth(true)
+        dangerousCastsGroup:AddChild(noCastsLabel)
     end
     
-    local addNPCComponent = addon.Components.AddNPCComponent:new(addNPCGroup, {
-        onNPCAdded = function(npcID)
-            -- Refresh entire tab to show new NPC
-            container:ReleaseChildren()
-            NPCsTab.create(container)
+    -- Information about dangerous cast system
+    local infoText = AceGUI:Create("Label")
+    infoText:SetText("The addon now uses dangerous cast detection instead of NPC effectiveness tracking. When these abilities are being cast, you'll receive visual alerts to use your crowd control abilities to stop them.")
+    infoText:SetFullWidth(true)
+    scroll:AddChild(infoText)
+    
+    -- Force layout refresh to fix scrolling
+    C_Timer.After(0.1, function()
+        if scroll and scroll.DoLayout then
+            scroll:DoLayout()
         end
-    }, dataProvider)
-    
-    addNPCComponent:buildUI()
-    
-    -- Help text for NPC management
-    local manageHelpText = AceGUI:Create("Label")
-    manageHelpText:SetText("NPCs are grouped by dungeon with Expand/Collapse buttons. Current Location shows where you are and offers filtering. 'Find Target in List' locates your target, 'Search NPCs' finds existing ones. 'Get from Target' auto-fills from your current target and detects dungeon. When in a dungeon, the addon auto-selects that dungeon for new NPCs. Use Reset to revert database NPCs, Delete to remove custom ones.")
-    manageHelpText:SetFullWidth(true)
-    scroll:AddChild(manageHelpText)
+    end)
 end
 
 -- Register NPCsTab module for ConfigFrame to load

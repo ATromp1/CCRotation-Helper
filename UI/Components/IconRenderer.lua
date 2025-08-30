@@ -484,6 +484,14 @@ function IconRenderer:updateDangerousCastText(icon, iconIndex, cooldownData, now
     
     -- Only show if feature is enabled, on first icon, and if there are dangerous casts that can be stopped
     if addon.Config:Get("showDangerousCasts") and iconIndex == 1 and cooldownData.dangerousCasts and #cooldownData.dangerousCasts > 0 then
+        -- Check player-only setting
+        if addon.Config:Get("dangerousCastsPlayerOnly") then
+            local unit = addon.CCRotation.GUIDToUnit and addon.CCRotation.GUIDToUnit[cooldownData.GUID]
+            if not (unit and UnitIsUnit(unit, "player")) then
+                icon.dangerousCastText:Hide()
+                return
+            end
+        end
         local cast = cooldownData.dangerousCasts[1] -- Show first matching cast
         local timeLeft = cast.endTime - now
         
