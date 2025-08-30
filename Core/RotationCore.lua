@@ -319,13 +319,11 @@ function CCRotation:DoRebuildQueue()
         end
     end
     
-    -- === STEP 3: Sort and Separate ===
+    -- === STEP 3: Add Status and Sort ===
     
     local now = GetTime()
-    local availableQueue = {}
-    local unavailableQueue = {}
     
-    -- Add status information and separate into available/unavailable
+    -- Add status information to all cooldown data
     for _, cooldownData in ipairs(self.cooldownQueue) do
         local unit = self.GUIDToUnit[cooldownData.GUID]
         if unit then
@@ -340,16 +338,10 @@ function CCRotation:DoRebuildQueue()
                 -- Not in group or unit doesn't exist - treat as out of range
                 cooldownData.inRange = false
             end
-            
-            if cooldownData.isDead or not cooldownData.inRange then
-                table.insert(unavailableQueue, cooldownData)
-            else
-                table.insert(availableQueue, cooldownData)
-            end
         end
     end
     
-    -- Sort both queues using shared sorting logic
+    -- Sort queue with dead/out-of-range players at the end
     local function sortQueue(a, b)
         local unitA, unitB = self.GUIDToUnit[a.GUID], self.GUIDToUnit[b.GUID]
         if not (unitA and unitB) then return false end
@@ -361,15 +353,21 @@ function CCRotation:DoRebuildQueue()
         local readyA = a.charges > 0 or a.expirationTime <= now
         local readyB = b.charges > 0 or b.expirationTime <= now
         
-        -- 1. Ready spells first
-        if readyA ~= readyB then return readyA end
+        local availableA = not a.isDead and a.inRange
+        local availableB = not b.isDead and b.inRange
         
-        -- 2. Among ready spells, prioritize priority players
-        if readyA and readyB and (isPriorityA ~= isPriorityB) then
+        -- 1. Available players first, then unavailable players
+        if availableA ~= availableB then return availableA end
+        
+        -- 2. Among available players, ready spells first
+        if availableA and availableB and readyA ~= readyB then return readyA end
+        
+        -- 3. Among available ready spells, prioritize priority players
+        if availableA and availableB and readyA and readyB and (isPriorityA ~= isPriorityB) then
             return isPriorityA
         end
         
-        -- 3. Finally, fallback on configured priority (or soonest available cooldown)
+        -- 4. Finally, fallback on configured priority (or soonest available cooldown)
         if readyA then
             return a.priority < b.priority
         else
@@ -377,20 +375,11 @@ function CCRotation:DoRebuildQueue()
         end
     end
     
-    table.sort(availableQueue, sortQueue)
-    table.sort(unavailableQueue, sortQueue)
-    
-    -- Update the main queue and store unavailable queue
-    self.cooldownQueue = availableQueue
-    self.unavailableQueue = unavailableQueue
+    table.sort(self.cooldownQueue, sortQueue)
     
     -- === STEP 4: Check Changes and Fire Events ===
     
-    self:FireEvent("QUEUE_UPDATED", self.cooldownQueue, self.unavailableQueue)
-
-    -- Check if secondary queue should be shown (first ability on cooldown)
-    local shouldShowSecondary = self:ShouldShowSecondaryQueue()
-    self:FireEvent("SECONDARY_QUEUE_STATE_CHANGED", shouldShowSecondary)
+    self:FireEvent("QUEUE_UPDATED", self.cooldownQueue)
 
     -- === STEP 5: Handle Side Effects ===
     

@@ -38,13 +38,8 @@ function UI:Initialize()
     
     -- Register for queue update events from RotationCore
     if addon.CCRotation then
-        addon.CCRotation:RegisterEventListener("QUEUE_UPDATED", function(queue, unavailableQueue)
-            self:UpdateDisplay(queue, unavailableQueue)
-        end)
-        
-        -- Register for secondary queue state changes
-        addon.CCRotation:RegisterEventListener("SECONDARY_QUEUE_STATE_CHANGED", function(shouldShow)
-            self.iconRenderer.shouldShowSecondary = shouldShow
+        addon.CCRotation:RegisterEventListener("QUEUE_UPDATED", function(queue)
+            self:UpdateDisplay(queue)
         end)
     end
     
@@ -123,11 +118,6 @@ function UI:setupMainFrame()
         end
     end)
 
-    -- Create unavailable queue container
-    frame.unavailableContainer = CreateFrame("Frame", nil, frame)
-    frame.unavailableContainer:SetSize(1, 1)
-    frame.unavailableContainer:SetMovable(true)
-    frame.unavailableContainer:SetClampedToScreen(true)
     
     -- Create preview frames for config mode (initially hidden)
     self:createPreviewFrames(frame)
@@ -203,7 +193,7 @@ function UI:RefreshDisplay()
     end
     
     if addon.CCRotation and addon.CCRotation.cooldownQueue then
-        self:UpdateDisplay(addon.CCRotation.cooldownQueue, addon.CCRotation.unavailableQueue)
+        self:UpdateDisplay(addon.CCRotation.cooldownQueue)
     end
     
     -- Update preview frames if config is open
@@ -213,7 +203,7 @@ function UI:RefreshDisplay()
 end
 
 -- Update display with current queue (main function)
-function UI:UpdateDisplay(queue, unavailableQueue)
+function UI:UpdateDisplay(queue)
     if not self.mainFrame or not self.mainFrame.container then return end
     
     if not queue then
@@ -224,7 +214,6 @@ function UI:UpdateDisplay(queue, unavailableQueue)
     
     -- Use component-based rendering (this should be safe during combat)
     self.iconRenderer:updateMainIcons(queue, now, self.mainFrame)
-    self.iconRenderer:updateUnavailableIcons(unavailableQueue or {}, now, self.mainFrame)
     
     -- Update frame visibility
     if not addon.CCRotation:ShouldBeActive() then
@@ -243,9 +232,6 @@ function UI:updateFrameSize()
     local config = addon.Config
     local spacing = config:Get("spacing")
     local activeIcons = self.iconPool:getActiveMainIcons()
-    local activeUnavailableIcons = self.iconPool:getActiveUnavailableIcons()
-    local visibleIcons = #activeIcons
-    local visibleUnavailableIcons = #activeUnavailableIcons
     
     -- Calculate maximum possible width to prevent frame shifting
     local maxIcons = config:Get("maxIcons")
@@ -269,42 +255,7 @@ function UI:updateFrameSize()
     local frameWidth = math.max(maxTotalWidth, 200) -- Minimum width of 200
     local frameHeight = math.max(maxHeight, 64) -- Minimum height of 64
     
-    -- Position unavailable container
-    if visibleUnavailableIcons > 0 and config:Get("showUnavailableQueue") then
-        self:positionUnavailableContainer(config)
-    end
-    
     self.mainFrame:SetSize(frameWidth, frameHeight)
-end
-
--- Position unavailable container based on config settings
-function UI:positionUnavailableContainer(config)
-    local container = self.mainFrame.unavailableContainer
-    container:ClearAllPoints()
-    
-    local positioningMode = config:Get("unavailableQueuePositioning")
-    
-    if positioningMode == "independent" then
-        -- Independent positioning - anchor to UIParent with saved coordinates
-        local x = config:Get("unavailableQueueX")
-        local y = config:Get("unavailableQueueY")
-        local anchorPoint = config:Get("unavailableQueueAnchorPoint") or "TOPLEFT"
-        
-        container:SetPoint(anchorPoint, UIParent, anchorPoint, x, y)
-    else
-        -- Relative positioning - anchor relative to main container (default behavior)
-        local x = config:Get("unavailableQueueX") or 0
-        local y = config:Get("unavailableQueueY") or -30
-        local anchorPoint = config:Get("unavailableQueueAnchorPoint") or "TOP"
-        local relativePoint = config:Get("unavailableQueueRelativePoint") or "BOTTOM"
-        
-        -- Use legacy offset if Y is still using the old setting
-        if y == -30 and config:Get("unavailableQueueOffset") then
-            y = -config:Get("unavailableQueueOffset")
-        end
-        
-        container:SetPoint(anchorPoint, self.mainFrame.container, relativePoint, x, y)
-    end
 end
 
 -- Create preview frames for config positioning
@@ -328,22 +279,6 @@ function UI:createPreviewFrames(frame)
     
     -- No sample icons needed - just show the frame for positioning
     
-    -- Unavailable queue preview frame
-    frame.unavailablePreview = CreateFrame("Frame", nil, frame.unavailableContainer)
-    frame.unavailablePreview:SetSize(100, 24)
-    frame.unavailablePreview:SetPoint("TOPLEFT", frame.unavailableContainer, "TOPLEFT", 0, 0)
-    frame.unavailablePreview:Hide()
-    
-    -- Unavailable preview border
-    frame.unavailablePreview.border = frame.unavailablePreview:CreateTexture(nil, "BACKGROUND")
-    frame.unavailablePreview.border:SetAllPoints()
-    frame.unavailablePreview.border:SetColorTexture(1, 0.5, 0, 0.3) -- Orange with transparency
-    
-    -- Unavailable preview label
-    frame.unavailablePreview.label = frame.unavailablePreview:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.unavailablePreview.label:SetPoint("CENTER")
-    frame.unavailablePreview.label:SetText("Secondary Queue")
-    frame.unavailablePreview.label:SetTextColor(1, 1, 1, 1)
     
     -- No sample icons needed - just show the frame for positioning
 end
@@ -364,14 +299,13 @@ function UI:showConfigPreview()
     end
     
     -- Check if preview frames exist
-    if not self.mainFrame.mainPreview or not self.mainFrame.unavailablePreview then
+    if not self.mainFrame.mainPreview then
         addon.Config:DebugPrint("Preview frames missing, recreating...")
         self:createPreviewFrames(self.mainFrame)
     end
     
     -- Update positioning first
     local config = addon.Config
-    self:positionUnavailableContainer(config)
     
     -- Hide real icons when showing preview
     self:hideRealIcons()
@@ -384,15 +318,6 @@ function UI:showConfigPreview()
         addon.Config:DebugPrint("ERROR: Main preview frame missing")
     end
     
-    if self.mainFrame.unavailablePreview and config:Get("showUnavailableQueue") then
-        self.mainFrame.unavailablePreview:Show()
-        addon.Config:DebugPrint("Unavailable preview shown")
-    else
-        if self.mainFrame.unavailablePreview then
-            self.mainFrame.unavailablePreview:Hide()
-        end
-        addon.Config:DebugPrint("Unavailable preview hidden (showUnavailableQueue = " .. tostring(config:Get("showUnavailableQueue")) .. ")")
-    end
     
     -- Update sample icon sizes
     self:updatePreviewIconSizes()
@@ -405,7 +330,6 @@ function UI:hideConfigPreview()
     if not self.mainFrame then return end
     
     self.mainFrame.mainPreview:Hide()
-    self.mainFrame.unavailablePreview:Hide()
     
     -- Show real icons again when hiding preview
     self:showRealIcons()
@@ -425,13 +349,6 @@ function UI:hideRealIcons()
         end
     end
     
-    -- Hide unavailable queue real icons
-    local activeUnavailableIcons = self.iconPool:getActiveUnavailableIcons()
-    for _, icon in ipairs(activeUnavailableIcons) do
-        if icon then
-            icon:Hide()
-        end
-    end
     
     addon.Config:DebugPrint("Real icons hidden for preview mode")
 end
@@ -448,13 +365,6 @@ function UI:showRealIcons()
         end
     end
     
-    -- Show unavailable queue real icons  
-    local activeUnavailableIcons = self.iconPool:getActiveUnavailableIcons()
-    for _, icon in ipairs(activeUnavailableIcons) do
-        if icon then
-            icon:Show()
-        end
-    end
     
     addon.Config:DebugPrint("Real icons restored after preview mode")
 end
@@ -473,9 +383,6 @@ function UI:updatePreviewIconSizes()
     )
     self.mainFrame.mainPreview:SetSize(math.max(200, maxIconSize * 3 + 20), maxIconSize + 10)
     
-    -- Update unavailable preview frame size
-    local unavailableSize = config:Get("unavailableIconSize") or 24
-    self.mainFrame.unavailablePreview:SetSize(math.max(100, unavailableSize * 2 + 10), unavailableSize + 5)
 end
 
 -- Update visibility based on config and group status

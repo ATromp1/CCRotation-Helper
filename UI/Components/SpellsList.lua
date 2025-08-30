@@ -178,8 +178,8 @@ function QueueDisplayComponent:new(container, callbacks, dataProvider)
     }
     
     -- Register for queue updates from the main rotation system
-    instance:RegisterEventListener("QUEUE_UPDATED", function(queue, unavailableQueue)
-        instance:updateQueueDisplay(queue, unavailableQueue)
+    instance:RegisterEventListener("QUEUE_UPDATED", function(queue)
+        instance:updateQueueDisplay(queue)
     end)
     
     return instance
@@ -256,7 +256,7 @@ function QueueDisplayComponent:buildUI()
 end
 
 -- New simpler method that uses the already-calculated queue
-function QueueDisplayComponent:updateQueueDisplay(queue, unavailableQueue)
+function QueueDisplayComponent:updateQueueDisplay(queue)
     if not self.queueGroup then
         return
     end
@@ -290,18 +290,7 @@ function QueueDisplayComponent:updateQueueDisplay(queue, unavailableQueue)
         end
     end
     
-    -- Also check unavailable queue if it exists
-    if unavailableQueue then
-        for _, entry in ipairs(unavailableQueue) do
-            local spellInfo = addon.CCRotation.trackedCooldowns and addon.CCRotation.trackedCooldowns[entry.spellID]
-            local ccType = spellInfo and spellInfo.type
-            
-            -- Apply CC type filter
-            if not ccType or self.ccTypeFilters[ccType] then
-                table.insert(filteredQueue, entry)
-            end
-        end
-    end
+    -- All entries are now in the main queue (available and unavailable)
     
     if #filteredQueue == 0 then
         local noQueueText = self.AceGUI:Create("Label")
@@ -344,8 +333,7 @@ function QueueDisplayComponent:refreshQueueDisplay()
     
     if addon.CCRotation then
         local queue = addon.CCRotation:GetQueue() or {}
-        local unavailableQueue = addon.CCRotation.unavailableQueue or {}
-        self:updateQueueDisplay(queue, unavailableQueue)
+        self:updateQueueDisplay(queue)
     end
 end
 
