@@ -54,10 +54,37 @@ function CCRotation:Initialize()
         self:OnDangerousCastStopped(castInfo)
     end)
     
-    -- Schedule delayed queue rebuild to ensure LibOpenRaid has data
-    C_Timer.After(1, function()
-        self:RebuildQueue()
+    -- Listen for config changes that affect enabled state
+    addon.Config:RegisterEventListener("CONFIG_UPDATED", function(key, value, oldValue)
+        if key == "enabled" or key == "onlyInDungeons" or key == "showInSolo" then
+            self:HandleActiveStateChange()
+        end
     end)
+    
+    -- Check initial state and enable/disable accordingly
+    self:HandleActiveStateChange()
+    
+    -- Schedule delayed queue rebuild to ensure LibOpenRaid has data (only if enabled)
+    if self.enabled then
+        C_Timer.After(1, function()
+            self:RebuildQueue()
+        end)
+    end
+end
+
+-- Handle changes in settings that affect whether the addon should be active
+function CCRotation:HandleActiveStateChange()
+    local shouldBeActive = self:ShouldBeActive()
+    
+    if shouldBeActive and not self.enabled then
+        self:Enable()
+        -- Delayed rebuild after enabling
+        C_Timer.After(0.1, function()
+            self:RebuildQueue()
+        end)
+    elseif not shouldBeActive and self.enabled then
+        self:Disable()
+    end
 end
 
 -- Function to rebuild GUID mapping
@@ -214,6 +241,11 @@ end
 
 -- Debounced queue rebuild
 function CCRotation:RebuildQueue()
+    -- Don't rebuild queue if addon is disabled
+    if not self.enabled then
+        return
+    end
+    
     -- Cancel any previous scheduled rebuild
     if self._rebuildTimer then
         self._rebuildTimer:Cancel()
@@ -662,4 +694,90 @@ function CCRotation:ShouldBeActive()
     end
     
     return true
+end
+
+-- Enable the addon system
+function CCRotation:Enable()
+    if self.enabled then
+        return -- Already enabled
+    end
+    
+    self.enabled = true
+    
+    -- Register for events
+    self:RegisterEvents()
+    
+    -- Start the update timer
+    self:StartUpdateTimer()
+    
+    addon.Config:DebugPrint("CCRotation enabled")
+end
+
+-- Disable the addon system
+function CCRotation:Disable()
+    if not self.enabled then
+        return -- Already disabled
+    end
+    
+    self.enabled = false
+    
+    -- Unregister events
+    if self.eventFrame then
+        self.eventFrame:UnregisterAllEvents()
+    end
+    
+    -- Stop all timers
+    self:StopUpdateTimer()
+    
+    if self.queueTicker then
+        self.queueTicker:Cancel()
+        self.queueTicker = nil
+    end
+    
+    if self.nonCombatTicker then
+        self.nonCombatTicker:Cancel()
+        self.nonCombatTicker = nil
+    end
+    
+    if self._rebuildTimer then
+        self._rebuildTimer:Cancel()
+        self._rebuildTimer = nil
+    end
+    
+    -- Clear queues
+    self.cooldownQueue = {}
+    
+    -- Fire empty queue update to hide UI
+    self:FireEvent("QUEUE_UPDATED", {}, {})
+    
+    addon.Config:DebugPrint("CCRotation disabled")
+end
+
+-- Start the update timer
+function CCRotation:StartUpdateTimer()
+    if self.updateTimer then
+        return -- Already running
+    end
+    
+    self.updateTimer = C_Timer.NewTicker(0.1, function()
+        self:UpdateRotationQueue()
+    end)
+end
+
+-- Stop the update timer
+function CCRotation:StopUpdateTimer()
+    if self.updateTimer then
+        self.updateTimer:Cancel()
+        self.updateTimer = nil
+    end
+end
+
+-- Update rotation queue (called by timer)
+function CCRotation:UpdateRotationQueue()
+    -- Only process updates if addon is enabled
+    if not self.enabled then
+        return
+    end
+    
+    self:RebuildQueue()
 end

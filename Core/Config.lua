@@ -152,6 +152,9 @@ local defaults = {
         -- Icon zoom multiplier
         iconZoom = 1.0,
         
+        -- Interrupt coordination settings
+        interruptAssignments = {}, -- playerName -> markerIndex
+        interruptCoordinationEnabled = false,
 
     },
     global = {
@@ -246,11 +249,19 @@ function addon.Config:Get(key)
 end
 
 function addon.Config:Set(key, value)
+    -- Store the old value for comparison
+    local oldValue = self:Get(key)
+    
     -- Determine if this is a profile-specific or global setting
     if self:IsProfileSetting(key) then
         self.db[key] = value
     else
         self.global[key] = value
+    end
+    
+    -- Fire event if the value actually changed
+    if oldValue ~= value then
+        self:FireEvent("CONFIG_UPDATED", key, value, oldValue)
     end
 end
 

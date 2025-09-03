@@ -20,6 +20,11 @@ end
 
 -- Play turn notification sound using text-to-speech
 function SoundManager:PlayTurnNotification()
+    -- Don't play sound if addon should not be active
+    if not addon.CCRotation or not addon.CCRotation:ShouldBeActive() then
+        return
+    end
+    
     -- Throttle notifications to prevent spam (only once per 5 seconds)
     local now = GetTime()
     if self.lastNotificationTime and (now - self.lastNotificationTime) < 5 then
