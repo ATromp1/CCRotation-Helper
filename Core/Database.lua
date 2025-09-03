@@ -77,6 +77,19 @@ addon.Database.dangerousCasts = {
 
     "Tazavesh: Streets of Wonder", {
         [354297] = { name = "Hyperlight Bolt", npcName = "Support Officer", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [355642] = { name = "Hyperlight Salvo", npcName = "Veteral Sparkcaster", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [355641] = { name = "Scintillate", npcName = "Veteral Sparkcaster", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [355640] = { name = "Phalanx Field", npcName = "Market Peacekeaper", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+    },
+
+    "Tazavesh: So'leah's Gambit", {
+        [355057] = { name = "Cry of Mrrggllrrgg", npcName = "Murkbrine Shellcrusher", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [355225] = { name = "Waterbolt", npcName = "Murkbrine Fishmancer", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [352347] = { name = "Valorous Bolt", npcName = "Vault Purifier", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [346980] = { name = "Empowered Defense", npcName = "Vault Purifier", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [356843] = { name = "Brackish Bolt", npcName = "Hourglass Tidesage", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [357260] = { name = "Unstable Rift", npcName = "Focused Ritualist", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
+        [354297] = { name = "Hyperlight Bolt", npcName = "Focused Ritualist", ccTypes = {"stun", "disorient", "fear", "knock", "incapacitate"} },
     },
 
     -- For testing

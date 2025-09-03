@@ -163,6 +163,24 @@ function DisplaySettings:buildUI()
     )
     dangerousCastsPlayerOnlyControl:buildUI()
 
+    -- Dangerous cast trigger count slider
+    local dangerousCastTriggerCountControl = addon.Components.SliderControl:new(
+        dangerousCastsGroup,
+        "Minimum simultaneous casts to trigger",
+        "dangerousCastTriggerCount",
+        1, 10, 1,
+        {
+            onValueChanged = function(configKey, value)
+                -- Rebuild queue to refresh dangerous cast data
+                self.dataProvider.config:rebuildQueue()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
+            end
+        }
+    )
+    dangerousCastTriggerCountControl:buildUI()
+
     -- Desaturate icon if spell is on cooldown
     local desaturateIconControl = addon.Components.CheckboxControl:new(
         internalGroup,

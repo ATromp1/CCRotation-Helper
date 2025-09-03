@@ -303,10 +303,12 @@ function CCRotation:DoRebuildQueue()
             
             if ccType and addon.CastTracker then
                 local matchingCasts = addon.CastTracker:GetDangerousCastsForCCType(ccType)
-                if #matchingCasts > 0 then
+                local triggerCount = addon.Config:Get("dangerousCastTriggerCount") or 1
+                
+                if #matchingCasts >= triggerCount then
                     cd.dangerousCasts = matchingCasts
                 else
-                    -- Clear stale dangerous cast data when no active casts
+                    -- Clear dangerous cast data when cast count is below trigger threshold
                     cd.dangerousCasts = nil
                 end
             else
