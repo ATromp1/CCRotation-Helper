@@ -154,6 +154,8 @@ end
 -- Event handler
 function CCRotation:OnEvent(event, ...)
     if event == "PLAYER_ENTERING_WORLD" or event == "CHALLENGE_MODE_START" then
+        -- Handle active state change first (location may affect onlyInDungeons setting)
+        self:HandleActiveStateChange()
         self:RebuildQueue()
         -- Fire location change event for UI components
         self:FireEvent("LOCATION_CHANGED")
