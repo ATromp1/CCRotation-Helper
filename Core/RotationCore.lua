@@ -435,6 +435,13 @@ end
 -- Check if player is next in queue and fire notification event
 function CCRotation:CheckPlayerTurnStatus()
     local config = addon.Config
+    
+    -- Don't check turn status if addon shouldn't be active
+    if not self:ShouldBeActive() then
+        self.wasPlayerNext = false
+        return
+    end
+    
     if not config:Get("enableTurnNotification") then
         self.wasPlayerNext = false
         return

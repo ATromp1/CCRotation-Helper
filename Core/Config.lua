@@ -155,6 +155,11 @@ local defaults = {
         -- Interrupt coordination settings
         interruptAssignments = {}, -- playerName -> markerIndex
         interruptCoordinationEnabled = false,
+        
+        -- Turn notification settings
+        enableTurnNotification = false,
+        turnNotificationText = "Next",
+        turnNotificationVolume = 100,
 
     },
     global = {
