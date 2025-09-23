@@ -26,6 +26,11 @@ local lastDataHash = nil -- Track last sent/received data hash
 -- Track which players have the addon
 local playersWithAddon = {} -- [playerName] = true if they have the addon
 
+-- Check if player is the group leader
+function addon.PartySync:IsGroupLeader()
+    return UnitIsGroupLeader("player")
+end
+
 -- User profile choice tracking for legacy compatibility
 local userProfileTracking = {
     lastUserChosenProfile = nil
@@ -182,6 +187,8 @@ function addon.PartySync:Initialize()
     -- Start sync if we're already in a group (delay to ensure group status is ready)
     C_Timer.After(1, function()
         self:UpdateGroupStatus()
+        -- Detect players with addon
+        self:ScanGroupForAddon()
     end)
     
 end
@@ -331,13 +338,21 @@ function addon.PartySync:OnRequestReceived(prefix, message, distribution, sender
         return
     end
 
+    -- Mark sender as having the addon
+    playersWithAddon[sender] = true
+    DebugPrint("COMM", "Detected player with addon:", sender)
+    
+    -- If we receive a detection message, we don't need to do anything else
+    if message == "DETECT" then
+        return
+    end
+
+    -- Only the group leader should respond to sync requests
     if not UnitIsGroupLeader("player") then
         return
     end
        
     DebugPrint("COMM", "Received sync request from:", sender)
-    -- Mark sender as having the addon
-    playersWithAddon[sender] = true
     
     -- Force immediate broadcast regardless of hash
     self:ForceBroadcast()
@@ -474,14 +489,33 @@ function addon.PartySync:GROUP_ROSTER_UPDATE()
     -- Always mark yourself as having the addon
     playersWithAddon[UnitName("player")] = true
     
+    -- Proactively detect players with addon
+    self:ScanGroupForAddon()
+    
     -- Delay operations to avoid taint issues with Blizzard frames
     C_Timer.After(0.1, function()
         -- Immediately stop broadcasting if no longer in group
         if not addon.PartySync:IsInGroup() then
             addon.PartySync:StopBroadcasting()
-               addon.PartySync:UpdateGroupStatus()
+            addon.PartySync:UpdateGroupStatus()
         end
     end)
+end
+
+-- Scan group members to detect who has the addon
+function addon.PartySync:ScanGroupForAddon()
+    if not self:IsInGroup() then
+        return
+    end
+    
+    -- Send a detection ping to the party
+    local success = pcall(function()
+        self:SendCommMessage(REQUEST_PREFIX, "DETECT", "PARTY")
+    end)
+    
+    if not success then
+        DebugPrint("COMM", "Failed to send addon detection message")
+    end
 end
 
 -- Public API for status checking
@@ -571,6 +605,11 @@ function addon.PartySync:IsPlayerPug(playerName)
        
     -- If we're not in a group, there are no pugs
     if not self:IsInGroup() then
+        return false
+    end
+    
+    -- Priority players are not considered pugs (they should know what they're doing)
+    if addon.Config and addon.Config:IsPriorityPlayer(playerName) then
         return false
     end
        

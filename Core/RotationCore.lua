@@ -208,6 +208,26 @@ function CCRotation:UpdateSpellCooldown(unit, spellID, cooldownInfo)
     local info = self.trackedCooldowns[spellID]
     if not (unit and info and cooldownInfo and lib) then return end
     
+    -- Check if player has the talent/spell
+    if UnitIsUnit(unit, "player") then
+        -- For local player, use IsSpellKnown directly
+        if not IsSpellKnown(spellID) then
+            return false
+        end
+    else
+        -- For other group members, check using cooldowns
+        -- This is more reliable than trying to access talent data
+        local allUnitsCooldown = lib.GetAllUnitsCooldown and lib.GetAllUnitsCooldown()
+        if allUnitsCooldown then
+            local unitCooldowns = allUnitsCooldown[UnitName(unit)]
+            if unitCooldowns and not unitCooldowns[spellID] then
+                -- If the unit has cooldown data but this ability isn't there,
+                -- the ability is probably not available (talent not selected)
+                return false
+            end
+        end
+    end
+    
     local GUID = UnitGUID(unit)
     if not GUID then return end
     
@@ -399,7 +419,7 @@ function CCRotation:DoRebuildQueue()
         if availableA and availableB and readyA ~= readyB then return readyA end
         
         -- 3. Among available ready spells, prioritize priority players
-        if availableA and availableB and readyA and readyB and (isPriorityA ~= isPriorityB) then
+         if availableA and availableB and readyA and readyB and (isPriorityA ~= isPriorityB) then
             return isPriorityA
         end
         
@@ -419,7 +439,7 @@ function CCRotation:DoRebuildQueue()
 
     -- === STEP 5: Handle Side Effects ===
     
---     self:CheckPugAnnouncement()
+    self:CheckPugAnnouncement()
     self:CheckPlayerTurnStatus()
 end
 
@@ -504,26 +524,50 @@ function CCRotation:CheckPugAnnouncement()
             local playerName = UnitName(unit)
             
             -- Check if this player is a pug
-            if addon.PartySync:IsPlayerPug(playerName) then
+            local isPug = addon.PartySync:IsPlayerPug(playerName)
+            local isSelf = UnitIsUnit(unit, "player")
+            
+            -- Never announce for yourself or players with the addon
+            if isPug and not isSelf then
                 -- Check if spell is ready (has charges or cooldown is up)
                 local now = GetTime()
                 local isReady = firstInQueue.charges > 0 or firstInQueue.expirationTime <= now
                 
                 if isReady then
-                    local spellName = firstInQueue.name
+                    -- Ensure we have a valid spell ID
+                    if not firstInQueue.spellID then
+                        if addon.Debug then
+                            addon.Debug:Print("Error: No spellID in queue entry")
+                        end
+                        return
+                    end
+                    
+                    -- Get spell name using the spell ID
+                    local spellInfo = C_Spell.GetSpellInfo(firstInQueue.spellID)
+                    local spellName = spellInfo and spellInfo.name
+                    
+                    -- Fallback if GetSpellInfo fails
+                    if not spellName or spellName == "" then
+                        spellName = "Ability #" .. tostring(firstInQueue.spellID)
+                    end
+                    
                     local announceKey = playerName .. ":" .. spellName
                     
-                    -- Throttle announcements: minimum 5 seconds between announcements
+                    -- Throttle announcements: minimum 2 seconds between announcements
                     -- and don't repeat the same player+spell combo
-                    if self.lastAnnouncedSpell ~= announceKey and (now - self.lastAnnouncementTime) >= 5 then
+                    if self.lastAnnouncedSpell ~= announceKey and (now - self.lastAnnouncementTime) >= 2 then
                         self.lastAnnouncedSpell = announceKey
                         self.lastAnnouncementTime = now
                         
                         local channel = config:Get("pugAnnouncerChannel") or "SAY"
-                        local message = spellName .. " next"
                         
-                        -- Send the announcement
-                        SendChatMessage(message, channel)
+                        -- Ensure we have all needed parts to create a message
+                        if playerName and spellName then
+                            local message = playerName .. ": " .. spellName .. " next"
+                            
+                            -- Send the announcement
+                            SendChatMessage(message, channel)
+                        end
                     end
                 end
             else
