@@ -281,6 +281,40 @@ function CCRotation:RebuildQueue()
     end)
 end
 
+function CCRotation:HasValidCCableNPC(ccType)
+    -- Build a set of all active enemy NPC names with nameplates
+    local activeNPCNames = {}
+    local plates = C_NamePlate.GetNamePlates()
+    for _, plate in ipairs(plates) do
+        local unit = plate.UnitFrame and plate.UnitFrame.unit
+        if unit and UnitAffectingCombat(unit) and UnitIsEnemy("player", unit) then
+            local npcName = UnitName(unit)
+            if npcName then
+                activeNPCNames[npcName] = true
+            end
+        end
+    end
+
+    -- For each dangerousCasts entry, check if any active NPC accepts the ccType
+    if addon.Database.dangerousCasts then
+        for i = 1, #addon.Database.dangerousCasts do
+            local entry = addon.Database.dangerousCasts[i]
+            if type(entry) == "table" then
+                for _, castData in pairs(entry) do
+                    if type(castData) == "table" and castData.npcName and castData.ccTypes and activeNPCNames[castData.npcName] then
+                        for _, npcCC in ipairs(castData.ccTypes) do
+                            if npcCC == ccType then
+                                return true
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
 -- Consolidated queue rebuild implementation
 function CCRotation:DoRebuildQueue()
     -- === STEP 1: Gather Data ===
@@ -340,10 +374,24 @@ function CCRotation:DoRebuildQueue()
     
     -- === STEP 2: Transform Data ===
     
-    -- Convert spell cooldowns to queue format
+    -- Convert spell cooldowns to queue format, filter by valid CC if enabled
     self.cooldownQueue = {}
+    local ccChecked = {}
+    local enableCCPackFilter = addon.Config:Get("enableCCPackFilter")
     for key, spellData in pairs(self.spellCooldowns) do
-        table.insert(self.cooldownQueue, spellData)
+        local info = self.trackedCooldowns[spellData.spellID]
+        local ccType = info and info.type
+        if enableCCPackFilter then
+            if ccType and not ccChecked[ccType] then
+                local hasTarget = self:HasValidCCableNPC(ccType)
+                ccChecked[ccType] = true
+            end
+            if not ccType or self:HasValidCCableNPC(ccType) then
+                table.insert(self.cooldownQueue, spellData)
+            end
+        else
+            table.insert(self.cooldownQueue, spellData)
+        end
     end
     
     -- Mark abilities as effective and add cast information for glow logic
