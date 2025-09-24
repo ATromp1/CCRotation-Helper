@@ -409,17 +409,19 @@ function CCRotation:DoRebuildQueue()
         local readyA = a.charges > 0 or a.expirationTime <= now
         local readyB = b.charges > 0 or b.expirationTime <= now
         
-        local availableA = not a.isDead and a.inRange
-        local availableB = not b.isDead and b.inRange
+        local availableA = not a.isDead and a.inRange and readyA
+        local availableB = not b.isDead and b.inRange and readyB
         
         -- 1. Available players first, then unavailable players
         if availableA ~= availableB then return availableA end
         
-        -- 2. Among available players, ready spells first
-        if availableA and availableB and readyA ~= readyB then return readyA end
+        -- 2. Among players who are in range and alive, prioritize ready spells
+        if (not a.isDead and a.inRange) and (not b.isDead and b.inRange) and readyA ~= readyB then
+            return readyA
+        end
         
         -- 3. Among available ready spells, prioritize priority players
-         if availableA and availableB and readyA and readyB and (isPriorityA ~= isPriorityB) then
+        if availableA and availableB and (isPriorityA ~= isPriorityB) then
             return isPriorityA
         end
         
