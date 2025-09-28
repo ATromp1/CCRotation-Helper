@@ -26,6 +26,7 @@ Core\Database.lua
 Core\Config.lua
 Core\CastTracker.lua
 Core\RotationCore.lua
+Core\InterruptTeams.lua
 Core\SoundManager.lua
 Core\DebugFrame.lua
 Core\PartySync.lua
@@ -54,6 +55,7 @@ UI\Components\IconRenderer.lua
 UI\Components\NPCDebugFrame.lua
 UI\Tabs\SpellsTab.lua
 UI\Tabs\PlayersTab.lua
+UI\Tabs\InterruptTeamsTab.lua
 UI\Tabs\NPCsTab.lua
 UI\Tabs\ProfilesTab.lua
 UI\Tabs\DisplayTab.lua
@@ -61,6 +63,7 @@ UI\Tabs\TextTab.lua
 UI\Tabs\IconsTab.lua
 UI\Tabs\AboutTab.lua
 UI\MainFrame.lua
+UI\InterruptTeamsFrame.lua
 UI\ConfigFrame.lua
 UI\MinimapIcon.lua
 UI\UIHelpers.lua

@@ -34,7 +34,12 @@ end
 function CCRotationHelper:OnPlayerLogin()
     -- Initialize core rotation system
     addon.CCRotation:Initialize()
-    
+
+    -- Initialize interrupt teams system
+    if addon.InterruptTeams then
+        addon.InterruptTeams:Initialize()
+    end
+
     -- Initialize sound manager (after CCRotation is ready)
     if addon.SoundManager then
         addon.SoundManager:Initialize()
@@ -105,7 +110,24 @@ SlashCmdList["CCROTATION"] = function(msg)
         addon.PartySyncCommands:status()
     elseif command == "pugtest" then
         addon.PartySyncCommands:pugtest()
-    
+
+    -- Interrupt teams commands
+    elseif command == "teams" or command == "interruptteams" then
+        if addon.UI and addon.UI.InterruptTeamsFrame then
+            addon.UI.InterruptTeamsFrame:Toggle()
+        end
+    elseif command == "teamsstatus" then
+        if addon.InterruptTeams then
+            addon.InterruptTeams:PrintTeams()
+        end
+    elseif command == "testteams" then
+        addon.CoreCommands:testteams()
+    elseif command == "teamsreset" then
+        if addon.UI and addon.UI.InterruptTeamsFrame then
+            addon.UI.InterruptTeamsFrame:ResetPosition()
+            print("Interrupt teams frame position reset")
+        end
+
     -- Help/default
     else
         print("|cff00ff00CC Rotation Helper|r Commands:")
@@ -119,6 +141,10 @@ SlashCmdList["CCROTATION"] = function(msg)
         print("  /ccr debugnpc - Toggle NPC debug frame")
         print("  /ccr debugframe - Show tabbed debug frame")
         print("  /ccr resetdb - Reset database (WARNING: loses all settings)")
+        print("  /ccr teams - Toggle interrupt teams display")
+        print("  /ccr teamsstatus - Show current interrupt team assignments")
+        print("  /ccr testteams - Debug command to test team data")
+        print("  /ccr teamsreset - Reset interrupt teams frame position")
     end
 end
 

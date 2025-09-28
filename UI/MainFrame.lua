@@ -57,10 +57,15 @@ function UI:Initialize()
     C_Timer.After(0.1, function()
         self:UpdateVisibility()
     end)
-    
+
+    -- Initialize interrupt teams frame
+    if self.InterruptTeamsFrame then
+        self.InterruptTeamsFrame:Initialize()
+    end
+
     -- Clear initialization flag
     self.initializing = false
-    
+
     addon.Config:DebugPrint("UI initialization complete")
 end
 

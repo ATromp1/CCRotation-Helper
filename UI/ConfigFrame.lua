@@ -30,11 +30,12 @@ function addon.UI:CreateConfigFrame()
     tabGroup:SetFullHeight(true)
     tabGroup:SetTabs({
         {text="Display", value="display"},
-        {text="Text", value="text"}, 
+        {text="Text", value="text"},
         {text="Icons", value="icons"},
         {text="Spells", value="spells"},
-        {text="Npcs", value="npcs"},
         {text="Players", value="players"},
+        {text="Interrupt Teams", value="interruptteams"},
+        {text="Npcs", value="npcs"},
         {text="Profiles", value="profiles"},
         {text="About", value="about"}
     })
@@ -48,6 +49,7 @@ function addon.UI:CreateConfigFrame()
             spells = addon.SpellsTabModule,
             npcs = addon.NPCsTabModule,
             players = addon.PlayersTabModule,
+            interruptteams = addon.InterruptTeamsTabModule,
             about = addon.AboutTabModule
         }
         

@@ -152,7 +152,38 @@ local defaults = {
         -- Icon zoom multiplier
         iconZoom = 1.0,
         
-        -- Interrupt coordination settings
+        -- Interrupt teams settings
+        interruptTeamsEnabled = false,
+        interruptTeams = {
+            -- Example structure:
+            -- [1] = {"Zimbu", "Aidan"},  -- Star marker team
+            -- [2] = {"Chaarp", "Bluenessie"},  -- Circle marker team
+            -- [3] = {},  -- Diamond marker team
+            -- [4] = {},  -- Triangle marker team
+            -- [5] = {},  -- Moon marker team
+            -- [6] = {},  -- Square marker team
+            -- [7] = {},  -- Cross marker team
+            -- [8] = {},  -- Skull marker team
+        },
+
+        -- Interrupt spell mappings by class
+        interruptSpells = {
+            ["WARRIOR"] = 6552,    -- Pummel
+            ["MAGE"] = 2139,       -- Counterspell
+            ["PRIEST"] = 15487,    -- Silence (Shadow only)
+            ["ROGUE"] = 1766,      -- Kick
+            ["PALADIN"] = 96231,   -- Rebuke (Prot/Ret only)
+            ["MONK"] = 116705,     -- Spear Hand Strike (BrM/WW only)
+            ["SHAMAN"] = 57994,    -- Wind Shear
+            ["DEATHKNIGHT"] = 47528, -- Mind Freeze
+            ["DRUID"] = 106839,    -- Skull Bash (Feral/Guardian only)
+            ["DEMONHUNTER"] = 183752, -- Consume Magic
+            ["HUNTER"] = 147362,   -- Counter Shot
+            ["WARLOCK"] = 19647,   -- Spell Lock (via Felhunter)
+            ["EVOKER"] = 351338,   -- Quell
+        },
+
+        -- Legacy interrupt coordination (kept for compatibility)
         interruptAssignments = {}, -- playerName -> markerIndex
         interruptCoordinationEnabled = false,
         
@@ -160,6 +191,11 @@ local defaults = {
         enableTurnNotification = false,
         turnNotificationText = "Next",
         turnNotificationVolume = 100,
+
+        -- Interrupt teams frame position
+        interruptTeamsFramePoint = nil,
+        interruptTeamsFrameX = nil,
+        interruptTeamsFrameY = nil,
 
     },
     global = {
