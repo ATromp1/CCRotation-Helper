@@ -21,6 +21,22 @@ function DisplaySettings:buildUI()
     internalGroup:SetFullWidth(true)
     internalGroup:SetLayout("Flow")
     self.container:AddChild(internalGroup)
+
+    -- Only suggest CC if there is a valid add in the pack
+    local ccPackFilterControl = addon.Components.CheckboxControl:new(
+        internalGroup,
+        "Only suggest CC if there is a valid add in the pack",
+        "enableCCPackFilter",
+        {
+            onValueChanged = function(configKey, value)
+                self.dataProvider.config:rebuildQueue()
+                if addon.UI and addon.UI.RefreshDisplay then
+                    addon.UI:RefreshDisplay()
+                end
+            end
+        }
+    )
+    ccPackFilterControl:buildUI()
     
     -- Load form control components
     if not addon.Components or not addon.Components.CheckboxControl then

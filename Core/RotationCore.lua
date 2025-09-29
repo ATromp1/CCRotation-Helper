@@ -208,6 +208,26 @@ function CCRotation:UpdateSpellCooldown(unit, spellID, cooldownInfo)
     local info = self.trackedCooldowns[spellID]
     if not (unit and info and cooldownInfo and lib) then return end
     
+    -- Check if player has the talent/spell
+    if UnitIsUnit(unit, "player") then
+        -- For local player, use IsSpellKnown directly
+        if not IsSpellKnown(spellID) then
+            return false
+        end
+    else
+        -- For other group members, check using cooldowns
+        -- This is more reliable than trying to access talent data
+        local allUnitsCooldown = lib.GetAllUnitsCooldown and lib.GetAllUnitsCooldown()
+        if allUnitsCooldown then
+            local unitCooldowns = allUnitsCooldown[UnitName(unit)]
+            if unitCooldowns and not unitCooldowns[spellID] then
+                -- If the unit has cooldown data but this ability isn't there,
+                -- the ability is probably not available (talent not selected)
+                return false
+            end
+        end
+    end
+    
     local GUID = UnitGUID(unit)
     if not GUID then return end
     
@@ -320,11 +340,36 @@ function CCRotation:DoRebuildQueue()
     
     -- === STEP 2: Transform Data ===
     
-    -- Convert spell cooldowns to queue format
+    -- Convert spell cooldowns to queue format, filter by valid CC if enabled
     self.cooldownQueue = {}
-    for key, spellData in pairs(self.spellCooldowns) do
-        table.insert(self.cooldownQueue, spellData)
+    local enableCCPackFilter = addon.Config:Get("enableCCPackFilter")
+    
+    -- If CC pack filter is enabled, check if any CC abilities have valid targets in current pack
+    local hasValidCCTargets = false
+    if enableCCPackFilter and addon.CastTracker then
+        -- Check each CC type to see if there are valid targets
+        local ccTypesChecked = {}
+        for key, spellData in pairs(self.spellCooldowns) do
+            local info = self.trackedCooldowns[spellData.spellID]
+            local ccType = info and info.type
+            if ccType and not ccTypesChecked[ccType] then
+                local matchingCasts = addon.CastTracker:GetDangerousCastsForCCType(ccType)
+                if #matchingCasts > 0 then
+                    hasValidCCTargets = true
+                    break
+                end
+                ccTypesChecked[ccType] = true
+            end
+        end
     end
+    
+    -- Only process abilities if filter is disabled or filter is enabled with valid targets
+    if not enableCCPackFilter or hasValidCCTargets then
+        for key, spellData in pairs(self.spellCooldowns) do
+            table.insert(self.cooldownQueue, spellData)
+        end
+    end
+    -- If filter enabled but no valid targets: queue remains empty (rotation won't appear)
     
     -- Mark abilities as effective and add cast information for glow logic
     for _, cd in ipairs(self.cooldownQueue) do
@@ -419,7 +464,7 @@ function CCRotation:DoRebuildQueue()
 
     -- === STEP 5: Handle Side Effects ===
     
---     self:CheckPugAnnouncement()
+    self:CheckPugAnnouncement()
     self:CheckPlayerTurnStatus()
 end
 
@@ -504,26 +549,50 @@ function CCRotation:CheckPugAnnouncement()
             local playerName = UnitName(unit)
             
             -- Check if this player is a pug
-            if addon.PartySync:IsPlayerPug(playerName) then
+            local isPug = addon.PartySync:IsPlayerPug(playerName)
+            local isSelf = UnitIsUnit(unit, "player")
+            
+            -- Never announce for yourself or players with the addon
+            if isPug and not isSelf then
                 -- Check if spell is ready (has charges or cooldown is up)
                 local now = GetTime()
                 local isReady = firstInQueue.charges > 0 or firstInQueue.expirationTime <= now
                 
                 if isReady then
-                    local spellName = firstInQueue.name
+                    -- Ensure we have a valid spell ID
+                    if not firstInQueue.spellID then
+                        if addon.Debug then
+                            addon.Debug:Print("Error: No spellID in queue entry")
+                        end
+                        return
+                    end
+                    
+                    -- Get spell name using the spell ID
+                    local spellInfo = C_Spell.GetSpellInfo(firstInQueue.spellID)
+                    local spellName = spellInfo and spellInfo.name
+                    
+                    -- Fallback if GetSpellInfo fails
+                    if not spellName or spellName == "" then
+                        spellName = "Ability #" .. tostring(firstInQueue.spellID)
+                    end
+                    
                     local announceKey = playerName .. ":" .. spellName
                     
-                    -- Throttle announcements: minimum 5 seconds between announcements
+                    -- Throttle announcements: minimum 2 seconds between announcements
                     -- and don't repeat the same player+spell combo
-                    if self.lastAnnouncedSpell ~= announceKey and (now - self.lastAnnouncementTime) >= 5 then
+                    if self.lastAnnouncedSpell ~= announceKey and (now - self.lastAnnouncementTime) >= 2 then
                         self.lastAnnouncedSpell = announceKey
                         self.lastAnnouncementTime = now
                         
                         local channel = config:Get("pugAnnouncerChannel") or "SAY"
-                        local message = spellName .. " next"
                         
-                        -- Send the announcement
-                        SendChatMessage(message, channel)
+                        -- Ensure we have all needed parts to create an announcement message in the format: playerName .. ": " .. spellName .. " next"
+                        if playerName and spellName then
+                            local announcementMessage = playerName .. ": " .. spellName .. " next"
+                            
+                            -- Send the announcement
+                            SendChatMessage(announcementMessage, channel)
+                        end
                     end
                 end
             else
