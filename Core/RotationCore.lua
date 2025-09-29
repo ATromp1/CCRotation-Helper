@@ -281,40 +281,6 @@ function CCRotation:RebuildQueue()
     end)
 end
 
-function CCRotation:HasValidCCableNPC(ccType)
-    -- Build a set of all active enemy NPC names with nameplates
-    local activeNPCNames = {}
-    local plates = C_NamePlate.GetNamePlates()
-    for _, plate in ipairs(plates) do
-        local unit = plate.UnitFrame and plate.UnitFrame.unit
-        if unit and UnitAffectingCombat(unit) and UnitIsEnemy("player", unit) then
-            local npcName = UnitName(unit)
-            if npcName then
-                activeNPCNames[npcName] = true
-            end
-        end
-    end
-
-    -- For each dangerousCasts entry, check if any active NPC accepts the ccType
-    if addon.Database.dangerousCasts then
-        for i = 1, #addon.Database.dangerousCasts do
-            local entry = addon.Database.dangerousCasts[i]
-            if type(entry) == "table" then
-                for _, castData in pairs(entry) do
-                    if type(castData) == "table" and castData.npcName and castData.ccTypes and activeNPCNames[castData.npcName] then
-                        for _, npcCC in ipairs(castData.ccTypes) do
-                            if npcCC == ccType then
-                                return true
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return false
-end
-
 -- Consolidated queue rebuild implementation
 function CCRotation:DoRebuildQueue()
     -- === STEP 1: Gather Data ===
@@ -376,22 +342,36 @@ function CCRotation:DoRebuildQueue()
     
     -- Convert spell cooldowns to queue format, filter by valid CC if enabled
     self.cooldownQueue = {}
-    local ccChecked = {}
     local enableCCPackFilter = addon.Config:Get("enableCCPackFilter")
+    
+    -- If CC pack filter is enabled, check if any CC abilities have valid targets in current pack
+    local hasValidCCTargets = false
+    if enableCCPackFilter and addon.CastTracker then
+        -- Check each CC type to see if there are valid targets
+        local ccTypesChecked = {}
+        for key, spellData in pairs(self.spellCooldowns) do
+            local info = self.trackedCooldowns[spellData.spellID]
+            local ccType = info and info.type
+            if ccType and not ccTypesChecked[ccType] then
+                local matchingCasts = addon.CastTracker:GetDangerousCastsForCCType(ccType)
+                if #matchingCasts > 0 then
+                    hasValidCCTargets = true
+                    break
+                end
+                ccTypesChecked[ccType] = true
+            end
+        end
+    end
+    
     for key, spellData in pairs(self.spellCooldowns) do
-        local info = self.trackedCooldowns[spellData.spellID]
-        local ccType = info and info.type
-        if enableCCPackFilter then
-            if ccType and not ccChecked[ccType] then
-                local hasTarget = self:HasValidCCableNPC(ccType)
-                ccChecked[ccType] = true
-            end
-            if not ccType or self:HasValidCCableNPC(ccType) then
-                table.insert(self.cooldownQueue, spellData)
-            end
-        else
+        if not enableCCPackFilter then
+            -- Filter disabled: include all abilities
+            table.insert(self.cooldownQueue, spellData)
+        elseif enableCCPackFilter and hasValidCCTargets then
+            -- Filter enabled and there are valid CC targets in pack: include all abilities
             table.insert(self.cooldownQueue, spellData)
         end
+        -- If filter enabled but no valid targets: don't include any abilities (rotation won't appear)
     end
     
     -- Mark abilities as effective and add cast information for glow logic
@@ -457,19 +437,17 @@ function CCRotation:DoRebuildQueue()
         local readyA = a.charges > 0 or a.expirationTime <= now
         local readyB = b.charges > 0 or b.expirationTime <= now
         
-        local availableA = not a.isDead and a.inRange and readyA
-        local availableB = not b.isDead and b.inRange and readyB
+        local availableA = not a.isDead and a.inRange
+        local availableB = not b.isDead and b.inRange
         
         -- 1. Available players first, then unavailable players
         if availableA ~= availableB then return availableA end
         
-        -- 2. Among players who are in range and alive, prioritize ready spells
-        if (not a.isDead and a.inRange) and (not b.isDead and b.inRange) and readyA ~= readyB then
-            return readyA
-        end
+        -- 2. Among available players, ready spells first
+        if availableA and availableB and readyA ~= readyB then return readyA end
         
         -- 3. Among available ready spells, prioritize priority players
-        if availableA and availableB and (isPriorityA ~= isPriorityB) then
+        if availableA and availableB and readyA and readyB and (isPriorityA ~= isPriorityB) then
             return isPriorityA
         end
         
