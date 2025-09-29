@@ -489,26 +489,26 @@ function addon.PartySync:GROUP_ROSTER_UPDATE()
     -- Always mark yourself as having the addon
     playersWithAddon[UnitName("player")] = true
     
-    -- Proactively detect players with addon
-    self:ScanGroupForAddon()
-    
     -- Delay operations to avoid taint issues with Blizzard frames
     C_Timer.After(0.1, function()
         -- Immediately stop broadcasting if no longer in group
         if not addon.PartySync:IsInGroup() then
             addon.PartySync:StopBroadcasting()
             addon.PartySync:UpdateGroupStatus()
+        else
+            -- Only send detection ping once per group change
+            addon.PartySync:ScanGroupForAddon()
         end
     end)
 end
 
--- Scan group members to detect who has the addon
+-- Scan group members to detect who has the addon (throttled)
 function addon.PartySync:ScanGroupForAddon()
     if not self:IsInGroup() then
         return
     end
     
-    -- Send a detection ping to the party
+    -- Throttle to once per group change to avoid spam
     local success = pcall(function()
         self:SendCommMessage(REQUEST_PREFIX, "DETECT", "PARTY")
     end)
