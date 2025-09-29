@@ -363,16 +363,13 @@ function CCRotation:DoRebuildQueue()
         end
     end
     
-    for key, spellData in pairs(self.spellCooldowns) do
-        if not enableCCPackFilter then
-            -- Filter disabled: include all abilities
-            table.insert(self.cooldownQueue, spellData)
-        elseif enableCCPackFilter and hasValidCCTargets then
-            -- Filter enabled and there are valid CC targets in pack: include all abilities
+    -- Only process abilities if filter is disabled or filter is enabled with valid targets
+    if not enableCCPackFilter or hasValidCCTargets then
+        for key, spellData in pairs(self.spellCooldowns) do
             table.insert(self.cooldownQueue, spellData)
         end
-        -- If filter enabled but no valid targets: don't include any abilities (rotation won't appear)
     end
+    -- If filter enabled but no valid targets: queue remains empty (rotation won't appear)
     
     -- Mark abilities as effective and add cast information for glow logic
     for _, cd in ipairs(self.cooldownQueue) do
