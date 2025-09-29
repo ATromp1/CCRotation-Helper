@@ -586,12 +586,12 @@ function CCRotation:CheckPugAnnouncement()
                         
                         local channel = config:Get("pugAnnouncerChannel") or "SAY"
                         
-                        -- Ensure we have all needed parts to create a message
+                        -- Ensure we have all needed parts to create an announcement message in the format: playerName .. ": " .. spellName .. " next"
                         if playerName and spellName then
-                            local message = playerName .. ": " .. spellName .. " next"
+                            local announcementMessage = playerName .. ": " .. spellName .. " next"
                             
                             -- Send the announcement
-                            SendChatMessage(message, channel)
+                            SendChatMessage(announcementMessage, channel)
                         end
                     end
                 end
